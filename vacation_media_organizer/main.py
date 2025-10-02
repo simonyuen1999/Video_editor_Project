@@ -30,76 +30,75 @@ def organize_media(source_dir, library_dir):
         print("Error: Could not connect to database.")
         return
 
-    for filename in os.listdir(source_dir):
+    # Traverse all subdirectories recursively
+    for root, dirs, files in os.walk(source_dir):
+        for filename in files:
+            if filename == '.DS_Store':
+                continue  # Skip hidden files
 
-        if filename=='.DS_Store':
-            continue  # Skip hidden files
+            source_path = os.path.join(root, filename)
+            
+            print(f"Processing {source_path}...")
 
-        source_path = os.path.join(source_dir, filename)
-        if not os.path.isfile(source_path):
-            continue
+            # 1. Extract Metadata
+            metadata = extract_metadata(source_path)
 
-        print(f"Processing {filename}...")
+            # 2. Perform Semantic Analysis (for videos)
+            semantic_info = {}
+            if filename.lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm")):
+                semantic_info = analyze_video(source_path)
 
-        # 1. Extract Metadata
-        metadata = extract_metadata(source_path)
+            # 3. Organize File by Date
+            new_path = None
+            if metadata["creation_date"]:
+                year, month, day = metadata["creation_date"].split("-")
+                date_dir = os.path.join(library_dir, year, month, day)
+                os.makedirs(date_dir, exist_ok=True)
+                new_path = os.path.join(date_dir, filename)
+                shutil.move(source_path, new_path)
+            else:
+                # If no date, move to an 'unsorted' directory
+                unsorted_dir = os.path.join(library_dir, "unsorted")
+                os.makedirs(unsorted_dir, exist_ok=True)
+                new_path = os.path.join(unsorted_dir, filename)
+                shutil.move(source_path, new_path)
 
-        # 2. Perform Semantic Analysis (for videos)
-        semantic_info = {}
-        if filename.lower().endswith((".mp4", ".mov", ".avi", ".mkv", ".webm")):
-            semantic_info = analyze_video(source_path)
-
-        # 3. Organize File by Date
-        new_path = None
-        if metadata["creation_date"]:
-            year, month, day = metadata["creation_date"].split("-")
-            date_dir = os.path.join(library_dir, year, month, day)
-            os.makedirs(date_dir, exist_ok=True)
-            new_path = os.path.join(date_dir, filename)
-            shutil.move(source_path, new_path)
-        else:
-            # If no date, move to an 'unsorted' directory
-            unsorted_dir = os.path.join(library_dir, "unsorted")
-            os.makedirs(unsorted_dir, exist_ok=True)
-            new_path = os.path.join(unsorted_dir, filename)
-            shutil.move(source_path, new_path)
-
-        # 4. Create Symbolic Links (by location and scenery)
-        # Location
-        if metadata["city"] and metadata["country"] and new_path:
-            location_dir = os.path.join(organized_by_dir, "Location", f"{metadata["city"]}_{metadata["country"]}")
-            os.makedirs(location_dir, exist_ok=True)
-            try:
-                os.symlink(new_path, os.path.join(location_dir, filename))
-            except FileExistsError:
-                print(f"Symlink already exists for {filename} in {location_dir}")
-        
-        # Scenery
-        if semantic_info.get("scenery") and new_path:
-            for scene in semantic_info["scenery"]:
-                scenery_dir = os.path.join(organized_by_dir, "Scenery", scene)
-                os.makedirs(scenery_dir, exist_ok=True)
+            # 4. Create Symbolic Links (by location and scenery)
+            # Location
+            if metadata["city"] and metadata["country"] and new_path:
+                location_dir = os.path.join(organized_by_dir, "Location", f"{metadata["city"]}_{metadata["country"]}")
+                os.makedirs(location_dir, exist_ok=True)
                 try:
-                    os.symlink(new_path, os.path.join(scenery_dir, filename))
+                    os.symlink(new_path, os.path.join(location_dir, filename))
                 except FileExistsError:
-                    print(f"Symlink already exists for {filename} in {scenery_dir}")
+                    print(f"Symlink already exists for {filename} in {location_dir}")
+            
+            # Scenery
+            if semantic_info.get("scenery") and new_path:
+                for scene in semantic_info["scenery"]:
+                    scenery_dir = os.path.join(organized_by_dir, "Scenery", scene)
+                    os.makedirs(scenery_dir, exist_ok=True)
+                    try:
+                        os.symlink(new_path, os.path.join(scenery_dir, filename))
+                    except FileExistsError:
+                        print(f"Symlink already exists for {filename} in {scenery_dir}")
 
-        # 5. Save information to Database
-        record = {
-            "original_path": source_path,
-            "new_path": new_path,
-            "creation_date": metadata.get("creation_date"),
-            "creation_time": metadata.get("creation_time"),
-            "latitude": metadata.get("latitude"),
-            "longitude": metadata.get("longitude"),
-            "city": metadata.get("city"),
-            "country": metadata.get("country"),
-            "people_count": semantic_info.get("people_count", 0),
-            "activities": json.dumps(semantic_info.get("activities", [])), # Store as JSON string
-            "scenery": json.dumps(semantic_info.get("scenery", [])),       # Store as JSON string
-            "talking_detected": semantic_info.get("talking_detected", False)
-        }
-        insert_media_record(conn, record)
+            # 5. Save information to Database
+            record = {
+                "original_path": source_path,
+                "new_path": new_path,
+                "creation_date": metadata.get("creation_date"),
+                "creation_time": metadata.get("creation_time"),
+                "latitude": metadata.get("latitude"),
+                "longitude": metadata.get("longitude"),
+                "city": metadata.get("city"),
+                "country": metadata.get("country"),
+                "people_count": semantic_info.get("people_count", 0),
+                "activities": json.dumps(semantic_info.get("activities", [])), # Store as JSON string
+                "scenery": json.dumps(semantic_info.get("scenery", [])),       # Store as JSON string
+                "talking_detected": semantic_info.get("talking_detected", False)
+            }
+            insert_media_record(conn, record)
 
     conn.close()
     print(f"\nMedia organization complete. Library created at: {library_dir}")
@@ -120,7 +119,8 @@ if __name__ == '__main__':
     organize_media(source_directory, library_directory)
 
     # Clean up dummy directories
-    shutil.rmtree(source_directory)
+    ### shutil.rmtree(source_directory)
+
     # Keep the library for inspection
     # shutil.rmtree(library_directory)
 
