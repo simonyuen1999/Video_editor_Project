@@ -1,5 +1,17 @@
 # Vacation Media Organizer: Smart Photo & Video Management
 
+## What is this and where is it coming from?
+
+After my vacation, I ended up with over 500 video and photo files from my DJI Pocket 3 and iPhone, all named using internal device sequences. To create highlight clips of the trip—scenery and gatherings—I began by manually reviewing and organizing the files by date, time, and category. I then sorted them into subdirectories based on location or timestamp, and started analyzing each video to decide which segments to keep. I used free editors like [Shotcut](https://shotcut.org/) and [CapCut](https://www.capcut.com/) for the final cuts.
+
+However, this workflow quickly proved inefficient. I couldn’t find an existing solution to automate the first three steps. ChatGPT suggested combining Python scripts and external tools, but the approach lacked a cohesive structure. That’s why I asked Manus to help build a complete, streamlined solution based on the following project description.
+
+Here is the description I passed into Manus:
+
+> I want to create a solution for both Windows and Mac. After vacation, download all the photo, video files from iPhone, and DJI Pocket 3 into a directory or a set of subdirectory.   Create a solution to scan all these files to extract their creation date, time, and geographic location, performs semantic video-analysis (number of people in the video, just talking, walking, and scenery information, move these files into sub-directory by creation date.  If possible, create a linkable file into other sub-directory such as by city, or by scenery.   Save our scan result information into a file DB or CSV file, which has file location in the sub-directory.    For the user interface, create a web local page which uses JavaScript to show the result, the page shows the clickable marks (the file taken location) in Google Map or AMap.   When the user clicks that mark or URL, browser starts preview or media player to play that media file.   The local web GUI also allows the user to sort, select and highlight the files by date, date range, location, group of location, simple category such as hiking, city walk, or friend dinner video etc.     All the files are designed to save locally in the computer.    Eventually, these suggested files, time range from the video clips is for creating a more viewable video by skipping or speed up the unimportant senses.
+
+Below is the initial generated workflow.
+
 ## Introduction
 
 This solution provides a comprehensive, cross-platform system for organizing your vacation photos and videos from devices like iPhone and DJI Pocket 3. It automates the process of extracting metadata, performing semantic video analysis, organizing files by creation date, and creating intelligent links for location and scenery-based browsing. A local web-based interface allows for intuitive exploration, filtering, and playback of your media.
@@ -169,3 +181,5 @@ For further assistance, please refer to the project's source code or open an iss
 
 Manus AI
 
+**Crabviz** generates calling graph
+![Crabviz Calling Graph](Calling_Graph.svg)
