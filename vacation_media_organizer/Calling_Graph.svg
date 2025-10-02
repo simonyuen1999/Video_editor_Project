@@ -1,0 +1,299 @@
+
+<svg class="callgraph" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1196.8599853515625 915">
+  <style>:root{--background-color: #f5fffa;--selected-color: #4fe1f4;--edge-color: #548f9e;--edge-incoming-color: #698b69;--edge-outgoing-color: #008acd;--edge-incoming-outgoing-color: black;--cluster-label-bg-color: #e8eaed;--node-bg-color: #f4f5f1;--symbol-default-bg-color: var(--node-bg-color);--symbol-default-border-color: #889f4e;--symbol-default-text-color: #363636;--interface-bg-color: #fff8dc;--interface-border-color: #a69348;--module-bg-color: #ffebcd;--module-border-color: #a67e43;--constructor-bg-color: #ffdab9;--constructor-border-color: #a66e3c;--method-bg-color: #fff8c5;--method-border-color: #d4a72c;--function-bg-color: #bafbd0;--function-border-color: #4ac26b;--struct-bg-color: #ddf4ff;--struct-border-color: #54aeff;--type-icon-color: #8969da;--property-icon-color: #5f9348}.callgraph{--bold-border: 3.2;width:100%;height:100%;outline:none;cursor:default;-webkit-user-select:none;user-select:none}.callgraph>#graph0>polygon:first-of-type{fill:var(--background-color)}.callgraph>#graph0>#faded-group>:where(.node,.cluster){opacity:.2}.callgraph>#graph0>#faded-group>.edge{opacity:.05}.callgraph .edge>path:not(.hover-path){stroke:var(--edge-color);stroke-width:3}.callgraph .edge>polygon{stroke:var(--edge-color);fill:var(--edge-color)}.callgraph .edge>path.hover-path{stroke:transparent;stroke-width:15}.callgraph .edge.impl>path{stroke-dasharray:8,3}.callgraph .edge.impl>polygon{stroke-width:2;fill:none!important}.callgraph .edge:hover{--edge-color: var(--selected-color)}.callgraph .edge.incoming{--edge-color: var(--edge-incoming-color)}.callgraph .edge.outgoing{--edge-color: var(--edge-outgoing-color)}.callgraph .edge.incoming.outgoing{--edge-color: var(--edge-incoming-outgoing-color)}.callgraph .cluster polygon{stroke-width:1.6}.callgraph .cluster .cluster-label{cursor:pointer;fill:var(--cluster-label-bg-color);rx:18px}.callgraph .cluster text{pointer-events:none}.callgraph .cluster.selected{--cluster-label-bg-color: color-mix(in srgb, var(--selected-color) 30%, transparent)}.callgraph .cluster.selected polygon{stroke-width:var(--bold-border);stroke:var(--selected-color)}.callgraph .node>rect{rx:20px;fill:var(--node-bg-color);filter:url(#shadow)}.callgraph .node.selected>rect{stroke:var(--selected-color);stroke-width:var(--bold-border)}.callgraph .node>.title{cursor:pointer}.callgraph .node>.title>text{font-weight:700}.callgraph .cell{--bg-color: var(--symbol-default-bg-color);--border-color: var(--symbol-default-border-color);--border-width: 1.6}.callgraph .cell>rect{rx:10px;fill:var(--bg-color);stroke:var(--border-color);stroke-width:var(--border-width)}.callgraph .cell>text{fill:var(--symbold-default-text-color)}.callgraph .cell:where(.highlight,.selected,:not(:has(>.cell:hover)):hover){--border-width: var(--bold-border)}.callgraph .cell.highlight>rect{stroke:url(#highlightGradient)}.callgraph .cell.selected>rect{filter:drop-shadow(3px 3px 6px var(--border-color))}.callgraph .cell.interface{--bg-color: var(--interface-bg-color);--border-color: var(--interface-border-color)}.callgraph .cell.interface>rect{stroke-dasharray:7,5}.callgraph .cell.module{--bg-color: var(--module-bg-color);--border-color: var(--module-border-color)}.callgraph .cell.constructor{--bg-color: var(--constructor-bg-color);--border-color: var(--constructor-border-color)}.callgraph .cell.function{--bg-color: var(--function-bg-color);--border-color: var(--function-border-color)}.callgraph .cell.method{--bg-color: var(--method-bg-color);--border-color: var(--method-border-color)}.callgraph .cell:where(.class,.struct,.enum){--bg-color: var(--struct-bg-color);--border-color: var(--struct-border-color)}.callgraph .cell:where(.class,.struct,.enum)>rect{rx:unset}.callgraph .cell:where(.class,.struct,.enum)>text{transform:translateY(1.5px)}.callgraph .cell:where(.class,.struct,.enum)>text:first-of-type{fill:var(--type-icon-color)}.callgraph .cell:where(.field,.property)>rect{rx:unset}.callgraph .cell:where(.field,.property)>text:first-of-type{font-style:italic;fill:var(--property-icon-color)}
+</style>
+  
+<g id="graph0" class="graph" transform="translate(0 915)">
+<polygon fill="white" stroke="none" points="-4,4 -4,-911 1192.86,-911 1192.86,4 -4,4"></polygon>
+<g id="clust1" class="cluster">
+
+<polygon fill="none" stroke="black" points="8,-8 8,-899 1180.86,-899 1180.86,-8 8,-8"></polygon>
+<rect x="416.1000061035156" y="-895" width="356.6600036621094" height="35.20001220703125" class="cluster-label"></rect>
+<text text-anchor="start" x="424.1" y="-872.6" font-family="Arial" font-size="16.00">Video_editor_Project/vacation_media_organizer</text>
+</g>
+<g id="clust2" class="cluster">
+
+<polygon fill="none" stroke="black" points="16,-16 16,-740 731.44,-740 731.44,-16 16,-16"></polygon>
+<rect x="285.69000244140625" y="-736" width="176.05999755859375" height="35.20001220703125" class="cluster-label"></rect>
+<text text-anchor="start" x="293.69" y="-713.6" font-family="Arial" font-size="16.00">media_library_web/src</text>
+</g>
+<g id="clust3" class="cluster">
+
+<polygon fill="none" stroke="black" points="445.44,-121 445.44,-535 723.44,-535 723.44,-121 445.44,-121"></polygon>
+<rect x="550.6500244140625" y="-531" width="67.5799560546875" height="35.20001220703125" class="cluster-label"></rect>
+<text text-anchor="start" x="558.65" y="-508.6" font-family="Arial" font-size="16.00">models</text>
+</g>
+<g id="clust4" class="cluster">
+
+<polygon fill="none" stroke="black" points="24,-24 24,-581 302,-581 302,-24 24,-24"></polygon>
+<rect x="132.77000427246094" y="-577" width="60.459991455078125" height="35.20001220703125" class="cluster-label"></rect>
+<text text-anchor="start" x="140.77" y="-554.6" font-family="Arial" font-size="16.00">routes</text>
+</g>
+<!-- 4 -->
+<g id="4" class="node" data-path="/Users/syuen/Video_editor_Project/vacation_media_organizer/media_library_web/src/routes/user.py">
+
+<rect x="32" y="-272.1000061035156" width="262" height="240.20000648498535"></rect>
+<g id="4_0" class="title">
+<text text-anchor="start" x="83.42" y="-239.7" font-family="Arial" font-size="16.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;user.py &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+
+</g>
+<g id="4:6_4" data-kind="12" class="cell function">
+<rect x="48" y="-220.89999389648438" width="230" height="27.199996948242188"></rect>
+<text text-anchor="start" x="127.87" y="-202.5" font-family="Arial" font-size="16.00">get_users</text>
+
+</g>
+<g id="4:11_4" data-kind="12" class="cell function">
+<rect x="48" y="-185.6999969482422" width="230" height="27.199996948242188"></rect>
+<text text-anchor="start" x="120.75" y="-167.3" font-family="Arial" font-size="16.00">create_user</text>
+
+</g>
+<g id="4:20_4" data-kind="12" class="cell function">
+<rect x="48" y="-150.5" width="230" height="27.199996948242188"></rect>
+<text text-anchor="start" x="131.87" y="-132.1" font-family="Arial" font-size="16.00">get_user</text>
+
+</g>
+<g id="4:25_4" data-kind="12" class="cell function">
+<rect x="48" y="-115.30000305175781" width="230" height="27.20000457763672"></rect>
+<text text-anchor="start" x="118.52" y="-96.9" font-family="Arial" font-size="16.00">update_user</text>
+
+</g>
+<g id="4:34_4" data-kind="12" class="cell function">
+<rect x="48" y="-80.0999984741211" width="230" height="27.199996948242188"></rect>
+<text text-anchor="start" x="121.19" y="-61.7" font-family="Arial" font-size="16.00">delete_user</text>
+
+</g>
+</g>
+<!-- 2 -->
+<g id="2" class="node" data-path="/Users/syuen/Video_editor_Project/vacation_media_organizer/media_library_web/src/models/user.py">
+
+<rect x="453.44000244140625" y="-314.8999938964844" width="262" height="185.79998779296875"></rect>
+<g id="2_1" class="title">
+<text text-anchor="start" x="504.86" y="-282.5" font-family="Arial" font-size="16.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;user.py &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+
+</g>
+<g id="2:4_6" data-kind="5" class="cell class">
+<rect x="469.44000244140625" y="-263.70001220703125" width="230" height="113.60000610351562"></rect>
+<text text-anchor="start" x="557.33" y="-238.3" font-family="Arial" font-weight="bold" font-size="16.00">C</text>
+<text text-anchor="start" x="568.88" y="-238.3" font-family="Arial" font-size="16.00"> &#160;User</text>
+<g id="2:9_8" data-kind="6" class="cell method">
+<rect x="477.44000244140625" y="-220.5" width="214" height="27.199996948242188"></rect>
+<text text-anchor="start" x="552.42" y="-202.1" font-family="Arial" font-size="16.00">__repr__</text>
+
+</g>
+<g id="2:12_8" data-kind="6" class="cell method">
+<rect x="477.44000244140625" y="-185.3000030517578" width="214" height="27.199996948242188"></rect>
+<text text-anchor="start" x="560.87" y="-166.9" font-family="Arial" font-size="16.00">to_dict</text>
+
+</g>
+
+</g>
+</g>
+<!-- 4&#45;&gt;2 -->
+<g id="4:11_4-2:12_8" class="edge" data-from="4:11_4" data-to="2:12_8">
+
+<path fill="none" stroke="black" d="M279,-172.1C324.63,-172.1 335.84,-163.64 381.44,-165.2 417.79,-166.44 430.57,-170.35 460.3,-171.42"></path>
+<polygon fill="black" stroke="black" points="459.84,-176.67 474.93,-171.67 460.02,-166.17 459.84,-176.67"></polygon>
+<text text-anchor="middle" x="379.69" y="-169.4" font-family="Times,serif" font-size="14.00"> </text>
+<path fill="none" stroke="black" d="M279,-172.1C324.63,-172.1 335.84,-163.64 381.44,-165.2 417.79,-166.44 430.57,-170.35 460.3,-171.42" class="hover-path"></path></g>
+<!-- 8 -->
+<g id="8" class="node" data-path="/Users/syuen/Video_editor_Project/vacation_media_organizer/main.py">
+
+<rect x="453.44000244140625" y="-847.7000122070312" width="262" height="99.4000244140625"></rect>
+<g id="8_2" class="title">
+<text text-anchor="start" x="503.09" y="-815.3" font-family="Arial" font-size="16.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;main.py &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+
+</g>
+<g id="8:11_4" data-kind="12" class="cell function">
+<rect x="469.44000244140625" y="-796.5" width="230" height="27.20001220703125"></rect>
+<text text-anchor="start" x="527.52" y="-778.1" font-family="Arial" font-size="16.00">organize_media</text>
+
+</g>
+</g>
+<!-- 11 -->
+<g id="11" class="node" data-path="/Users/syuen/Video_editor_Project/vacation_media_organizer/semantic_analyzer.py">
+
+<rect x="865.1799926757812" y="-507.70001220703125" width="305.42999267578125" height="99.4000244140625"></rect>
+<g id="11_3" class="title">
+<text text-anchor="start" x="887.18" y="-475.3" font-family="Arial" font-size="16.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;semantic_analyzer.py &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+
+</g>
+<g id="11:14_4" data-kind="12" class="cell function">
+<rect x="881.1799926757812" y="-456.5" width="273.42999267578125" height="27.20001220703125"></rect>
+<text text-anchor="start" x="966.75" y="-438.1" font-family="Arial" font-size="16.00">analyze_video</text>
+
+</g>
+</g>
+<!-- 8&#45;&gt;11 -->
+<g id="8:11_4-11:14_4" class="edge" data-from="8:11_4" data-to="11:14_4">
+
+<path fill="none" stroke="black" d="M700.44,-782.9C780.4,-782.9 793.27,-485.32 864.57,-446.96"></path>
+<polygon fill="black" stroke="black" points="865.52,-452.13 878.72,-443.28 862.88,-441.97 865.52,-452.13"></polygon>
+<text text-anchor="middle" x="789.19" y="-627.29" font-family="Times,serif" font-size="14.00"> </text>
+<path fill="none" stroke="black" d="M700.44,-782.9C780.4,-782.9 793.27,-485.32 864.57,-446.96" class="hover-path"></path></g>
+<!-- 7 -->
+<g id="7" class="node" data-path="/Users/syuen/Video_editor_Project/vacation_media_organizer/database_manager.py">
+
+<rect x="862.9400024414062" y="-730.5" width="309.91998291015625" height="205"></rect>
+<g id="7_4" class="title">
+<text text-anchor="start" x="884.94" y="-698.1" font-family="Arial" font-size="16.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;database_manager.py &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+
+</g>
+<g id="7:5_4" data-kind="12" class="cell function">
+<rect x="878.9400024414062" y="-679.2999877929688" width="277.91998291015625" height="27.20001220703125"></rect>
+<text text-anchor="start" x="952.52" y="-660.9" font-family="Arial" font-size="16.00">create_connection</text>
+
+</g>
+<g id="7:15_4" data-kind="12" class="cell function">
+<rect x="878.9400024414062" y="-644.0999755859375" width="277.91998291015625" height="27.199951171875"></rect>
+<text text-anchor="start" x="973.87" y="-625.7" font-family="Arial" font-size="16.00">create_table</text>
+
+</g>
+<g id="7:40_4" data-kind="12" class="cell function">
+<rect x="878.9400024414062" y="-608.9000244140625" width="277.91998291015625" height="27.20001220703125"></rect>
+<text text-anchor="start" x="944.97" y="-590.5" font-family="Arial" font-size="16.00">insert_media_record</text>
+
+</g>
+<g id="7:69_4" data-kind="12" class="cell function">
+<rect x="878.9400024414062" y="-573.7000122070312" width="277.91998291015625" height="27.20001220703125"></rect>
+<text text-anchor="start" x="936.96" y="-555.3" font-family="Arial" font-size="16.00">get_all_media_records</text>
+
+</g>
+</g>
+<!-- 8&#45;&gt;7 -->
+<g id="8:11_4-7:5_4" class="edge" data-from="8:11_4" data-to="7:5_4">
+
+<path fill="none" stroke="black" d="M700.44,-782.9C789.25,-782.9 784.42,-679.46 861.89,-666.94"></path>
+<polygon fill="black" stroke="black" points="861.88,-672.2 876.43,-665.82 861.07,-661.73 861.88,-672.2"></polygon>
+<text text-anchor="middle" x="789.19" y="-728.5" font-family="Times,serif" font-size="14.00"> </text>
+<path fill="none" stroke="black" d="M700.44,-782.9C789.25,-782.9 784.42,-679.46 861.89,-666.94" class="hover-path"></path></g>
+<!-- 8&#45;&gt;7 -->
+<g id="8:11_4-7:15_4" class="edge" data-from="8:11_4" data-to="7:15_4">
+
+<path fill="none" stroke="black" d="M700.44,-782.9C752.88,-782.9 747.65,-737.35 787.44,-703.2 822.01,-673.54 825.87,-639.59 861.79,-632.04"></path>
+<polygon fill="black" stroke="black" points="862,-637.29 876.43,-630.64 861,-626.84 862,-637.29"></polygon>
+<text text-anchor="middle" x="789.19" y="-707.4" font-family="Times,serif" font-size="14.00"> </text>
+<path fill="none" stroke="black" d="M700.44,-782.9C752.88,-782.9 747.65,-737.35 787.44,-703.2 822.01,-673.54 825.87,-639.59 861.79,-632.04" class="hover-path"></path></g>
+<!-- 8&#45;&gt;7 -->
+<g id="8:11_4-7:40_4" class="edge" data-from="8:11_4" data-to="7:40_4">
+
+<path fill="none" stroke="black" d="M700.44,-782.9C760.26,-782.9 746.23,-723.56 787.44,-680.2 821.21,-644.68 822.88,-605.24 861.54,-596.9"></path>
+<polygon fill="black" stroke="black" points="862.02,-602.13 876.44,-595.45 861,-591.68 862.02,-602.13"></polygon>
+<text text-anchor="middle" x="789.19" y="-684.4" font-family="Times,serif" font-size="14.00"> </text>
+<path fill="none" stroke="black" d="M700.44,-782.9C760.26,-782.9 746.23,-723.56 787.44,-680.2 821.21,-644.68 822.88,-605.24 861.54,-596.9" class="hover-path"></path></g>
+<!-- 10 -->
+<g id="10" class="node" data-path="/Users/syuen/Video_editor_Project/vacation_media_organizer/metadata_extractor.py">
+
+<rect x="862.9600219726562" y="-847.7000122070312" width="309.87994384765625" height="99.4000244140625"></rect>
+<g id="10_5" class="title">
+<text text-anchor="start" x="884.96" y="-815.3" font-family="Arial" font-size="16.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;metadata_extractor.py &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+
+</g>
+<g id="10:6_4" data-kind="12" class="cell function">
+<rect x="878.9600219726562" y="-796.5" width="277.87994384765625" height="27.20001220703125"></rect>
+<text text-anchor="start" x="956.09" y="-778.1" font-family="Arial" font-size="16.00">extract_metadata</text>
+
+</g>
+</g>
+<!-- 8&#45;&gt;10 -->
+<g id="8:11_4-10:6_4" class="edge" data-from="8:11_4" data-to="10:6_4">
+
+<path fill="none" stroke="black" d="M700.44,-782.9C773.64,-782.9 795.9,-782.9 861.74,-782.9"></path>
+<polygon fill="black" stroke="black" points="861.44,-788.15 876.44,-782.9 861.44,-777.65 861.44,-788.15"></polygon>
+<text text-anchor="middle" x="789.19" y="-787.1" font-family="Times,serif" font-size="14.00"> </text>
+<path fill="none" stroke="black" d="M700.44,-782.9C773.64,-782.9 795.9,-782.9 861.74,-782.9" class="hover-path"></path></g>
+<!-- 9 -->
+<g id="9" class="node" data-path="/Users/syuen/Video_editor_Project/vacation_media_organizer/organize_media.py">
+
+<rect x="20.059999465942383" y="-847.7000122070312" width="285.88000297546387" height="99.4000244140625"></rect>
+<g id="9_6" class="title">
+<text text-anchor="start" x="42.06" y="-815.3" font-family="Arial" font-size="16.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;organize_media.py &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+
+</g>
+<g id="9:5_4" data-kind="12" class="cell function">
+<rect x="36.060001373291016" y="-796.5" width="253.88000106811523" height="27.20001220703125"></rect>
+<text text-anchor="start" x="145.66" y="-778.1" font-family="Arial" font-size="16.00">main</text>
+
+</g>
+</g>
+<!-- 9&#45;&gt;8 -->
+<g id="9:5_4-8:11_4" class="edge" data-from="9:5_4" data-to="8:11_4">
+
+<path fill="none" stroke="black" d="M290.94,-782.9C364.13,-782.9 386.39,-782.9 452.22,-782.9"></path>
+<polygon fill="black" stroke="black" points="451.93,-788.15 466.93,-782.9 451.93,-777.65 451.93,-788.15"></polygon>
+<text text-anchor="middle" x="379.69" y="-787.1" font-family="Times,serif" font-size="14.00"> </text>
+<path fill="none" stroke="black" d="M290.94,-782.9C364.13,-782.9 386.39,-782.9 452.22,-782.9" class="hover-path"></path></g>
+<!-- 6 -->
+<g id="6" class="node" data-path="/Users/syuen/Video_editor_Project/vacation_media_organizer/media_library_web/src/main.py">
+
+<rect x="32" y="-688.7000122070312" width="262" height="99.4000244140625"></rect>
+<g id="6_7" class="title">
+<text text-anchor="start" x="81.64" y="-656.3" font-family="Arial" font-size="16.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;main.py &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+
+</g>
+<g id="6:26_4" data-kind="12" class="cell function">
+<rect x="48" y="-637.5" width="230" height="27.20001220703125"></rect>
+<text text-anchor="start" x="143.44" y="-619.1" font-family="Arial" font-size="16.00">serve</text>
+
+</g>
+</g>
+<!-- 1 -->
+<g id="1" class="node" data-path="/Users/syuen/Video_editor_Project/vacation_media_organizer/media_library_web/src/models/media.py">
+
+<rect x="453.44000244140625" y="-483.29998779296875" width="262" height="150.5999755859375"></rect>
+<g id="1_8" class="title">
+<text text-anchor="start" x="498.64" y="-450.9" font-family="Arial" font-size="16.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;media.py &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+
+</g>
+<g id="1:5_6" data-kind="5" class="cell class">
+<rect x="469.44000244140625" y="-432.1000061035156" width="230" height="78.39999389648438"></rect>
+<text text-anchor="start" x="552.43" y="-406.7" font-family="Arial" font-weight="bold" font-size="16.00">C</text>
+<text text-anchor="start" x="563.98" y="-406.7" font-family="Arial" font-size="16.00"> &#160;Media</text>
+<g id="1:23_8" data-kind="6" class="cell method">
+<rect x="477.44000244140625" y="-388.8999938964844" width="214" height="27.199981689453125"></rect>
+<text text-anchor="start" x="560.87" y="-370.5" font-family="Arial" font-size="16.00">to_dict</text>
+
+</g>
+
+</g>
+</g>
+<!-- 5 -->
+<g id="5" class="node" data-path="/Users/syuen/Video_editor_Project/vacation_media_organizer/media_library_web/src/routes/media.py">
+
+<rect x="32" y="-530.0999755859375" width="262" height="240.19998168945312"></rect>
+<g id="5_9" class="title">
+<text text-anchor="start" x="77.2" y="-497.7" font-family="Arial" font-size="16.00"> &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;media.py &#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;</text>
+
+</g>
+<g id="5:8_4" data-kind="12" class="cell function">
+<rect x="48" y="-478.8999938964844" width="230" height="27.199981689453125"></rect>
+<text text-anchor="start" x="113.19" y="-460.5" font-family="Arial" font-size="16.00">get_all_media</text>
+
+</g>
+<g id="5:57_4" data-kind="12" class="cell function">
+<rect x="48" y="-443.70001220703125" width="230" height="27.20001220703125"></rect>
+<text text-anchor="start" x="125.64" y="-425.3" font-family="Arial" font-size="16.00">get_media</text>
+
+</g>
+<g id="5:78_4" data-kind="12" class="cell function">
+<rect x="48" y="-408.5" width="230" height="27.20001220703125"></rect>
+<text text-anchor="start" x="102.52" y="-390.1" font-family="Arial" font-size="16.00">serve_media_file</text>
+
+</g>
+<g id="5:92_4" data-kind="12" class="cell function">
+<rect x="48" y="-373.29998779296875" width="230" height="27.199981689453125"></rect>
+<text text-anchor="start" x="115.86" y="-354.9" font-family="Arial" font-size="16.00">get_locations</text>
+
+</g>
+<g id="5:128_4" data-kind="12" class="cell function">
+<rect x="48" y="-338.1000061035156" width="230" height="27.20001220703125"></rect>
+<text text-anchor="start" x="130.54" y="-319.7" font-family="Arial" font-size="16.00">get_stats</text>
+
+</g>
+</g>
+<g id="faded-group"></g></g>
+<defs><filter id="shadow"><feDropShadow dx="0" dy="0" stdDeviation="4" flood-opacity="0.5"></feDropShadow></filter>
+    <linearGradient id="highlightGradient">
+      <stop offset="0%" stop-color="var(--edge-incoming-color)"></stop>
+      <stop offset="100%" stop-color="var(--edge-outgoing-color)"></stop>
+    </linearGradient></defs>
+</svg>
