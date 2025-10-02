@@ -86,6 +86,20 @@ pip install -r requirements.txt
 pip install -r requirements.txt
 ```
 
+### My M1 installation note
+
+```bash
+python --version
+  Python 3.12.1
+
+pip3 install numpy==2.3.0
+pip3 install PyExifTool mediameta opencv-python ultralytics pydub silero-vad
+pip3 install geopy mediapipe opencv-python
+pip3 install Flask Flask-SQLAlchemy SQLAlchemy
+
+brew install ffmpeg
+```
+
 ## Usage
 
 ### 1. Ingest and Organize Media Files

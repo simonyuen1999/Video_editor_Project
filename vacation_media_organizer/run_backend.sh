@@ -6,7 +6,7 @@
 cd media_library_web
 
 # Activate the virtual environment
-source venv/bin/activate
+# source venv/bin/activate
 
 # Run the Flask application
 python src/main.py

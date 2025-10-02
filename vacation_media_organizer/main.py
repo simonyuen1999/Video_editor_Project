@@ -31,6 +31,10 @@ def organize_media(source_dir, library_dir):
         return
 
     for filename in os.listdir(source_dir):
+
+        if filename=='.DS_Store':
+            continue  # Skip hidden files
+
         source_path = os.path.join(source_dir, filename)
         if not os.path.isfile(source_path):
             continue
