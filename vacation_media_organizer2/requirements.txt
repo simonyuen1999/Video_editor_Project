@@ -1,0 +1,11 @@
+PyExifTool
+mediameta
+opencv-python
+ultralytics
+pydub
+silero-vad
+geopy
+Flask
+Flask-SQLAlchemy
+SQLAlchemy
+
