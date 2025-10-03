@@ -12,6 +12,10 @@ Here is the description I passed into Manus:
 
 Below is the initial generated workflow.
 
+### Found the problem
+
+DJI Pocket 3 does not have GPS, so its MP4 files **do not have geographic information** unless Pocket 3 camera is connecting to phone Memo application.
+
 ## Introduction
 
 This solution provides a comprehensive, cross-platform system for organizing your vacation photos and videos from devices like iPhone and DJI Pocket 3. It automates the process of extracting metadata, performing semantic video analysis, organizing files by creation date, and creating intelligent links for location and scenery-based browsing. A local web-based interface allows for intuitive exploration, filtering, and playback of your media.
