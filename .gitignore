@@ -88,3 +88,4 @@ out/
 .svelte-kit/
 .vite/
 coverage/
+target/

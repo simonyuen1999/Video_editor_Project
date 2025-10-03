@@ -1,3 +1,6 @@
+#!python
+
+# This is the old version of scan_main.py, kept for reference.
 import os
 import sys
 import argparse
