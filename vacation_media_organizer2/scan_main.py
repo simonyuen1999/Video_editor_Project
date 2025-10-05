@@ -38,7 +38,6 @@ class MediaOrganizerDB:
                     file_type TEXT,
                     size INTEGER,
                     creation_time TEXT,
-                    modification_time TEXT,
                     latitude REAL,
                     longitude REAL,
                     city TEXT,
@@ -62,12 +61,13 @@ class MediaOrganizerDB:
 
     def add_media_file(self, metadata):
         try:
+            # fixing error: 14 values for 13 columns
             self.cursor.execute('''
                 INSERT INTO media_files (
                     filepath, filename, file_extension, file_type, size,
-                    creation_time, modification_time, latitude, longitude,
+                    creation_time, latitude, longitude,
                     city, region, subregion, country_code, country
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 metadata.get('filepath'),
                 metadata.get('filename'),
@@ -75,7 +75,6 @@ class MediaOrganizerDB:
                 metadata.get('file_type'),
                 metadata.get('size'),
                 metadata.get('creation_time'),
-                metadata.get('modification_time'),
                 metadata.get('latitude'),
                 metadata.get('longitude'),
                 metadata.get('city'),
@@ -85,7 +84,7 @@ class MediaOrganizerDB:
                 metadata.get('country'),
             ))
             self.conn.commit()
-            logging.info(f"Added/Updated: {metadata.get('filepath')}")
+            logging.info(f"Added: {metadata.get('filepath')}")
         except sqlite3.IntegrityError:
             logging.debug(f"File already exists in DB, skipping: {metadata.get('filepath')}")
         except sqlite3.Error as e:
