@@ -79,8 +79,8 @@ class MediaOrganizerDB:
         return self.cursor.fetchone() is not None
 
     def add_media_file(self, metadata):
+        # logging.info(f"Adding media file to DB: {metadata.get('filepath')}, {metadata.get('creation_time')}")
         try:
-            # fixing error: 14 values for 13 columns
             self.cursor.execute('''
                 INSERT INTO media_files (
                     filepath, filename, file_extension, file_type, size, creation_time, latitude, longitude,
@@ -107,7 +107,7 @@ class MediaOrganizerDB:
                 metadata.get('timezone'),
             ))
             self.conn.commit()
-            logging.debug(f"Added: {metadata.get('filepath')}")
+            logging.debug(f"Added media file: {metadata.get('filepath')}, {metadata.get('creation_time')}")
         except sqlite3.IntegrityError:
             logging.debug(f"File already exists in DB, skipping: {metadata.get('filepath')}")
         except sqlite3.Error as e:
@@ -160,26 +160,26 @@ class MediaOrganizerDB:
             self.conn.rollback()
             logging.debug(f"Rolled back changes for {filepath}")
 
-    def get_files_with_geo(self, file_type=None):
-        if file_type:
-            self.cursor.execute(
-                'SELECT filepath, creation_time, latitude, longitude, city_en, city_zh, ' + \
-                       'region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone ' + \
-                       'FROM media_files WHERE city_en IS NOT NULL AND file_type = ?', (file_type,))
-        else:
-            self.cursor.execute(
-                'SELECT filepath, creation_time, latitude, longitude, city_en, city_zh, ' + \
-                    'region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone ' + \
-                    'FROM media_files WHERE city_en IS NOT NULL')
-        return self.cursor.fetchall()
-    
+    def get_files_with_geo(self):
+        self.cursor.execute(
+            'SELECT filepath, creation_time, latitude, longitude, city_en, city_zh, ' + \
+                   'region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone ' + \
+                   'FROM media_files WHERE creation_time IS NOT NULL and city_en IS NOT NULL and file_type="Image"')
+        arr = self.cursor.fetchall()
+        # logging.info(f"== Found {len(arr)} image files with city_en data.")
+        #for a in arr:
+        #    logging.info(f"geo data: {a}")
+        return arr
+
     def get_files_without_geo(self):
         self.cursor.execute(
             'SELECT filepath, creation_time, latitude, longitude, city_en, city_zh, ' + \
                    'region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone ' + \
-                   'FROM media_files WHERE city_en IS NULL AND latitude IS NULL'
+                   'FROM media_files WHERE creation_time IS NOT NULL AND city_en IS NULL AND latitude IS NULL'
         )
-        return self.cursor.fetchall()
+        arr = self.cursor.fetchall()
+        # logging.info(f"== Found {len(arr)} files without geo data (city_en is NULL and latitude is NULL).")
+        return arr
 
     def get_media_by_time_and_location(self, timestamp, lat, lon, time_window_minutes=5, distance_threshold_km=0.2):
         # This is a simplified proximity check. A more robust solution would use spatial indexing.
@@ -227,8 +227,12 @@ def main():
         help='Delete database and start the re-scan process. default: False (do not delete DB)'
     )
     parser.add_argument(
-        '--jump2update', '-j', default=True, action='store_true',
-        help='Skip the file scanning and jump to updating the database. default: True (jump to update section, skip scanning files)'
+        '--jump2update', '-j', default=False, action='store_true',
+        help='Skip the file scanning and jump to updating the database. default: False'
+    )
+    parser.add_argument(
+        '--skipDBupdate', '-s', default=False, action='store_true',
+        help='Default not skip DB update at the end. default: False'
     )
     # The geo_chinese_.list file for enhanced geolocation with Chinese name translations
     parser.add_argument(
@@ -245,6 +249,7 @@ def main():
     logging.getLogger().setLevel(numeric_level)
     logging.info(f"Logging level set to {args.debug_level}")
 
+    # If user specified --deldb, delete the existing database file inside MetaOrganizerDB class.
     db = MediaOrganizerDB(rescan=args.deldb)
     extractor = MetadataExtractor(geo_list_path=args.geo_list)
 
@@ -253,6 +258,7 @@ def main():
 
     # After the first run, DB is created.  For the rest of the runs, we can skip already scanned files.
     if not args.jump2update:
+        logging.info("Starting to process files and update database...")
         for filepath in all_files:
 
             # Skip the hidden files and non-media files
@@ -274,132 +280,143 @@ def main():
                     if geo_data:
                         metadata.update(geo_data)
 
-                if 'creation_date' not in metadata or metadata['creation_date'] is None or metadata['creation_date'] == 'N/A':
-                    logging.warning(f"Metadata for {filepath}: ****** Missing creation_date")
-                
+                #if 'creation_time' not in metadata or metadata['creation_time'] is None or metadata['creation_time'] == 'N/A':
+                #    logging.warning(f"Metadata for {filepath}: ****** Missing creation_time")
+                #    input("Paused for debugging. Press Enter to continue...")
+
                 db.add_media_file(metadata)
             else:
                 logging.warning(f"Could not extract metadata for: {filepath}")
+    else:
+        logging.info("Skipping file scanning as per user request (--jump2update or -j), go to DB update.")
 
     # ==================================================================================
-    # Post-processing for metadata sharing (MP4 from HEIC/Images)
-    logging.info("Attempting to share geo metadata between related files...")
+    if not args.skipDBupdate:
+        # Post-processing for metadata sharing (MP4 from HEIC/Images)
+        logging.info("Attempting to share geo metadata between related files...")
 
-    # All iPhone images are HEIC, some other images may have geo data.
-    image_files_with_geo = db.get_files_with_geo(file_type='Image')
-    logging.info(f"Found {len(image_files_with_geo)} image files with geo data.")
-    
-    # The video files are from DJI Pocket 3 which MP4 do not have geo data.
-    all_files_without_geo = db.get_files_without_geo()
-    logging.info(f"Found {len(all_files_without_geo)} video files without geo data.")
+        # All iPhone images are HEIC, some other images may have geo data.
+        image_files_with_geo = db.get_files_with_geo()
+        logging.info(f">> Found {len(image_files_with_geo)} image files with geo data.")
+        #for a in image_files_with_geo:
+        #    logging.info(f"geo data: {a}")
+        #input("Paused for debugging. Press Enter to continue...")
+        
+        # The video files are from DJI Pocket 3 which MP4 do not have geo data.
+        all_files_without_geo = db.get_files_without_geo()
+        logging.info(f">> Found {len(all_files_without_geo)} video files without geo data.")
+        #for a in all_files_without_geo:
+        #    logging.info(f"no geo data: {a}")
+        #input("Paused for debugging. Press Enter to continue...")
 
-    # Process each media file without geo data to find closest image with geo data
-    for media_file in all_files_without_geo:
-        media_filepath = media_file[0]
-        media_creation_time = media_file[1]
-        
-        if not media_creation_time:
-            logging.info(f"Skipping {media_filepath} - no creation time available")
-            continue
+        # Process each media file without geo data to find closest image with geo data
+        for media_file in all_files_without_geo:
+            media_filepath = media_file[0]
+            media_creation_time = media_file[1]
             
-        # Find the closest image file by creation time
-        closest_image = None
-        min_time_diff = float('inf')
-        
-        for image_file in image_files_with_geo:
-            image_filepath = image_file[0]
-            image_creation_time = image_file[1]
-            
-            if not image_creation_time:
+            if not media_creation_time:
+                logging.debug(f"Skipping {media_filepath} - no creation time available")
                 continue
                 
-            try:
-                # Calculate time difference in seconds
-                from datetime import datetime
-                media_time = datetime.fromisoformat(media_creation_time.replace('Z', '+00:00'))
-                image_time = datetime.fromisoformat(image_creation_time.replace('Z', '+00:00'))
-                time_diff = abs((media_time - image_time).total_seconds())
+            # Find the closest image file by creation time
+            closest_image = None
+            min_time_diff = float('inf')
+            
+            for image_file in image_files_with_geo:
+                image_filepath = image_file[0]
+                image_creation_time = image_file[1]
                 
-                if time_diff < min_time_diff:
-                    min_time_diff = time_diff
-                    closest_image = image_file
+                if not image_creation_time:
+                    continue
                     
-            except (ValueError, TypeError) as e:
-                logging.debug(f"Error parsing timestamps for {media_filepath} or {image_filepath}: {e}")
-                continue
-        
-        # If we found a close image (within reasonable time window, e.g., 1 hour)
-        if closest_image and min_time_diff <= 3600:  # 3600 seconds = 1 hour
-            # Extract geo data from closest image
-            geo_data = {
-                'latitude': closest_image[2],
-                'longitude': closest_image[3], 
-                'city_en': closest_image[4],
-                'city_zh': closest_image[5],
-                'region_en': closest_image[6],
-                'region_zh': closest_image[7],
-                'subregion_en': closest_image[8],
-                'subregion_zh': closest_image[9],
-                'country_code': closest_image[10],
-                'country_en': closest_image[11],
-                'country_zh': closest_image[12],
-                'timezone': closest_image[13]
-            }
+                try:
+                    # Calculate time difference in seconds
+                    from datetime import datetime
+                    media_time = datetime.fromisoformat(media_creation_time.replace('Z', '+00:00'))
+                    image_time = datetime.fromisoformat(image_creation_time.replace('Z', '+00:00'))
+                    time_diff = abs((media_time - image_time).total_seconds())
+                    
+                    if time_diff < min_time_diff:
+                        min_time_diff = time_diff
+                        closest_image = image_file
+                        
+                except (ValueError, TypeError) as e:
+                    logging.debug(f"Error parsing timestamps for {media_filepath} or {image_filepath}: {e}")
+                    continue
             
-            # Update the media file with geo data from closest image
-            try:
-                db.cursor.execute('''
-                    UPDATE media_files
-                    SET latitude = ?, longitude = ?, city_en = ?, city_zh = ?, 
-                        region_en = ?, region_zh = ?, subregion_en = ?, subregion_zh = ?,
-                        country_code = ?, country_en = ?, country_zh = ?, timezone = ?
-                    WHERE filepath = ?
-                ''', (
-                    geo_data['latitude'], geo_data['longitude'],
-                    geo_data['city_en'], geo_data['city_zh'],
-                    geo_data['region_en'], geo_data['region_zh'],
-                    geo_data['subregion_en'], geo_data['subregion_zh'],
-                    geo_data['country_code'], geo_data['country_en'],
-                    geo_data['country_zh'], geo_data['timezone'],
-                    media_filepath
-                ))
-                db.conn.commit()
+            # If we found a close image (within reasonable time window, e.g., 1 hour)
+            if closest_image and min_time_diff <= 3600:  # 3600 seconds = 1 hour
+                # Extract geo data from closest image
+                geo_data = {
+                    'latitude': closest_image[2],
+                    'longitude': closest_image[3], 
+                    'city_en': closest_image[4],
+                    'city_zh': closest_image[5],
+                    'region_en': closest_image[6],
+                    'region_zh': closest_image[7],
+                    'subregion_en': closest_image[8],
+                    'subregion_zh': closest_image[9],
+                    'country_code': closest_image[10],
+                    'country_en': closest_image[11],
+                    'country_zh': closest_image[12],
+                    'timezone': closest_image[13]
+                }
                 
-                logging.info(f"Updated geo data for {media_filepath} from {closest_image[0]} "
-                           f"(time diff: {min_time_diff:.0f} seconds)")
-                           
-            except sqlite3.Error as e:
-                logging.error(f"Error updating geo data for {media_filepath}: {e}")
-        else:
-            if closest_image:
-                logging.debug(f"Closest image for {media_filepath} is too far in time "
-                            f"({min_time_diff:.0f} seconds)")
+                # Update the media file with geo data from closest image
+                try:
+                    db.cursor.execute('''
+                        UPDATE media_files
+                        SET latitude = ?, longitude = ?, city_en = ?, city_zh = ?, 
+                            region_en = ?, region_zh = ?, subregion_en = ?, subregion_zh = ?,
+                            country_code = ?, country_en = ?, country_zh = ?, timezone = ?
+                        WHERE filepath = ?
+                    ''', (
+                        geo_data['latitude'], geo_data['longitude'],
+                        geo_data['city_en'], geo_data['city_zh'],
+                        geo_data['region_en'], geo_data['region_zh'],
+                        geo_data['subregion_en'], geo_data['subregion_zh'],
+                        geo_data['country_code'], geo_data['country_en'],
+                        geo_data['country_zh'], geo_data['timezone'],
+                        media_filepath
+                    ))
+                    db.conn.commit()
+                    
+                    logging.info(f"Updated geo data for {media_filepath} from {closest_image[0]} "
+                            f"(time diff: {min_time_diff:.0f} seconds)")
+                            
+                except sqlite3.Error as e:
+                    logging.error(f"Error updating geo data for {media_filepath}: {e}")
             else:
-                logging.debug(f"No suitable image found for {media_filepath}")
+                if closest_image:
+                    logging.debug(f"Closest image for {media_filepath} is too far in time "
+                                f"({min_time_diff:.0f} seconds)")
+                else:
+                    logging.debug(f"No suitable image found for {media_filepath}")
 
-    # For a real implementation, we'd query for images with geo data, then find nearby videos.
-    # For now, let's simulate by finding files that need geo and trying to fill them.
+        # For a real implementation, we'd query for images with geo data, then find nearby videos.
+        # For now, let's simulate by finding files that need geo and trying to fill them.
 
-    # Simplified metadata sharing logic (needs refinement for real-world use)
-    # Iterate through all files in DB, if an MP4 lacks geo but an image nearby has it, share.
-    # This part would be more complex, involving spatial and temporal queries.
-    # For this playbook, we'll assume the extractor can handle this during initial scan or a dedicated pass.
+        # Simplified metadata sharing logic (needs refinement for real-world use)
+        # Iterate through all files in DB, if an MP4 lacks geo but an image nearby has it, share.
+        # This part would be more complex, involving spatial and temporal queries.
+        # For this playbook, we'll assume the extractor can handle this during initial scan or a dedicated pass.
 
-    # A more robust approach for metadata sharing would involve:
-    # 1. Querying all media files with GPS data.
-    # 2. For each media file (e.g., an image) with GPS, find other media files (e.g., videos) within a certain
-    #    time and spatial proximity that lack detailed geo-location (city, region, etc.).
-    # 3. Propagate the detailed geo-location from the source media to the target media.
+        # A more robust approach for metadata sharing would involve:
+        # 1. Querying all media files with GPS data.
+        # 2. For each media file (e.g., an image) with GPS, find other media files (e.g., videos) within a certain
+        #    time and spatial proximity that lack detailed geo-location (city, region, etc.).
+        # 3. Propagate the detailed geo-location from the source media to the target media.
 
-    # Example of how one might iterate to find and update related files:
-    # for image_filepath, img_lat, img_lon, img_time in db.get_images_with_geo():
-    #     related_videos = db.get_media_by_time_and_location(img_time, img_lat, img_lon)
-    #     for video_filepath, vid_type, vid_lat, vid_lon, vid_time in related_videos:
-    #         if vid_type == 'video' and not db.has_detailed_geo(video_filepath):
-    #             geo_data = extractor.get_geo_from_coordinates(img_lat, img_lon) # Re-extract or use cached
-    #             if geo_data:
-    #                 db.update_media_file_geo(video_filepath, geo_data)
-    #                 logging.info(f"Shared geo data from {image_filepath} to {video_filepath}")
+        # Example of how one might iterate to find and update related files:
+        # for image_filepath, img_lat, img_lon, img_time in db.get_images_with_geo():
+        #     related_videos = db.get_media_by_time_and_location(img_time, img_lat, img_lon)
+        #     for video_filepath, vid_type, vid_lat, vid_lon, vid_time in related_videos:
+        #         if vid_type == 'video' and not db.has_detailed_geo(video_filepath):
+        #             geo_data = extractor.get_geo_from_coordinates(img_lat, img_lon) # Re-extract or use cached
+        #             if geo_data:
+        #                 db.update_media_file_geo(video_filepath, geo_data)
+        #                 logging.info(f"Shared geo data from {image_filepath} to {video_filepath}")
+    # ==================================================================================
 
     db.close()
     logging.info("Media organization complete.")

@@ -122,7 +122,7 @@ class MetadataExtractor:
             "file_extension": exif_data.get("FileTypeExtension", extension),
             "file_type": fileType,
             "size": stat_info.st_size,
-            "creation_date": exif_data.get("CreateDate", None),
+            "creation_time": exif_data.get("CreateDate", None),
             "latitude": exif_data.get("Latitude", None),
             "longitude": exif_data.get("Longitude", None),
         }
