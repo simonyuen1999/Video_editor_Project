@@ -5,39 +5,47 @@ import subprocess
 import json
 import logging
 from datetime import datetime
-from unittest import result
+import pickle
+from pathlib import Path
 
 class MetadataExtractor:
-    def __init__(self, geo_list_path='geo.list'):
+    def __init__(self, geo_list_path='geo_chinese_.list'):
+
         self.geo_list_path = geo_list_path
         if not os.path.exists(self.geo_list_path):
-            logging.warning(f"geo.list not found at: {self.geo_list_path}. Geolocation enhancement will be disabled.")
+            logging.warning(f"File {self.geo_list_path} not found. Geolocation enhancement will be disabled.")
             self.geo_list_path = None
         else:
             # Read and parse geo.list comma separator CSV file and store in memory as a list of tuples
-            # This is the first line of the geo.list file:
-            #   City,Region,Subregion,CountryCode,Country,TimeZone,FeatureCode,Population,Latitude,Longitude
+            # This is the first line of the CSV file:
+            #   City_en,City_zn,Region_en,Region_zn,Subregion_en,Subregion_zn,CountryCode,Country_en,Country_zn,TimeZone,Latitude,Longitude
             self.geo_data = []
             with open(self.geo_list_path, 'r', encoding='utf-8') as f:
                 # Skip header line
                 next(f)
                 for line in f:
-                    # Each line is comma-separated values and values are 0:City,1:Region,2:Subregion,3:CountryCode,4:Country,5:TimeZone,6:FeatureCode,7:Population,8:Latitude,9:Longitude
-                    # After splitting, we want to store (Latitude, Longitude, City, Region, Subregion, CountryCode, Country)
+                    # Each line is comma-separated values and values are
+                    #  0:City_en,1:City_zn,2:Region_en,3:Region_zn,4:Subregion_en,5:Subregion_zn,6:CountryCode,7:Country_en,8:Country_zn,9:TimeZone,10:Latitude,11:Longitude
+                    # logging.info(f"Parsing line in geo.list: {line.strip()}")
                     parts = line.strip().split(',')
                     try:
-                        lat = float(parts[8])
-                        lon = float(parts[9])
-                        city = parts[0]
-                        region = parts[1]
-                        subregion = parts[2]
-                        country_code = parts[3]
-                        country = parts[4]
-                        self.geo_data.append((lat, lon, city, region, subregion, country_code, country))
+                        city_en = parts[0]
+                        city_zn = parts[1]
+                        region_en = parts[2]
+                        region_zn = parts[3]
+                        subregion_en = parts[4]
+                        subregion_zn = parts[5]
+                        country_code = parts[6]
+                        country_en = parts[7]
+                        country_zn = parts[8]
+                        timezone = parts[9]
+                        lat = float(parts[10])
+                        lon = float(parts[11])
+                        self.geo_data.append((lat, lon, city_en, city_zn, region_en, region_zn, subregion_en, subregion_zn, country_code, country_en, country_zn, timezone))
                     except ValueError:
                         logging.error(f"Error parsing line in geo.list: {line}")
                         continue
-            logging.info(f"Loaded {len(self.geo_data)} entries from geo.list")
+            logging.info(f"Loaded {len(self.geo_data)} entries from {self.geo_list_path}")
 
     def _run_exiftool(self, filepath):
         result = subprocess.run(
@@ -75,9 +83,9 @@ class MetadataExtractor:
 
         metadata = {
             "file_type": "image",
-            "latitude": exif_data.get("Composite:GPSLatitude", "N/A"),
-            "longitude": exif_data.get("Composite:GPSLongitude", "N/A"),
-            "creation_date": exif_data.get("EXIF:CreateDate", "N/A"),
+            "latitude": exif_data.get("Composite:GPSLatitude", None),
+            "longitude": exif_data.get("Composite:GPSLongitude", None),
+            "creation_date": exif_data.get("EXIF:CreateDate", None),
         }
         return metadata
 
@@ -88,8 +96,9 @@ class MetadataExtractor:
 
         metadata = {
             "file_type": "video",
-            "latitude": exif_data.get("Composite:GPSLatitude"),
-            "longitude": exif_data.get("Composite:GPSLongitude"),
+            "latitude": exif_data.get("Composite:GPSLatitude", None),
+            "longitude": exif_data.get("Composite:GPSLongitude", None),
+            "creation_date": exif_data.get("EXIF:CreateDate", None),
         }
         return metadata
 
@@ -104,7 +113,8 @@ class MetadataExtractor:
             "filename": os.path.basename(filepath),
             "file_extension": os.path.splitext(filepath)[1].lower(),
             "size": stat_info.st_size,
-            "creation_time": datetime.fromtimestamp(stat_info.st_ctime).isoformat(),
+            # This is the last modification time, not image creation time
+            # "creation_time": datetime.fromtimestamp(stat_info.st_ctime).isoformat(),
         }
 
         media_metadata = self.ImageMetadata(filepath, exif_data) or self.VideoMetadata(filepath, exif_data)
@@ -140,18 +150,22 @@ class MetadataExtractor:
             closest = min(self.geo_data, key=lambda g: self.haversine(latitude, longitude, g[0], g[1]))
             logging.info(f"Closest geo data found: {closest}")
 
+            # 0:lat, 1:lon, 2:city_en, 3:city_zn, 4:region_en, 5:region_zn, 6:subregion_en, 7:subregion_zn, 8:country_code, 9:country_en, 10:country_zn, 11:timezone
             return {
-                "city": closest[2],
-                "region": closest[3],
-                "subregion": closest[4],
-                "country_code": closest[5],
-                "country": closest[6],
                 "latitude": closest[0],
                 "longitude": closest[1],
+                "city_en": closest[2],
+                "city_zh": closest[3],
+                "region_en": closest[4],
+                "region_zh": closest[5],
+                "subregion_en": closest[6],
+                "subregion_zh": closest[7],
+                "country_code": closest[8],
+                "country_en": closest[9],
+                "country_zh": closest[10],
+                "timezone": closest[11],
                 "distance_km": round(self.haversine(latitude, longitude, closest[0], closest[1]), 2)
             }
-
         except Exception as e:
             logging.error(f"Error getting geo from coordinates: {e}")
             return None
-

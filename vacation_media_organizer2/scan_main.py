@@ -6,6 +6,7 @@ import logging
 import sqlite3
 from metadata_extractor import MetadataExtractor
 
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format=
     '%(asctime)s - %(levelname)s - %(message)s')
@@ -40,11 +41,16 @@ class MediaOrganizerDB:
                     creation_time TEXT,
                     latitude REAL,
                     longitude REAL,
-                    city TEXT,
-                    region TEXT,
-                    subregion TEXT,
+                    city_en TEXT,
+                    city_zh TEXT,
+                    region_en TEXT,
+                    region_zh TEXT,
+                    subregion_en TEXT,
+                    subregion_zh TEXT,
                     country_code TEXT,
-                    country TEXT,
+                    country_en TEXT,
+                    country_zh TEXT,
+                    timezone TEXT,
                     scanned_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -64,10 +70,9 @@ class MediaOrganizerDB:
             # fixing error: 14 values for 13 columns
             self.cursor.execute('''
                 INSERT INTO media_files (
-                    filepath, filename, file_extension, file_type, size,
-                    creation_time, latitude, longitude,
-                    city, region, subregion, country_code, country
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    filepath, filename, file_extension, file_type, size, creation_time, latitude, longitude,
+                    city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 metadata.get('filepath'),
                 metadata.get('filename'),
@@ -77,11 +82,16 @@ class MediaOrganizerDB:
                 metadata.get('creation_time'),
                 metadata.get('latitude'),
                 metadata.get('longitude'),
-                metadata.get('city'),
-                metadata.get('region'),
-                metadata.get('subregion'),
+                metadata.get('city_en'),
+                metadata.get('city_zh'),
+                metadata.get('region_en'),
+                metadata.get('region_zh'),
+                metadata.get('subregion_en'),
+                metadata.get('subregion_zh'),
                 metadata.get('country_code'),
-                metadata.get('country'),
+                metadata.get('country_en'),
+                metadata.get('country_zh'),
+                metadata.get('timezone'),
             ))
             self.conn.commit()
             logging.info(f"Added: {metadata.get('filepath')}")
@@ -94,14 +104,19 @@ class MediaOrganizerDB:
         try:
             self.cursor.execute('''
                 UPDATE media_files
-                SET city = ?, region = ?, subregion = ?, country_code = ?, country = ?
+                SET city_en = ?, city_zh = ?, region_en = ?, region_zh = ?, subregion_en = ?, subregion_zh = ?, country_code = ?, country_en = ?, country_zh = ?, timezone = ?
                 WHERE filepath = ?
             ''', (
-                geo_data.get('city'),
-                geo_data.get('region'),
-                geo_data.get('subregion'),
+                geo_data.get('city_en'),
+                geo_data.get('city_zh'),
+                geo_data.get('region_en'),
+                geo_data.get('region_zh'),
+                geo_data.get('subregion_en'),
+                geo_data.get('subregion_zh'),
                 geo_data.get('country_code'),
-                geo_data.get('country'),
+                geo_data.get('country_en'),
+                geo_data.get('country_zh'),
+                geo_data.get('timezone'),
                 filepath
             ))
             self.conn.commit()
@@ -115,7 +130,7 @@ class MediaOrganizerDB:
         )
         return self.cursor.fetchall()
 
-    def get_media_by_time_and_location(self, timestamp, lat, lon, time_window_minutes=5, distance_threshold_km=0.1):
+    def get_media_by_time_and_location(self, timestamp, lat, lon, time_window_minutes=5, distance_threshold_km=0.2):
         # This is a simplified proximity check. A more robust solution would use spatial indexing.
         # For demonstration, we'll just return files within a time window.
         # Real implementation would need to calculate distance from lat/lon.
@@ -159,8 +174,8 @@ def main():
         help='Skip files that have already been scanned and exist in the database.'
     )
     parser.add_argument(
-        '--geo-list', type=str, default='geo.list',
-        help='Path to the geo.list file for enhanced geolocation (default: geo.list).'
+        '--geo-list', type=str, default='geo_chinese_.list',
+        help='Path to the geo.list file for enhanced geolocation (default: geo_chinese_.list).'
     )
 
     args = parser.parse_args()
@@ -200,8 +215,10 @@ def main():
             logging.warning(f"Could not extract metadata for: {filepath}")
 
     # Post-processing for metadata sharing (MP4 from HEIC/Images)
-    logging.info("Attempting to share geo metadata between related files...")
-    image_files_with_geo = db.get_files_without_geo() # This is a placeholder, needs actual query for images with geo
+    #logging.info("Attempting to share geo metadata between related files...")
+    #image_files_with_geo = db.get_files_without_geo() # This is a placeholder, needs actual query for images with geo
+    #video_files_without_geo = db.get_files_without_geo(file_type='video')
+
     # For a real implementation, we'd query for images with geo data, then find nearby videos.
     # For now, let's simulate by finding files that need geo and trying to fill them.
 
