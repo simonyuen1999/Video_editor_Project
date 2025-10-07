@@ -1,4 +1,5 @@
 
+from importlib.metadata import metadata
 from math import radians, sin, cos, sqrt, atan2
 import os
 import subprocess
@@ -59,70 +60,72 @@ class MetadataExtractor:
             logging.error(f"Error reading metadata from {filepath}: {metadata[0].get('Error', 'Unknown error')}")
             return None
 
-        GPSLatitude  = metadata[0].get("GPSLatitude", "N/A") if "GPSLatitude" in metadata[0] else None
-        GPSLongitude = metadata[0].get("GPSLongitude", "N/A") if "GPSLongitude" in metadata[0] else None
-        createDate   = metadata[0].get("DateTimeOriginal", "N/A") if "DateTimeOriginal" in metadata[0] else None
+        # pretty print metadata for debugging
+        # print(json.dumps(metadata, indent=3))
+        # input("Paused for debugging. Press Enter to continue...")
+
+        fileExt = os.path.splitext(filepath)[1].lstrip(".").lower()
+
+        Latitude  = metadata[0].get("GPSLatitude", "N/A") if "GPSLatitude" in metadata[0] else None
+        Longitude = metadata[0].get("GPSLongitude", "N/A") if "GPSLongitude" in metadata[0] else None
+
+        CreateDate = None
+        #if "CreationDate" in metadata[0]:
+        #    # CreateDate format: 2023:10:05 14:30:00+08:00, we only want the date and time part
+        #    CreateDate = metadata[0].get("CreationDate", "N/A").split("+")[0]
+
+        #if "GPSDateTime" in metadata[0]:
+        #    # GPSDateTime format: 2023:10:05 14:30:00Z, replace the 'Z'
+        #    CreateDate = metadata[0].get("GPSDateTime", "N/A").replace("Z", "")
+
+        #if "DateTimeOriginal" in metadata[0]:
+        #    CreateDate = metadata[0].get("DateTimeOriginal", "N/A")
+
+        if "CreateDate" in metadata[0]:
+            CreateDate = metadata[0].get("CreateDate", "N/A")
+
+        # if fileExt in ["mp4", "mov"]:
+        #if CreateDate is None or CreateDate == "N/A":
+        #    print(f"\nFile detected: {filepath} no CreateDate")
+        #    print(json.dumps(metadata[0], indent=3))
+        #    # input("Paused for debugging. Press Enter to continue...")
 
         dummy_exif_data = {
             "SourceFile": filepath,
             "FileName": os.path.basename(filepath),
-            "File:FileTypeExtension": os.path.splitext(filepath)[1].lstrip(".").lower(),
-            "EXIF:GPSLatitude": GPSLatitude,
-            "EXIF:GPSLongitude": GPSLongitude,
-            "Composite:GPSLatitude": GPSLatitude,
-            "Composite:GPSLongitude": GPSLongitude,
-            "EXIF:CreateDate": createDate if createDate else "2025:01:01 01:00:00",
-            "QuickTime:CreationDate": createDate if createDate else "2025:01:01 02:00:00",
+            "FileTypeExtension": os.path.splitext(filepath)[1].lstrip(".").lower(),
+            "Latitude": Latitude,
+            "Longitude": Longitude,
+            "CreateDate": CreateDate,
         }
         return dummy_exif_data
 
-    def ImageMetadata(self, filepath, exif_data):
-        extension = os.path.splitext(filepath)[1].lower()
-        if extension not in [".jpg", ".jpeg", ".png", ".heic"]:
-            return None
-
-        metadata = {
-            "file_type": "image",
-            "latitude": exif_data.get("Composite:GPSLatitude", None),
-            "longitude": exif_data.get("Composite:GPSLongitude", None),
-            "creation_date": exif_data.get("EXIF:CreateDate", None),
-        }
-        return metadata
-
-    def VideoMetadata(self, filepath, exif_data):
-        extension = os.path.splitext(filepath)[1].lower()
-        if extension not in [".mp4", ".mov"]:
-            return None
-
-        metadata = {
-            "file_type": "video",
-            "latitude": exif_data.get("Composite:GPSLatitude", None),
-            "longitude": exif_data.get("Composite:GPSLongitude", None),
-            "creation_date": exif_data.get("EXIF:CreateDate", None),
-        }
-        return metadata
-
     def extract_metadata(self, filepath):
+        fileType = 'Undefined'
+        extension = os.path.splitext(filepath)[1].lower()
+        if extension in [".jpg", ".jpeg", ".png", ".heic"]:
+            fileType = 'Image'
+        elif extension in [".mp4", ".mov"]:
+            fileType = 'Video'
+        else:
+            logging.warning(f"Unsupported file type for {filepath}. Skipping.")
+            return None
+        
         exif_data = self._run_exiftool(filepath)
         if not exif_data:
             return None
 
         stat_info = os.stat(filepath)
         base_metadata = {
-            "filepath": os.path.abspath(filepath),
-            "filename": os.path.basename(filepath),
-            "file_extension": os.path.splitext(filepath)[1].lower(),
+            "filepath": os.path.abspath(filepath),   # exif_data.get("SourceFile", filepath),
+            "filename": os.path.basename(filepath),  # exif_data.get("FileName", os.path.basename(filepath)),
+            "file_extension": exif_data.get("FileTypeExtension", extension),
+            "file_type": fileType,
             "size": stat_info.st_size,
-            # This is the last modification time, not image creation time
-            # "creation_time": datetime.fromtimestamp(stat_info.st_ctime).isoformat(),
+            "creation_date": exif_data.get("CreateDate", None),
+            "latitude": exif_data.get("Latitude", None),
+            "longitude": exif_data.get("Longitude", None),
         }
-
-        media_metadata = self.ImageMetadata(filepath, exif_data) or self.VideoMetadata(filepath, exif_data)
-
-        if not media_metadata:
-            return None
-
-        base_metadata.update(media_metadata)
         return base_metadata
 
     def haversine(self, lat1, lon1, lat2, lon2):
@@ -152,8 +155,8 @@ class MetadataExtractor:
 
             # 0:lat, 1:lon, 2:city_en, 3:city_zn, 4:region_en, 5:region_zn, 6:subregion_en, 7:subregion_zn, 8:country_code, 9:country_en, 10:country_zn, 11:timezone
             return {
-                "latitude": closest[0],
-                "longitude": closest[1],
+                "latitude": latitude,   # closest[0],
+                "longitude": longitude, # closest[1],
                 "city_en": closest[2],
                 "city_zh": closest[3],
                 "region_en": closest[4],
