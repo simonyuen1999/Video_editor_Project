@@ -164,7 +164,7 @@ class MediaOrganizerDB:
         self.cursor.execute(
             'SELECT filepath, creation_time, latitude, longitude, city_en, city_zh, ' + \
                    'region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone ' + \
-                   'FROM media_files WHERE creation_time IS NOT NULL and city_en IS NOT NULL and file_type="Image"')
+                   'FROM media_files WHERE creation_time IS NOT NULL and city_en IS NOT NULL')
         arr = self.cursor.fetchall()
         # logging.info(f"== Found {len(arr)} image files with city_en data.")
         #for a in arr:
@@ -203,6 +203,10 @@ def scan_directory_recursive(path):
     all_files = []
     for root, _, files in os.walk(path):
         for file in files:
+            # Skip hidden files and non-media files
+            extension = os.path.splitext(file)[1].lower()
+            if file.startswith('.') or extension not in [".jpg", ".jpeg", ".png", ".heic", ".mp4", ".mov"]:
+                continue
             all_files.append(os.path.join(root, file))
     logging.info(f"Found {len(all_files)} files in total.")
     return all_files
@@ -234,13 +238,24 @@ def main():
         '--skipDBupdate', '-s', default=False, action='store_true',
         help='Default not skip DB update at the end. default: False'
     )
-    # The geo_chinese_.list file for enhanced geolocation with Chinese name translations
+    parser.add_argument(
+        '--syncFSnDB', '-f', default=False, action='store_true',
+        help='Sync file system changes with the database. default: False'
+    )
+    # Add search time_diff parameter for proximity search
+    parser.add_argument(
+        '--time-diff', type=int, default=240,
+        help='Time difference in min for proximity search (default: 240 minutes = 4 hours) 5h=300, 6h=360, 7h=420.'
+    )
     parser.add_argument(
         '--geo-list', type=str, default='geo_chinese_.list',
         help='Path to the geo.list file for enhanced geolocation (default: geo_chinese_.list).'
     )
+    # The geo_chinese_.list file for enhanced geolocation with Chinese name translations
 
     args = parser.parse_args()
+
+    time_diff_seconds = args.time_diff * 60  # convert minutes to seconds
 
     # Set logging level based on user input
     numeric_level = getattr(logging, args.debug_level.upper(), None)
@@ -249,6 +264,11 @@ def main():
     logging.getLogger().setLevel(numeric_level)
     logging.info(f"Logging level set to {args.debug_level}")
 
+    # When syncing FS and DB, it will re-scan all files, so disable jump2update to skip the normal scanning.
+    if args.syncFSnDB:
+        args.jump2update = False
+        logging.info("Sync FS and DB enabled, disabling jump2update option (jump to DB Geo update section).")
+
     # If user specified --deldb, delete the existing database file inside MetaOrganizerDB class.
     db = MediaOrganizerDB(rescan=args.deldb)
     extractor = MetadataExtractor(geo_list_path=args.geo_list)
@@ -256,15 +276,16 @@ def main():
     target_directory = args.directory
     all_files = scan_directory_recursive(target_directory)
 
+    # ==================================================================================
     # After the first run, DB is created.  For the rest of the runs, we can skip already scanned files.
     if not args.jump2update:
         logging.info("Starting to process files and update database...")
         for filepath in all_files:
 
-            # Skip the hidden files and non-media files
-            extension = os.path.splitext(filepath)[1].lower()
-            if os.path.basename(filepath).startswith('.') or extension not in [".jpg", ".jpeg", ".png", ".heic", ".mp4", ".mov"]:
-                continue
+            # Skip the hidden files and non-media files, already done in scanning.
+            #extension = os.path.splitext(filepath)[1].lower()
+            #if os.path.basename(filepath).startswith('.') or extension not in [".jpg", ".jpeg", ".png", ".heic", ".mp4", ".mov"]:
+            #    continue
             
             if db.file_exists(filepath):
                 logging.debug(f"Skipping already scanned and existing file: {filepath}")
@@ -291,20 +312,63 @@ def main():
         logging.info("Skipping file scanning as per user request (--jump2update or -j), go to DB update.")
 
     # ==================================================================================
+    if args.syncFSnDB:
+        logging.info("Sync FS and DB: Syncing file system changes with the database...")
+        current_files_set = set(all_files)
+        db.cursor.execute('SELECT filepath FROM media_files')
+        db_files_set = set(row[0] for row in db.cursor.fetchall())
+
+        # Files to remove from DB
+        files_to_remove = db_files_set - current_files_set
+        for filepath in files_to_remove:
+            try:
+                db.cursor.execute('DELETE FROM media_files WHERE filepath = ?', (filepath,))
+                logging.info(f"Sync FS and DB: Removed from DB (file no longer exists): {filepath}")
+            except sqlite3.Error as e:
+                logging.error(f"Sync FS and DB: Error removing {filepath} from DB: {e}")
+        db.conn.commit()
+
+        # This section is repeated here to ensure new files are added above.
+        # Files to add to DB (new files)
+        files_to_add = current_files_set - db_files_set
+        for filepath in files_to_add:
+            # No need to check again for hidden files and non-media files here since already checked in scanning.
+            #extension = os.path.splitext(filepath)[1].lower()
+            #if os.path.basename(filepath).startswith('.') or extension not in [".jpg", ".jpeg", ".png", ".heic", ".mp4", ".mov"]:
+            #    continue
+
+            logging.debug(f"Sync FS and DB: New file detected, processing: {filepath}")
+            metadata = extractor.extract_metadata(filepath)
+
+            if metadata:
+                # Attempt to get geo data from geo.list if GPS coords are present
+                if metadata.get('latitude') is not None and metadata.get('longitude') is not None:
+                    geo_data = extractor.get_geo_from_coordinates(metadata['latitude'], metadata['longitude'])
+                    if geo_data:
+                        metadata.update(geo_data)
+
+                # This file is new and not in DB, so no need to check for existing.
+                db.add_media_file(metadata)
+            else:
+                logging.warning(f"Sync FS and DB: Could not extract metadata for new file: {filepath}")
+
+    # ==================================================================================
     if not args.skipDBupdate:
         # Post-processing for metadata sharing (MP4 from HEIC/Images)
         logging.info("Attempting to share geo metadata between related files...")
 
         # All iPhone images are HEIC, some other images may have geo data.
+        # Once we have more media files (Image and Video) with geo data, we can use them to find nearby videos.
         image_files_with_geo = db.get_files_with_geo()
-        logging.info(f">> Found {len(image_files_with_geo)} image files with geo data.")
+        logging.info(f">> Found {len(image_files_with_geo)} media files with geo data.")
         #for a in image_files_with_geo:
         #    logging.info(f"geo data: {a}")
         #input("Paused for debugging. Press Enter to continue...")
         
         # The video files are from DJI Pocket 3 which MP4 do not have geo data.
+        # As long as the file has creation_time, we can try to find nearby images with geo data.
         all_files_without_geo = db.get_files_without_geo()
-        logging.info(f">> Found {len(all_files_without_geo)} video files without geo data.")
+        logging.info(f">> Found {len(all_files_without_geo)} media files (mainly MP4) without geo data.")
         #for a in all_files_without_geo:
         #    logging.info(f"no geo data: {a}")
         #input("Paused for debugging. Press Enter to continue...")
@@ -345,7 +409,7 @@ def main():
                     # Calculate time difference in seconds
                     time_diff = abs((media_time - image_time).total_seconds())
 
-                    if time_diff > 14400:  # 14400 seconds = 4 hours
+                    if time_diff > time_diff_seconds:  # Use seconds for search, default 4h (240 minutes = 4 hours)
                         continue  # Skip images that are more than 4 hours apart
 
                     if time_diff < min_time_diff:
@@ -356,8 +420,8 @@ def main():
                     logging.debug(f"Error parsing timestamps for {media_filepath} or {image_filepath}: {e}")
                     continue
 
-            # If we found a close image (within reasonable time window, e.g., 4 hours)
-            if closest_image and min_time_diff <= 14400:  # 14400 seconds = 4 hours
+            # If we found a close image (within reasonable time window, e.g., 4 hours = 240 minutes)
+            if closest_image and min_time_diff <= time_diff_seconds:  # 240 minutes = 4 hours
                 # Extract geo data from closest image
                 geo_data = {
                     'latitude': closest_image[2],
