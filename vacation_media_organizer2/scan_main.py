@@ -4,8 +4,8 @@ import sys
 import argparse
 import logging
 import sqlite3
+from datetime import datetime               
 from metadata_extractor import MetadataExtractor
-
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format=
@@ -308,34 +308,46 @@ def main():
         #for a in all_files_without_geo:
         #    logging.info(f"no geo data: {a}")
         #input("Paused for debugging. Press Enter to continue...")
+       
+        # Pre-calculate image_time for all image files for efficiency
+        updated_image_files_with_geo = []
+        for image_file in image_files_with_geo:
+            # convert image_file[1] (YYYY-MM-DD HH:MM:SS format) to datetime object,  
+            image_datetime = datetime.strptime(image_file[1], '%Y:%m:%d %H:%M:%S')
+            updated_image_file = image_file + (image_datetime,)
+            updated_image_files_with_geo.append(updated_image_file)       
+        # Update the original list
+        image_files_with_geo = updated_image_files_with_geo
 
         # Process each media file without geo data to find closest image with geo data
         for media_file in all_files_without_geo:
             media_filepath = media_file[0]
-            media_creation_time = media_file[1]
-            
-            if not media_creation_time:
-                logging.debug(f"Skipping {media_filepath} - no creation time available")
-                continue
-                
+            media_time = datetime.strptime(media_file[1], '%Y:%m:%d %H:%M:%S')
+
+            # Already use SQL to filter out files without creation_time (SQL: creation_time IS NOT NULL)
+            #if not media_creation_time:
+            #    logging.debug(f"Skipping {media_filepath} - no creation time available")
+            #    continue
+
             # Find the closest image file by creation time
             closest_image = None
             min_time_diff = float('inf')
             
             for image_file in image_files_with_geo:
                 image_filepath = image_file[0]
-                image_creation_time = image_file[1]
-                
-                if not image_creation_time:
-                    continue
+                image_time = image_file[-1]
+
+                # Already use SQL to filter out files without creation_time (SQL: creation_time IS NOT NULL)
+                # if not image_creation_time:
+                #    continue
                     
                 try:
                     # Calculate time difference in seconds
-                    from datetime import datetime
-                    media_time = datetime.fromisoformat(media_creation_time.replace('Z', '+00:00'))
-                    image_time = datetime.fromisoformat(image_creation_time.replace('Z', '+00:00'))
                     time_diff = abs((media_time - image_time).total_seconds())
-                    
+
+                    if time_diff > 14400:  # 14400 seconds = 4 hours
+                        continue  # Skip images that are more than 4 hours apart
+
                     if time_diff < min_time_diff:
                         min_time_diff = time_diff
                         closest_image = image_file
@@ -343,9 +355,9 @@ def main():
                 except (ValueError, TypeError) as e:
                     logging.debug(f"Error parsing timestamps for {media_filepath} or {image_filepath}: {e}")
                     continue
-            
-            # If we found a close image (within reasonable time window, e.g., 1 hour)
-            if closest_image and min_time_diff <= 3600:  # 3600 seconds = 1 hour
+
+            # If we found a close image (within reasonable time window, e.g., 4 hours)
+            if closest_image and min_time_diff <= 14400:  # 14400 seconds = 4 hours
                 # Extract geo data from closest image
                 geo_data = {
                     'latitude': closest_image[2],
