@@ -1,30 +1,36 @@
-# 📸 Vacation Media Library - Web Interface
+# 📸 Vacation Media Organizer - Dual-View Web Interface
 
-A Flask-based web application for browsing and managing your vacation media files with advanced filtering, interactive mapping, and system integration.
+**Status**: ✅ Implementation Complete (October 2025)
 
-## 🎯 Features
+A comprehensive Flask-based web application with dual viewing interfaces for intelligent vacation media organization, featuring bilingual location support, semantic analysis, and advanced content-based filtering.
 
-### 📱 **Interactive Web Interface**
-- **Responsive Design**: Works on desktop and mobile devices
-- **Real-time Filtering**: Filter by city, country, date range, people count, talking detection
-- **Statistics Dashboard**: Live counts of total media, location-tagged files, etc.
+## 🎯 Dual-Interface Features
 
-### 🗺️ **Interactive Map**
-- **Leaflet.js Integration**: Interactive world map with media locations
-- **Clustered Markers**: Group nearby media files with counts
-- **Popup Details**: Hover over markers to see file information
-- **Click to Open**: Direct system integration to open files with default applications
+### �️ **Map View (index.html) - Geographic Exploration**
+- **Interactive Leaflet Map**: Clustered markers with zoom-level awareness
+- **60/40 Layout**: Optimal map/filter panel split for desktop and mobile
+- **Bilingual Location Filtering**: City and country dropdowns with "city_zh | city_en" format
+- **Advanced Content Filters**: Date ranges, people count, talking detection
+- **Real-time Statistics**: Live media counts with instant filter feedback
 
-### 🔍 **Advanced Search & Filtering**
-- **Location-based**: Search by city names (English/Chinese)
-- **Time-based**: Date and time range filtering with datetime-local inputs
-- **Content-based**: Filter by people count and talking detection
-- **Real-time Updates**: Map and gallery update instantly with filters
+### � **Daily View (daily.html) - Chronological Browsing**  
+- **Day-by-Day Navigation**: Previous/Next controls with smart date detection
+- **Flexible Display Modes**: Toggle between thumbnail grid and detailed list views
+- **Thumbnail Size Controls**: Adjustable small/medium/large sizing options
+- **Smart Date Initialization**: Automatically loads earliest media creation date
+- **Sort Order Toggle**: Newest-first or oldest-first chronological ordering
 
-### 💻 **System Integration**
-- **Native File Opening**: Click map markers or modal buttons to open files with system default apps
-- **Cross-platform Support**: macOS (open), Windows (startfile), Linux (xdg-open)
-- **Media Preview**: In-browser image and video preview with full controls
+### 🎬 **Modal Media Viewer - Full-Resolution Experience**
+- **Shared Component**: Consistent viewer across both Map and Daily interfaces
+- **Complete Metadata Display**: File path, creation time, location, semantic analysis results
+- **System Integration**: Direct opening in Preview, QuickTime, or default applications
+- **Navigation Controls**: Previous/next media browsing within filtered results
+
+### 🤖 **Intelligent Media Analysis**
+- **YOLOv8 Semantic Analysis**: People detection, activity classification (hiking, gathering, dining)
+- **Audio Content Analysis**: Talking detection in video files using librosa
+- **GPS Intelligence**: Smart coordinate assignment from HEIC to DJI MP4 files
+- **Bilingual Location Database**: English/Chinese geographic data with geo.list integration
 
 ## 🏗️ Architecture
 

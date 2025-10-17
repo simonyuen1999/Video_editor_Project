@@ -1,138 +1,313 @@
-# Vacation Media Organizer: Smart Photo & Video Management
+# Vacation Media Organizer: Smart Photo & Video Management System
 
-## Enhanced instruction
+## Overview
 
-The above solution is not working since **DJI Pocket 3 Camera does not have GPS** so its MP4 does not have Geo information.   Beside the suggested software does not analysis video well, they cannot figure out the content of video such as number of people, scenery type.   Let change the solution as follows, read geo.list file for identify city/area later.  Scan the directory and sub-directory for all the video and photo files, get their creation date, video length, number of people, scenery, if file has geo info, save their geo info, use geo.list to identify their city/area, save these info into SQLite DB.    Since DJI MP4 files do not have geo info, if any HEIC file was taken in the same day, then just use first HEIC file location as MP4 geo info, of course save info to SQLite DB too.   At the end, do not move files, only create a link from the original file to the sorted directories.   For GUI, read in geo.list file for geo info.  Create two web pages.
+A comprehensive, Flask-based web application for organizing and exploring vacation photos and videos with intelligent metadata extraction, semantic analysis, and dual-view interfaces for enhanced media browsing.
 
-* First web page  has an interactive map, and has a list of all the media files.  The page allows user to select one file at a time and allow user to update geo info, add comment, number of people, scenery type (hiking, walking, gathering, dinner/lunch, tour scenery, others), and allow user to update into SQLite DB.    Use geo.list file to quickly identify the file creation city.
+## Latest Implementation (October 2025)
 
-* Second web page, similar as the first attempt, it has interactive map, has a list of sorting selections.
+### **Dual-Interface Web Application**
+- **Map View**: Interactive map-based media exploration with clustering and filtering
+- **Daily View**: Chronological day-by-day media browsing with flexible display modes
 
-In additional, when analyzing Video and Photo files, please display debug information, this debug statements has 1 - 4 levels and can be turned off too.   Since we only create link target directory, not copy or move the files over, so **we can re-run the solution**.  In the re-run, it just update the existing data in SQLite DB.    Since the analysis taking a while, add an option to skip the already scanned files.   Therefore, we can add more files in the original directory, and update information for the new files.   In the previous solution, the python code only scan the current directory, it needs to fix to scan all the sub-directory too.
+### **Smart Media Organization**
+- **Automated Metadata Extraction**: Creation time, GPS coordinates, file size, and technical details
+- **Semantic Analysis**: People detection, activity recognition, talking detection, and scenery classification
+- **Location Intelligence**: Bilingual city/country support (English + Chinese) with geographic clustering
+- **Database-Driven**: SQLite backend with comprehensive media indexing and relationship management
 
-The following is the geo.list CSV (comma separator) file header:
-> City,Region,Subregion,CountryCode,Country,TimeZone,FeatureCode,Population,Latitude,Longitude
+### **Advanced User Experience**
+- **Responsive Design**: Mobile-friendly interface with gradient themes and modern UI components
+- **Interactive Features**: Clickable thumbnails, detailed modal views, and system file integration
+- **Flexible Filtering**: Date ranges, location dropdowns, people count, and talking detection filters
+- **Sorting Controls**: Chronological ordering with user-toggleable newest/oldest first options
+
+## Architecture
+
+### **Backend (Flask 3.1.1)**
+```
+src/
+├── main.py                 # Application entry point
+├── models/
+│   └── media.py           # SQLAlchemy media model
+├── routes/
+│   └── media.py           # API endpoints for media operations
+└── database/
+    └── media_organizer.db # SQLite database with media metadata
+```
+
+### **Frontend (HTML5/JavaScript/CSS3)**
+```
+static/
+├── index.html             # Map View - Interactive mapping interface
+└── daily.html             # Daily View - Chronological browsing interface
+```
+
+### **Key Features Implemented**
+1. **Bilingual Location Support**: City and country names in both English and Chinese
+2. **Smart Default Date Selection**: Automatically loads earliest media date in Daily View
+3. **Responsive Media Gallery**: Thumbnail and list view modes with adjustable sizing
+4. **Modal Media Viewer**: Full-resolution media display with comprehensive metadata
+5. **System Integration**: Direct file opening in default applications
+6. **Advanced Filtering**: Dropdown-based city/country selection with live search
+7. **Chronological Navigation**: Day-by-day browsing with previous/next controls
 
 ## Introduction
 
 This solution provides a comprehensive, cross-platform system for organizing your vacation photos and videos from devices like iPhone and DJI Pocket 3. It automates the process of extracting metadata, performing semantic video analysis, organizing files by creation date, and creating intelligent links for location and scenery-based browsing. A local web-based interface allows for intuitive exploration, filtering, and playback of your media.
 
-## Features
+## Core Features
 
-*   **Cross-Platform Compatibility:** Designed to run on both Windows and macOS/Linux.
-*   **Automated Ingestion:** Downloads and organizes media files from source directories.
-*   **Rich Metadata Extraction:** Extracts creation date, time, and geographic location (latitude, longitude, city, country) from photos and videos.
-*   **Semantic Video Analysis:**
-    *   **People Detection:** Counts the number of people present in video frames.
-    *   **Activity Recognition:** Identifies activities like walking in videos.
-    *   **Voice Activity Detection:** Detects segments where talking occurs.
-    *   **Scenery Classification:** Categorizes video scenery (e.g., city walk, hiking).
-*   **Intelligent File Organization:**
-    *   Primary organization by creation date into `YYYY/MM/DD` subdirectories.
-    *   Secondary organization using symbolic links by city/country and semantic categories (e.g., `OrganizedBy/Location/Paris_France`, `OrganizedBy/Scenery/Hiking`).
-*   **Local Database:** Stores all extracted metadata and analysis results in a SQLite database for efficient querying.
-*   **Interactive Web Interface:**
-    *   Displays media locations on an interactive map (Google Maps or AMap compatible).
-    *   Allows filtering and sorting media by date, date range, location, people count, and semantic categories.
-    *   Provides in-browser preview and playback of media files.
+### **Intelligent Media Processing**
+- **Multi-Format Support**: HEIC, JPG, PNG, MP4, MOV with comprehensive metadata extraction
+- **Recursive Directory Scanning**: Complete subdirectory traversal with incremental update support
+- **GPS Intelligence**: Smart coordinate assignment from HEIC files to GPS-less DJI MP4 files
+- **Semantic Analysis Engine**: 
+  - People detection and counting using YOLOv8
+  - Activity classification (hiking, gathering, dining, touring)
+  - Talking detection in video content
+  - Scenery type identification
+
+### **Geographic Intelligence System**
+- **Bilingual Location Database**: English and Chinese city/country names from geo.list
+- **Smart Location Assignment**: Automatic city/region identification from GPS coordinates
+- **Interactive Map Clustering**: Geographic grouping with zoom-level awareness
+- **Location-Based Filtering**: Dropdown selection with bilingual display format
+
+### **Dual-View Web Interface**
+- **Map View (index.html)**:
+  - Interactive Leaflet map with media markers
+  - Real-time clustering and marker management
+  - Geographic filtering with location dropdowns
+  - 60/40 layout ratio (map/filters)
+  
+- **Daily View (daily.html)**:
+  - Day-by-day chronological navigation
+  - Thumbnail and list display modes
+  - Adjustable thumbnail sizing (small/medium/large)
+  - Smart date initialization from earliest media
+
+### **Advanced User Experience**
+- **Modal Media Viewer**: Full-resolution display with complete metadata overlay
+- **System File Integration**: Direct opening in default applications (Preview, QuickTime)
+- **Responsive Design**: Mobile-optimized with gradient styling and modern UI
+- **Live Statistics**: Real-time media counts and filtering feedback
+- **Smart Defaults**: Automatic population of earliest creation dates
+
+## Technology Stack
+
+### **Backend Architecture**
+- **Flask 3.1.1**: Modern Python web framework with SQLAlchemy ORM
+- **SQLite Database**: Lightweight, file-based storage for media metadata
+- **Computer Vision**: 
+  - YOLOv8 for object and people detection
+  - OpenCV for video frame analysis
+  - PIL/Pillow for image processing
+- **Audio Processing**: librosa for talking detection in videos
+
+### **Frontend Technologies**
+- **Leaflet.js**: Interactive mapping with clustering and marker management
+- **Vanilla JavaScript ES6**: Modern client-side functionality without heavy frameworks
+- **CSS3 Grid/Flexbox**: Responsive layout with gradient styling
+- **HTML5**: Semantic markup with accessibility considerations
+
+### **Development Environment**
+- **Cross-Platform**: Native support for Windows, macOS, and Linux
+- **Modern Python**: 3.8+ with type hints and async-ready architecture
+- **Extensible Design**: Modular codebase for easy feature additions
 
 ## System Requirements
 
-*   **Operating System:** Windows 10/11, macOS, or Linux.
-*   **Python:** Python 3.8 or higher.
-*   **ExifTool:** The `exiftool` command-line application must be installed and accessible in your system's PATH. This is crucial for robust metadata extraction, especially from video files.
-    *   [Install ExifTool](https://exiftool.org/install.html)
-*   **Internet Connection:** Required for initial setup (downloading Python packages, YOLO model, Silero VAD model) and for reverse geocoding (using Nominatim).
+- **Operating System**: Windows 10/11, macOS 10.15+, or Linux Ubuntu 18.04+
+- **Python**: Python 3.8 or higher with pip package manager
+- **ExifTool**: Command-line metadata extraction tool ([Installation Guide](https://exiftool.org/install.html))
+- **Memory**: Minimum 4GB RAM (8GB+ recommended for large media collections)
+- **Storage**: SSD recommended for database performance
+- **Internet**: Required for geocoding services and initial model downloads
 
-## Installation
+## Quick Start Installation
 
-Follow these steps to set up the media organizer on your system.
-
-### 1. Install ExifTool
-
-Ensure ExifTool is installed on your system. Refer to the [official ExifTool website](https://exiftool.org/install.html) for detailed instructions specific to your operating system.
-
-### 2. Clone the Repository (or download files)
-
-Assuming you have Git installed, clone the project:
-
+### **1. ExifTool Setup**
 ```bash
-git clone <repository_url> # Replace with actual repository URL if available
-cd vacation-media-organizer # Or the directory where you downloaded the files
+# macOS (using Homebrew)
+brew install exiftool
+
+# Ubuntu/Debian
+sudo apt-get install libimage-exiftool-perl
+
+# Windows: Download from https://exiftool.org/install.html
 ```
 
-### 3. Set up Python Environment
-
-It's highly recommended to use a virtual environment to manage dependencies.
-
-**For macOS/Linux:**
-
+### **2. Environment Setup**
 ```bash
+# Clone and navigate to project
+cd vacation_media_organizer2
+
+# Create virtual environment
 python3 -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-**For Windows (Command Prompt):**
-
-```cmd
-python -m venv venv
-venv\Scripts\activate
-pip install -r requirements.txt
+### **3. Geographic Database**
+Ensure `geo.list` file is present in the project directory with city/country data in CSV format:
+```
+City,Region,Subregion,CountryCode,Country,TimeZone,FeatureCode,Population,Latitude,Longitude
 ```
 
-**Note:** The `requirements.txt` file will be generated during the packaging phase. For now, you will need to manually install the dependencies used in the backend development phase:
+## Usage Guide
+
+### **1. Initial Media Scanning**
+
+Process your vacation photos and videos from iPhone, DJI Pocket 3, and other devices:
 
 ```bash
-pip install -r requirements.txt
+# Activate environment
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Scan and analyze media files
+python organize_media.py /path/to/your/vacation/photos
+
+# Alternative: Scan with debug information
+python organize_media.py /path/to/media --debug-level 2
+
+# Skip already processed files for incremental updates
+python organize_media.py /path/to/media --skip-existing
 ```
 
-## Usage
+**What happens during scanning:**
+- Extracts creation dates, GPS coordinates, and technical metadata
+- Performs semantic analysis (people counting, activity recognition)
+- Assigns GPS coordinates from HEIC files to DJI MP4 files from same day
+- Identifies cities/countries using geo.list database
+- Creates organized directory structure with symbolic links
+- Populates SQLite database with all metadata
 
-### 1. Ingest and Organize Media Files
+### **2. Launch Web Application**
 
-First, you need to process your raw media files. Copy all your photos and videos from your iPhone and DJI Pocket 3 into a single source directory.
-
-**For macOS/Linux:**
+Start the Flask web server to access both viewing interfaces:
 
 ```bash
-source venv/bin/activate
-python organize_media.py /path/to/your/raw_media_folder /path/to/your/media_library_destination
+# Start the application
+python main.py
+
+# Application will be available at:
+# http://localhost:5000 - Map View interface
+# http://localhost:5000/daily - Daily View interface
 ```
 
-**For Windows (Command Prompt):**
+### **3. Web Interface Usage**
 
-```cmd
-venv\Scripts\activate
-python organize_media.py C:\path\to\your\raw_media_folder C:\path\to\your\media_library_destination
-```
+#### **Map View (Primary Interface)**
+- **Interactive Map**: Click on markers to view media details
+- **Geographic Clustering**: Markers group by location at different zoom levels
+- **Advanced Filtering**: 
+  - Date range selection with calendar pickers
+  - City and country dropdowns (bilingual English/Chinese)
+  - People count and talking detection filters
+- **Modal Media Viewer**: Click thumbnails for full-resolution viewing
+- **System Integration**: Open files directly in Preview, QuickTime, etc.
 
-*   Replace `/path/to/your/raw_media_folder` with the actual path to your unorganized media files.
-*   Replace `/path/to/your/media_library_destination` with the desired root directory for your organized media library.
+#### **Daily View (Chronological Interface)**
+- **Day Navigation**: Previous/Next buttons for chronological browsing
+- **Display Modes**: Toggle between thumbnail grid and detailed list views
+- **Thumbnail Sizing**: Adjustable small/medium/large thumbnail controls
+- **Smart Defaults**: Automatically loads earliest media creation date
+- **Sorting Options**: Toggle between newest-first and oldest-first ordering
 
-This script will:
-*   Extract metadata and perform semantic analysis.
-*   Move files into a date-based directory structure.
-*   Create symbolic links for location and scenery-based browsing.
-*   Populate the `media_library.db` SQLite database with all media information.
+### **4. Incremental Updates**
 
-### 2. Run the Web Interface
-
-After organizing your media, you can start the local web server to browse your library.
-
-**For macOS/Linux:**
+Add new media files without reprocessing existing ones:
 
 ```bash
-./run_backend.sh
+# Copy new photos to your media directory
+# Then run incremental scan
+python organize_media.py /path/to/media --skip-existing --debug-level 1
 ```
 
-**For Windows (Command Prompt):**
+## API Endpoints
 
-```cmd
-run_backend.bat
+### **Media Data APIs**
+- `GET /api/media` - Retrieve media with filtering parameters
+- `GET /api/media/<id>` - Get specific media item details
+- `GET /api/media/cities` - List all available cities (bilingual)
+- `GET /api/media/countries` - List all available countries (bilingual)
+- `GET /api/media/stats` - Get media collection statistics
+
+### **Query Parameters**
+- `start_date`, `end_date` - Date range filtering
+- `city`, `country` - Location-based filtering
+- `min_people`, `max_people` - People count filtering
+- `has_talking` - Audio content filtering
+- `limit`, `offset` - Pagination support
+
+## Project Structure
+
+```
+vacation_media_organizer2/
+├── main.py                    # Flask application entry point
+├── database_manager.py        # Database schema and operations
+├── metadata_extractor.py      # ExifTool and metadata processing
+├── semantic_analyzer.py       # YOLOv8 and audio analysis
+├── organize_media.py          # Media scanning and organization
+├── geo.list                   # Geographic location database
+├── media_organizer.db         # SQLite database (created at runtime)
+├── requirements.txt           # Python dependencies
+├── static/
+│   ├── index.html            # Map View interface
+│   └── daily.html            # Daily View interface
+└── media/                    # Organized media files (created at runtime)
 ```
 
-Once the server is running, open your web browser and navigate to `http://127.0.0.1:5000` (or the address displayed in the console).
+## Configuration
+
+### **Debug Levels**
+- `--debug-level 0` - Silent operation
+- `--debug-level 1` - Basic progress information
+- `--debug-level 2` - Detailed processing information
+- `--debug-level 3` - Verbose analysis details
+- `--debug-level 4` - Complete debug output
+
+### **Processing Options**
+- `--skip-existing` - Skip already processed files
+- `--force-update` - Reprocess existing files
+- `--no-semantic` - Skip semantic analysis for faster processing
+
+## Troubleshooting
+
+### **Common Issues**
+1. **ExifTool not found**: Ensure ExifTool is installed and in system PATH
+2. **Database locked**: Close web interface before running organize_media.py
+3. **Missing geo.list**: Download geographic database from provided source
+4. **Slow processing**: Use `--skip-existing` for incremental updates
+5. **Memory issues**: Process large collections in smaller batches
+
+### **Performance Tips**
+- Use SSD storage for better database performance
+- Increase available RAM for large media collections
+- Enable `--skip-existing` for regular updates
+- Consider lower debug levels for production use
+
+## License
+
+This project is open-source and available under the MIT License. See LICENSE file for details.
+
+## Contributing
+
+Contributions are welcome! Please follow these guidelines:
+1. Fork the repository and create a feature branch
+2. Ensure all tests pass and maintain code quality
+3. Update documentation for new features
+4. Submit pull request with detailed description
+
+## Support
+
+For issues and questions:
+1. Check the troubleshooting section above
+2. Review existing issues in the project repository
+3. Create a new issue with detailed description and system information
 
 ### 3. Interacting with the Web Interface
 
