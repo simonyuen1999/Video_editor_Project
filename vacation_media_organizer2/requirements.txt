@@ -8,4 +8,6 @@ geopy
 Flask
 Flask-SQLAlchemy
 SQLAlchemy
+Pillow
+pillow-heif
 

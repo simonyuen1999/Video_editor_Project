@@ -82,7 +82,12 @@ class MetadataExtractor:
         #    CreateDate = metadata[0].get("DateTimeOriginal", "N/A")
 
         if "CreateDate" in metadata[0]:
-            CreateDate = metadata[0].get("CreateDate", "N/A")
+            raw_date = metadata[0].get("CreateDate", "N/A")
+            # Convert YYYY:MM:DD HH:MM:SS format to YYYY-MM-DD HH:MM:SS format
+            if raw_date and raw_date != "N/A":
+                CreateDate = raw_date.replace(":", "-", 2)  # Replace only first 2 colons
+            else:
+                CreateDate = raw_date
 
         # if fileExt in ["mp4", "mov"]:
         #if CreateDate is None or CreateDate == "N/A":

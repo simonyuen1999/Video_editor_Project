@@ -4,23 +4,27 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from flask import Flask, send_from_directory
-from src.models.user import db
-from src.models.media import Media
-from src.routes.user import user_bp
+from src.models.media import db
 from src.routes.media import media_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
 
-app.register_blueprint(user_bp, url_prefix='/api')
+# Configuration for handling large files
+app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600  # Cache files for 1 hour
+
 app.register_blueprint(media_bp, url_prefix='/api')
 
-# uncomment if you need to use database
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(os.path.dirname(__file__), 'database', 'app.db')}"
+# Use the existing database from scan_main.py
+db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'media_organizer.db')
+app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
-with app.app_context():
-    db.create_all()
+
+# Don't create tables here - they should already exist from scan_main.py
+# with app.app_context():
+#     db.create_all()
 
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
@@ -40,4 +44,4 @@ def serve(path):
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(host='0.0.0.0', port=5001, debug=True)

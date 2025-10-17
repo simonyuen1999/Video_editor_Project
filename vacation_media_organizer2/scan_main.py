@@ -6,6 +6,15 @@ import logging
 import sqlite3
 from datetime import datetime               
 from metadata_extractor import MetadataExtractor
+import subprocess
+
+# Optional imports for thumbnail generation
+try:
+    from PIL import Image, ImageOps
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+    logging.warning("PIL/Pillow not available. Thumbnail generation will be skipped.")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format=
@@ -108,6 +117,14 @@ class MediaOrganizerDB:
             ))
             self.conn.commit()
             logging.debug(f"Added media file: {metadata.get('filepath')}, {metadata.get('creation_time')}")
+            
+            # Generate thumbnail after successfully adding to database
+            filepath = metadata.get('filepath')
+            if filepath and os.path.exists(filepath):
+                thumbnail_path = self.generate_thumbnail(filepath)
+                if thumbnail_path:
+                    logging.info(f"Generated thumbnail: {thumbnail_path}")
+                    
         except sqlite3.IntegrityError:
             logging.debug(f"File already exists in DB, skipping: {metadata.get('filepath')}")
         except sqlite3.Error as e:
@@ -193,6 +210,162 @@ class MediaOrganizerDB:
         )
         return self.cursor.fetchall()
 
+    def generate_thumbnail(self, filepath, thumbnail_size=(300, 300)):
+        """
+        Generate thumbnail for image or video files.
+        Returns the thumbnail file path if successful, None otherwise.
+        """
+        if not PIL_AVAILABLE:
+            logging.debug("PIL/Pillow not available, skipping thumbnail generation")
+            return None
+            
+        # Validate input filepath
+        if not filepath:
+            logging.error("generate_thumbnail: filepath is None or empty")
+            return None
+            
+        if not isinstance(filepath, str):
+            logging.error(f"generate_thumbnail: filepath is not a string, type: {type(filepath)}")
+            return None
+            
+        try:
+            # Generate thumbnail filename
+            file_dir = os.path.dirname(filepath)
+            file_name = os.path.basename(filepath)
+            name_without_ext = os.path.splitext(file_name)[0]
+            thumbnail_path = os.path.join(file_dir, f"{name_without_ext}_thumb.jpg")
+            
+            # Skip if thumbnail already exists
+            if os.path.exists(thumbnail_path):
+                logging.debug(f"Thumbnail already exists: {thumbnail_path}")
+                return thumbnail_path
+            
+            file_ext = os.path.splitext(filepath)[1].lower()
+            
+            # Handle image files
+            if file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.heic', '.webp']:
+                try:
+                    # Debug logging to check filepath
+                    logging.debug(f"Attempting to open image file: '{filepath}'")
+                    logging.debug(f"File exists check: {os.path.exists(filepath)}")
+                    logging.debug(f"File extension: {file_ext}")
+                    
+                    # Special handling for HEIC files which might need pillow-heif
+                    if file_ext == '.heic':
+                        try:
+                            # Try importing pillow_heif for HEIC support
+                            import pillow_heif
+                            pillow_heif.register_heif_opener()
+                        except ImportError:
+                            logging.warning("pillow_heif not available, HEIC support may be limited")
+                    
+                    with Image.open(filepath) as img:
+                        # Convert HEIC to RGB if needed
+                        if img.mode in ('RGBA', 'LA'):
+                            background = Image.new('RGB', img.size, (255, 255, 255))
+                            background.paste(img, mask=img.split()[-1] if img.mode == 'RGBA' else None)
+                            img = background
+                        elif img.mode != 'RGB':
+                            img = img.convert('RGB')
+                        
+                        # Auto-orient the image based on EXIF data
+                        img = ImageOps.exif_transpose(img)
+                        
+                        # Generate thumbnail
+                        img.thumbnail(thumbnail_size, Image.Resampling.LANCZOS)
+                        img.save(thumbnail_path, 'JPEG', quality=85, optimize=True)
+                        logging.debug(f"Generated image thumbnail: {thumbnail_path}")
+                        return thumbnail_path
+                        
+                except Exception as e:
+                    logging.error(f"Error generating image thumbnail for '{filepath}': {e}")
+                    logging.error(f"File exists: {os.path.exists(filepath)}")
+                    logging.error(f"File size: {os.path.getsize(filepath) if os.path.exists(filepath) else 'N/A'}")
+                    logging.error(f"Error type: {type(e).__name__}")
+                    return None
+            
+            # Handle video files
+            elif file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v']:
+                try:
+                    # First, try to get video info to check if file is valid
+                    info_cmd = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', filepath]
+                    info_result = subprocess.run(info_cmd, capture_output=True, text=True)
+                    
+                    if info_result.returncode != 0:
+                        logging.warning(f"ffprobe failed for {filepath}, file might be corrupted")
+                        return None
+                    
+                    # Parse ffprobe output to check for video streams
+                    try:
+                        import json
+                        probe_data = json.loads(info_result.stdout)
+                        video_streams = [s for s in probe_data.get('streams', []) if s.get('codec_type') == 'video']
+                        
+                        if not video_streams:
+                            logging.warning(f"No video streams found in {filepath}")
+                            return None
+                            
+                        # Get duration to determine best timestamp for thumbnail
+                        duration = video_streams[0].get('duration')
+                        if duration:
+                            # Use 10% of duration or 1 second, whichever is smaller
+                            timestamp = min(1.0, float(duration) * 0.1)
+                        else:
+                            timestamp = 0.1  # Very early timestamp for problematic files
+                            
+                    except (json.JSONDecodeError, ValueError, KeyError):
+                        logging.warning(f"Could not parse video info for {filepath}, using default timestamp")
+                        timestamp = 0.1
+                    
+                    # Try multiple ffmpeg strategies
+                    strategies = [
+                        # Strategy 1: Use calculated timestamp
+                        ['ffmpeg', '-v', 'quiet', '-i', filepath, '-ss', str(timestamp), '-vframes', '1',
+                         '-vf', f'scale={thumbnail_size[0]}:{thumbnail_size[1]}:force_original_aspect_ratio=decrease',
+                         '-y', thumbnail_path],
+                        
+                        # Strategy 2: Use first frame
+                        ['ffmpeg', '-v', 'quiet', '-i', filepath, '-vframes', '1',
+                         '-vf', f'scale={thumbnail_size[0]}:{thumbnail_size[1]}:force_original_aspect_ratio=decrease',
+                         '-y', thumbnail_path],
+                         
+                        # Strategy 3: More aggressive approach for corrupted files
+                        ['ffmpeg', '-v', 'quiet', '-err_detect', 'ignore_err', '-i', filepath, '-vframes', '1',
+                         '-vf', f'scale={thumbnail_size[0]}:{thumbnail_size[1]}:force_original_aspect_ratio=decrease',
+                         '-y', thumbnail_path]
+                    ]
+                    
+                    for i, cmd in enumerate(strategies, 1):
+                        logging.debug(f"Trying ffmpeg strategy {i} for {filepath}")
+                        result = subprocess.run(cmd, capture_output=True, text=True)
+                        
+                        if result.returncode == 0 and os.path.exists(thumbnail_path):
+                            logging.debug(f"Generated video thumbnail using strategy {i}: {thumbnail_path}")
+                            return thumbnail_path
+                        else:
+                            logging.debug(f"Strategy {i} failed: {result.stderr.strip()}")
+                            # Clean up any partial file
+                            if os.path.exists(thumbnail_path):
+                                os.remove(thumbnail_path)
+                    
+                    # All strategies failed
+                    logging.error(f"All ffmpeg strategies failed for {filepath}")
+                    logging.error(f"Last error: {result.stderr.strip()}")
+                    return None
+                        
+                except Exception as e:
+                    logging.error(f"Error generating video thumbnail for {filepath}: {e}")
+                    input("Press Enter to continue...")
+                    return None
+            
+            else:
+                logging.debug(f"Unsupported file type for thumbnail generation: {file_ext}")
+                return None
+                
+        except Exception as e:
+            logging.error(f"Unexpected error generating thumbnail for {filepath}: {e}")
+            return None
+
     def close(self):
         if self.conn:
             self.conn.close()
@@ -207,9 +380,34 @@ def scan_directory_recursive(path):
             extension = os.path.splitext(file)[1].lower()
             if file.startswith('.') or extension not in [".jpg", ".jpeg", ".png", ".heic", ".mp4", ".mov"]:
                 continue
+            
+            # Skip thumbnail files (files ending with _thumb.jpg)
+            if file.endswith('_thumb.jpg'):
+                logging.debug(f"Skipping thumbnail file: {file}")
+                continue
+                
             all_files.append(os.path.join(root, file))
     logging.info(f"Found {len(all_files)} files in total.")
     return all_files
+
+def cleanup_thumbnails(path):
+    """Remove all existing thumbnail files from the directory tree"""
+    logging.info(f"Cleaning up existing thumbnail files in: {path}")
+    thumbnail_count = 0
+    
+    for root, _, files in os.walk(path):
+        for file in files:
+            if file.endswith('_thumb.jpg'):
+                thumbnail_path = os.path.join(root, file)
+                try:
+                    os.remove(thumbnail_path)
+                    thumbnail_count += 1
+                    logging.debug(f"Removed thumbnail: {thumbnail_path}")
+                except OSError as e:
+                    logging.error(f"Error removing thumbnail {thumbnail_path}: {e}")
+    
+    logging.info(f"Cleaned up {thumbnail_count} thumbnail files")
+    return thumbnail_count
 
 def main():
     default_directory = '/Volumes/Extreme SSD 1/Media'
@@ -241,6 +439,10 @@ def main():
     parser.add_argument(
         '--syncFSnDB', '-f', default=False, action='store_true',
         help='Sync file system changes with the database. default: False'
+    )
+    parser.add_argument(
+        '--cleanup-thumbnails', '-c', default=False, action='store_true',
+        help='Remove all existing thumbnail files before scanning. default: False'
     )
     # Add search time_diff parameter for proximity search
     parser.add_argument(
@@ -274,6 +476,11 @@ def main():
     extractor = MetadataExtractor(geo_list_path=args.geo_list)
 
     target_directory = args.directory
+    
+    # Clean up existing thumbnails if requested
+    if args.cleanup_thumbnails:
+        cleanup_thumbnails(target_directory)
+    
     all_files = scan_directory_recursive(target_directory)
 
     # ==================================================================================
@@ -314,7 +521,19 @@ def main():
     # ==================================================================================
     if args.syncFSnDB:
         logging.info("Sync FS and DB: Syncing file system changes with the database...")
+        
+        # Generate thumbnails for all existing files if they don't exist
+        logging.info("Sync FS and DB: Generating missing thumbnails for existing files...")
         current_files_set = set(all_files)
+        thumbnail_count = 0
+        for filepath in current_files_set:
+            if os.path.exists(filepath):
+                thumbnail_path = db.generate_thumbnail(filepath)
+                if thumbnail_path:
+                    thumbnail_count += 1
+                    logging.debug(f"Generated thumbnail: {thumbnail_path}")
+        logging.info(f"Sync FS and DB: Generated {thumbnail_count} new thumbnails")
+        
         db.cursor.execute('SELECT filepath FROM media_files')
         db_files_set = set(row[0] for row in db.cursor.fetchall())
 
@@ -377,7 +596,7 @@ def main():
         updated_image_files_with_geo = []
         for image_file in image_files_with_geo:
             # convert image_file[1] (YYYY-MM-DD HH:MM:SS format) to datetime object,  
-            image_datetime = datetime.strptime(image_file[1], '%Y:%m:%d %H:%M:%S')
+            image_datetime = datetime.strptime(image_file[1], '%Y-%m-%d %H-%M-%S')
             updated_image_file = image_file + (image_datetime,)
             updated_image_files_with_geo.append(updated_image_file)       
         # Update the original list
@@ -386,7 +605,7 @@ def main():
         # Process each media file without geo data to find closest image with geo data
         for media_file in all_files_without_geo:
             media_filepath = media_file[0]
-            media_time = datetime.strptime(media_file[1], '%Y:%m:%d %H:%M:%S')
+            media_time = datetime.strptime(media_file[1], '%Y-%m-%d %H-%M-%S')
 
             # Already use SQL to filter out files without creation_time (SQL: creation_time IS NOT NULL)
             #if not media_creation_time:

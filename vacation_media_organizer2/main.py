@@ -6,7 +6,7 @@ import os
 import shutil
 import json
 from database_manager import create_connection, create_table, insert_media_record
-from metadata_extractor import extract_metadata
+from metadata_extractor import MetadataExtractor
 from semantic_analyzer import analyze_video
 
 def organize_media(source_dir, library_dir):
@@ -30,6 +30,9 @@ def organize_media(source_dir, library_dir):
         print("Error: Could not connect to database.")
         return
 
+    # Initialize metadata extractor
+    metadata_extractor = MetadataExtractor()
+    
     for filename in os.listdir(source_dir):
         source_path = os.path.join(source_dir, filename)
         if not os.path.isfile(source_path):
@@ -38,7 +41,7 @@ def organize_media(source_dir, library_dir):
         print(f"Processing {filename}...")
 
         # 1. Extract Metadata
-        metadata = extract_metadata(source_path)
+        metadata = metadata_extractor.extract_metadata(source_path)
 
         # 2. Perform Semantic Analysis (for videos)
         semantic_info = {}
