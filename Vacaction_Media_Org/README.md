@@ -22,6 +22,12 @@ A comprehensive, Flask-based web application for organizing and exploring vacati
 - **Flexible Filtering**: Date ranges, location dropdowns, people count, and talking detection filters
 - **Sorting Controls**: Chronological ordering with user-toggleable newest/oldest first options
 
+### **Geographic Translation Editor** 
+- **Comprehensive Database**: 100+ major cities worldwide with Chinese translations
+- **Smart Sorting**: Conditional alphabetical sorting by city name when filtering by country
+- **Reliable Translation**: Local fallback database eliminates Google search dependencies
+- **City Name Variations**: Handles prefixes, suffixes, and alternate spellings automatically
+
 ## Architecture
 
 ### **Backend (Flask 3.1.1)**
