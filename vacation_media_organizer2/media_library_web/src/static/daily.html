@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Media View - Vacation Media Organizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .nav-links {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.2);
+            transition: background 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .nav-links a.active {
+            background: rgba(255,255,255,0.4);
+            font-weight: bold;
+        }
+
+        .control-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .day-selector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .day-input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .nav-button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.2s ease;
+        }
+
+        .nav-button:hover {
+            transform: translateY(-2px);
+        }
+
+        .view-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .view-mode-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .view-mode-btn {
+            padding: 8px 16px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .view-mode-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .thumbnail-size-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .size-slider {
+            width: 150px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        /* Thumbnail Mode Styles */
+        .media-grid {
+            display: grid;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .media-grid.thumbnail {
+            grid-template-columns: repeat(auto-fill, minmax(var(--thumbnail-size, 200px), 1fr));
+        }
+
+        .media-item {
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .media-item:hover {
+            transform: translateY(-5px);
+        }
+
+        .media-thumbnail {
+            width: 100%;
+            height: var(--thumbnail-height, 150px);
+            object-fit: cover;
+        }
+
+        .media-info {
+            padding: 10px;
+        }
+
+        .media-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .media-meta {
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* List Mode Styles */
+        .media-grid.list {
+            grid-template-columns: 1fr;
+        }
+
+        .media-item.list {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+        }
+
+        .media-item.list .media-thumbnail {
+            width: 80px;
+            height: 60px;
+            margin-right: 15px;
+            border-radius: 6px;
+        }
+
+        .media-item.list .media-info {
+            flex: 1;
+            padding: 0;
+        }
+
+        .media-item.list .media-title {
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+
+        .media-item.list .media-meta {
+            font-size: 14px;
+        }
+
+        .no-media {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+            background: white;
+            border-radius: 10px;
+            margin: 20px;
+        }
+
+        .no-media h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+        }
+
+        .modal-content {
+            position: relative;
+            margin: 5% auto;
+            width: 90%;
+            max-width: 800px;
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .close {
+            color: white;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: opacity 0.3s ease;
+        }
+
+        .close:hover {
+            opacity: 0.7;
+        }
+
+        .modal-body {
+            padding: 20px;
+        }
+
+        .modal-media {
+            width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📅 Daily Media View</h1>
+            <p>Browse your vacation memories day by day</p>
+        </div>
+
+        <div class="nav-links">
+            <a href="index.html">🗺️ Map View</a>
+            <a href="daily.html" class="active">📅 Daily View</a>
+        </div>
+
+        <div class="control-panel">
+            <div class="day-selector">
+                <button class="nav-button" id="prev-day">⬅️ Previous Day</button>
+                <input type="date" id="selected-date" class="day-input">
+                <button class="nav-button" id="next-day">Next Day ➡️</button>
+            </div>
+
+            <div class="view-controls">
+                <div class="view-mode-buttons">
+                    <button class="view-mode-btn active" data-mode="thumbnail">🖼️ Thumbnail</button>
+                    <button class="view-mode-btn" data-mode="list">📋 List</button>
+                </div>
+
+                <div class="thumbnail-size-control">
+                    <label for="thumbnail-size">Size:</label>
+                    <input type="range" id="thumbnail-size" class="size-slider" min="150" max="350" value="200">
+                    <span id="size-display">200px</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            <h3>Loading media...</h3>
+        </div>
+
+        <div id="media-container">
+            <div class="no-media">
+                <h3>Select a date to view media</h3>
+                <p>Use the date picker above to browse your vacation photos and videos by day</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for media preview -->
+    <div id="media-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Media Details</h2>
+                <span class="close">&times;</span>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- Media details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentViewMode = 'thumbnail';
+        let currentDate = null;
+        let mediaData = [];
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            loadStatsAndSetDefaultDate();
+        });
+
+        function setupEventListeners() {
+            // Date navigation
+            document.getElementById('prev-day').addEventListener('click', () => navigateDay(-1));
+            document.getElementById('next-day').addEventListener('click', () => navigateDay(1));
+            document.getElementById('selected-date').addEventListener('change', loadMediaForSelectedDate);
+
+            // View mode buttons
+            document.querySelectorAll('.view-mode-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const mode = btn.getAttribute('data-mode');
+                    setViewMode(mode);
+                });
+            });
+
+            // Thumbnail size control
+            const sizeSlider = document.getElementById('thumbnail-size');
+            sizeSlider.addEventListener('input', updateThumbnailSize);
+
+            // Modal close
+            document.querySelector('.close').addEventListener('click', function() {
+                document.getElementById('media-modal').style.display = 'none';
+            });
+            
+            // Close modal when clicking outside
+            window.addEventListener('click', function(event) {
+                const modal = document.getElementById('media-modal');
+                if (event.target === modal) {
+                    modal.style.display = 'none';
+                }
+            });
+        }
+
+        async function loadStatsAndSetDefaultDate() {
+            try {
+                const response = await fetch('/api/media/stats');
+                const stats = await response.json();
+                
+                // Use earliest date if available, otherwise fall back to today
+                if (stats.date_range && stats.date_range.earliest) {
+                    setDefaultDate(stats.date_range.earliest);
+                } else {
+                    setDefaultDate();
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                // Fall back to today's date if stats loading fails
+                setDefaultDate();
+            }
+        }
+
+        function setDefaultDate(earliestDate = null) {
+            let defaultDate;
+            
+            if (earliestDate) {
+                // Convert database format "YYYY-MM-DD HH-MM-SS" to date format "YYYY-MM-DD"
+                try {
+                    let formatted = earliestDate;
+                    if (formatted.match(/\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}/)) {
+                        formatted = formatted.replace(/ (\d{2})-(\d{2})-(\d{2})/, ' $1:$2:$3');
+                    }
+                    const date = new Date(formatted);
+                    defaultDate = date.toISOString().split('T')[0];
+                } catch (error) {
+                    console.error('Error parsing earliest date:', error);
+                    defaultDate = new Date().toISOString().split('T')[0];
+                }
+            } else {
+                // Fall back to today
+                defaultDate = new Date().toISOString().split('T')[0];
+            }
+            
+            document.getElementById('selected-date').value = defaultDate;
+            currentDate = defaultDate;
+            loadMediaForSelectedDate();
+        }
+
+        function navigateDay(direction) {
+            const dateInput = document.getElementById('selected-date');
+            const currentDateObj = new Date(dateInput.value);
+            currentDateObj.setDate(currentDateObj.getDate() + direction);
+            
+            const newDate = currentDateObj.toISOString().split('T')[0];
+            dateInput.value = newDate;
+            currentDate = newDate;
+            loadMediaForSelectedDate();
+        }
+
+        async function loadMediaForSelectedDate() {
+            const selectedDate = document.getElementById('selected-date').value;
+            if (!selectedDate) return;
+
+            currentDate = selectedDate;
+            
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('media-container').innerHTML = '';
+
+                // Format date for API call (assuming the API expects YYYY-MM-DD format)
+                const dateFrom = selectedDate + ' 00:00:00';
+                const dateTo = selectedDate + ' 23:59:59';
+                
+                const response = await fetch(`/api/media?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}&order=asc`);
+                mediaData = await response.json();
+
+                document.getElementById('loading').style.display = 'none';
+                displayMedia(mediaData);
+
+            } catch (error) {
+                console.error('Error loading media:', error);
+                document.getElementById('loading').style.display = 'none';
+                showError('Failed to load media for the selected date.');
+            }
+        }
+
+        function displayMedia(data) {
+            const container = document.getElementById('media-container');
+            
+            if (data.length === 0) {
+                container.innerHTML = `
+                    <div class="no-media">
+                        <h3>No media found for ${currentDate}</h3>
+                        <p>Try selecting a different date</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const mediaGrid = document.createElement('div');
+            mediaGrid.className = `media-grid ${currentViewMode}`;
+            
+            mediaGrid.innerHTML = data.map(media => {
+                const isVideo = media.file_extension && 
+                    ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
+                
+                const displayTime = formatCreationTime(media.creation_time);
+                const location = media.city_zh && media.city_en ? 
+                    `${media.city_zh} | ${media.city_en}` : 
+                    (media.city_zh || media.city_en || 'Unknown location');
+
+                return `
+                    <div class="media-item ${currentViewMode}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                        ${isVideo ? 
+                            `<video class="media-thumbnail" controls>
+                                <source src="/api/media/${media.id}/file" type="video/${media.file_extension?.substring(1) || 'mp4'}">
+                                Your browser does not support the video tag.
+                            </video>` :
+                            `<img class="media-thumbnail" src="/api/media/${media.id}/thumbnail" alt="${media.filename}" loading="lazy">`
+                        }
+                        <div class="media-info">
+                            <div class="media-title">${media.filename}</div>
+                            <div class="media-meta">
+                                📅 ${displayTime}<br>
+                                📍 ${location}
+                                ${media.people_count > 0 ? `<br>👥 ${media.people_count} people` : ''}
+                                ${media.talking_detected ? '<br>🗣️ Talking detected' : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = '';
+            container.appendChild(mediaGrid);
+        }
+
+        function setViewMode(mode) {
+            currentViewMode = mode;
+            
+            // Update button states
+            document.querySelectorAll('.view-mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.getAttribute('data-mode') === mode) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Update thumbnail size control visibility
+            const sizeControl = document.querySelector('.thumbnail-size-control');
+            sizeControl.style.display = mode === 'thumbnail' ? 'flex' : 'none';
+
+            // Re-render media if we have data
+            if (mediaData.length > 0) {
+                displayMedia(mediaData);
+            }
+        }
+
+        function updateThumbnailSize() {
+            const size = document.getElementById('thumbnail-size').value;
+            document.getElementById('size-display').textContent = size + 'px';
+            
+            // Update CSS custom properties
+            document.documentElement.style.setProperty('--thumbnail-size', size + 'px');
+            document.documentElement.style.setProperty('--thumbnail-height', (size * 0.75) + 'px');
+        }
+
+        function formatCreationTime(timeStr) {
+            if (!timeStr) return 'Unknown time';
+            
+            try {
+                // Handle the database format with dashes in time part
+                let formatted = timeStr;
+                if (formatted.match(/\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}/)) {
+                    formatted = formatted.replace(/ (\d{2})-(\d{2})-(\d{2})/, ' $1:$2:$3');
+                }
+                
+                const date = new Date(formatted);
+                if (isNaN(date.getTime())) {
+                    return timeStr;
+                }
+                
+                return date.toLocaleString();
+            } catch (error) {
+                return timeStr;
+            }
+        }
+
+        function showError(message) {
+            const container = document.getElementById('media-container');
+            container.innerHTML = `
+                <div class="no-media">
+                    <h3>Error</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Open media modal
+        async function openMediaModal(mediaId) {
+            try {
+                const response = await fetch(`/api/media/${mediaId}`);
+                const media = await response.json();
+                
+                const modal = document.getElementById('media-modal');
+                const title = document.getElementById('modal-title');
+                const body = document.getElementById('modal-body');
+                
+                title.textContent = `${media.city_zh || 'Unknown Location'} - ${media.filename || 'Unknown File'}`;
+                
+                const isVideo = media.file_extension && 
+                    ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
+                
+                const displayTime = formatCreationTime(media.creation_time);
+                
+                body.innerHTML = `
+                    ${isVideo ? 
+                        `<video class="modal-media" controls src="/api/media/${media.id}/file"></video>` :
+                        `<img class="modal-media" src="/api/media/${media.id}/file" alt="Media">`
+                    }
+                    <div>
+                        <h3>Details</h3>
+                        <p><strong>Filename:</strong> ${media.filename || 'N/A'}</p>
+                        <p><strong>Creation Time:</strong> ${displayTime}</p>
+                        <p><strong>Location:</strong> ${media.city_zh || 'N/A'}, ${media.country_zh || 'N/A'}</p>
+                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> ${media.latitude}, ${media.longitude}</p>` : ''}
+                        <p><strong>People Count:</strong> ${media.people_count || 0}</p>
+                        <p><strong>Talking Detected:</strong> ${media.talking_detected ? 'Yes' : 'No'}</p>
+                        ${media.activities && media.activities.length > 0 ? `<p><strong>Activities:</strong> ${media.activities.join(', ')}</p>` : ''}
+                        ${media.scenery && media.scenery.length > 0 ? `<p><strong>Scenery:</strong> ${media.scenery.join(', ')}</p>` : ''}
+                        <p><strong>File Path:</strong> ${media.filepath || 'N/A'}</p>
+                        <p><strong>File Size:</strong> ${media.size ? (media.size / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</p>
+                        <button style="margin-top: 10px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;" onclick="openFileInSystem(${media.id})">
+                            📱 Open with System App
+                        </button>
+                    </div>
+                `;
+                
+                modal.style.display = 'block';
+            } catch (error) {
+                console.error('Error loading media details:', error);
+                showError('Failed to load media details.');
+            }
+        }
+
+        // Open file in system default application
+        async function openFileInSystem(mediaId) {
+            try {
+                const response = await fetch(`/api/media/${mediaId}/open`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('File opened successfully:', result.message);
+                } else {
+                    console.error('Error opening file:', result.error);
+                    alert('Error opening file: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error opening file:', error);
+                alert('Error opening file: ' + error.message);
+            }
+        }
+
+        // Show error message
+        function showError(message) {
+            const container = document.getElementById('media-container');
+            container.innerHTML = `
+                <div class="no-media">
+                    <h3>Error</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        // Initialize thumbnail size
+        updateThumbnailSize();
+    </script>
+</body>
+</html>

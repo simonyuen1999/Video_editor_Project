@@ -53,7 +53,7 @@ cython_debug/
 media_library.db
 media/
 staticfiles/
-static/
+# static/
 local_settings.py
 db.sqlite3
 celerybeat-schedule
