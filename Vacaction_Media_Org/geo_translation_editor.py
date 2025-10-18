@@ -51,6 +51,13 @@ class GeoTranslationEditor:
         # Track modifications
         self.modified = False
         
+        # UI components that need to be controlled
+        self.edit_all_button = None
+        
+        # Load additional city translations from HK CSV file
+        self.additional_translations = {}
+        self.load_hk_translations()
+        
         self.setup_ui()
         
     def center_window(self, width, height):
@@ -65,6 +72,32 @@ class GeoTranslationEditor:
         
         # Set the window position
         self.root.geometry(f"{width}x{height}+{x}+{y}")
+        
+    def load_hk_translations(self):
+        """Load additional city translations from HK_City_en_translated.csv"""
+        hk_file_path = "HK_City_en_translated.csv"
+        
+        try:
+            if os.path.exists(hk_file_path):
+                print(f"📖 Loading HK city translations from {hk_file_path}")
+                with open(hk_file_path, 'r', encoding='utf-8') as file:
+                    csv_reader = csv.DictReader(file)
+                    count = 0
+                    for row in csv_reader:
+                        # Handle BOM issue - first column might have \ufeff prefix
+                        city_en = row.get('City_en', row.get('\ufeffCity_en', '')).strip()
+                        city_zh = row.get('City_zh', '').strip()
+                        
+                        if city_en and city_zh:
+                            self.additional_translations[city_en] = city_zh
+                            count += 1
+                    
+                    print(f"✅ Loaded {count} HK city translations")
+            else:
+                print(f"⚠️  HK translation file not found: {hk_file_path}")
+                
+        except Exception as e:
+            print(f"❌ Error loading HK translations: {e}")
         
     def search_chinese_city_name(self, city_en, country_en):
         """Search for Chinese translation of city name using web search - returns single result for backward compatibility"""
@@ -619,7 +652,14 @@ class GeoTranslationEditor:
             'Da Nang': '岘港',
         }
         
-        return city_translations.get(city_en, "")
+        # First check the built-in translations
+        result = city_translations.get(city_en, "")
+        
+        # If not found in built-in translations, check additional translations from HK CSV
+        if not result and hasattr(self, 'additional_translations'):
+            result = self.additional_translations.get(city_en, "")
+            
+        return result
         
     def setup_ui(self):
         """Setup the user interface"""
@@ -696,6 +736,8 @@ class GeoTranslationEditor:
         control_frame.grid(row=3, column=0, columnspan=2, pady=(0, 10))
         
         ttk.Button(control_frame, text="Edit Selected", command=self.edit_selected_item).pack(side=tk.LEFT, padx=(0, 10))
+        self.edit_all_button = ttk.Button(control_frame, text="📝 Edit All", command=self.edit_all_cities, state="disabled")
+        self.edit_all_button.pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(control_frame, text="Save Changes", command=self.save_changes).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(control_frame, text="Export CSV", command=self.export_csv).pack(side=tk.LEFT)
         
@@ -778,11 +820,17 @@ class GeoTranslationEditor:
         if selected_country == 'All Countries' or not selected_country:
             # When "All Countries" is selected, no need to sort - keep original order
             self.filtered_data = self.data.copy()
+            # Disable Edit All button for "All Countries"
+            if self.edit_all_button:
+                self.edit_all_button.config(state="disabled")
         else:
             # When a specific country is selected, filter and sort by city name
             self.filtered_data = [item for item in self.data if item['country_en'] == selected_country]
             # Sort by city (English) name
             self.filtered_data.sort(key=lambda x: x['city_en'].lower())
+            # Enable Edit All button when a specific country is selected
+            if self.edit_all_button:
+                self.edit_all_button.config(state="normal")
         
         self.refresh_table()
     
@@ -807,6 +855,109 @@ class GeoTranslationEditor:
             ))
         
         self.status_var.set(f"Showing {len(self.filtered_data)} of {len(self.data)} records")
+    
+    def edit_all_cities(self):
+        """Auto-edit all cities in the current filtered list using fallback translations"""
+        if not self.filtered_data:
+            messagebox.showwarning("No Data", "No cities to edit. Please select a country first.")
+            return
+        
+        # Get current country selection for context
+        selected_country = self.country_filter_var.get()
+        if selected_country == 'All Countries' or not selected_country:
+            messagebox.showwarning("No Country Selected", "Please select a specific country before using Edit All.")
+            return
+        
+        # Confirm with user
+        response = messagebox.askyesno(
+            "Confirm Edit All",
+            f"This will automatically update Chinese translations for all {len(self.filtered_data)} cities in {selected_country} using the local database.\n\n"
+            f"Only cities with different translations will be updated.\n\n"
+            f"Do you want to continue?"
+        )
+        
+        if not response:
+            return
+        
+        # Track changes
+        updated_count = 0
+        processed_count = 0
+        
+        # Show progress dialog
+        progress_dialog = tk.Toplevel(self.root)
+        progress_dialog.title("Processing Cities...")
+        progress_dialog.geometry("400x150")
+        progress_dialog.transient(self.root)
+        progress_dialog.grab_set()
+        
+        # Center the dialog
+        progress_dialog.update_idletasks()
+        x = (progress_dialog.winfo_screenwidth() - progress_dialog.winfo_width()) // 2
+        y = (progress_dialog.winfo_screenheight() - progress_dialog.winfo_height()) // 2
+        progress_dialog.geometry(f"+{x}+{y}")
+        
+        progress_label = ttk.Label(progress_dialog, text="Processing cities...")
+        progress_label.pack(pady=10)
+        
+        progress_bar = ttk.Progressbar(progress_dialog, mode='determinate', maximum=len(self.filtered_data))
+        progress_bar.pack(pady=10, padx=20, fill=tk.X)
+        
+        # Update function
+        def update_progress(current, city_name):
+            progress_bar['value'] = current
+            progress_label.config(text=f"Processing: {city_name} ({current}/{len(self.filtered_data)})")
+            progress_dialog.update()
+        
+        try:
+            # Process each city in filtered data
+            for i, data_item in enumerate(self.filtered_data):
+                city_en = data_item.get('city_en', '').strip()
+                current_city_zh = data_item.get('city_zh', '').strip()
+                country_en = data_item.get('country_en', '').strip()
+                
+                processed_count += 1
+                update_progress(processed_count, city_en)
+                
+                if city_en:
+                    # Get suggested translation from fallback database
+                    suggested_translation = self.get_fallback_translation(city_en, country_en)
+                    
+                    if suggested_translation and suggested_translation != current_city_zh:
+                        # Update the translation in both data and filtered_data
+                        data_item['city_zh'] = suggested_translation
+                        
+                        # Also find and update in main data list
+                        for main_item in self.data:
+                            if (main_item.get('city_en') == city_en and 
+                                main_item.get('country_en') == country_en):
+                                main_item['city_zh'] = suggested_translation
+                                break
+                        
+                        updated_count += 1
+            
+            # Close progress dialog
+            progress_dialog.destroy()
+            
+            # Mark as modified and refresh display
+            if updated_count > 0:
+                self.modified = True
+                self.refresh_table()
+                messagebox.showinfo(
+                    "Edit All Complete",
+                    f"Successfully updated {updated_count} out of {processed_count} cities.\n\n"
+                    f"Changes have been made in memory.\n"
+                    f"Click 'Save Changes' to save to file."
+                )
+                self.status_var.set(f"Updated {updated_count} cities - Changes not saved")
+            else:
+                messagebox.showinfo(
+                    "No Updates Needed",
+                    f"All {processed_count} cities already have correct translations or no translations were found in the database."
+                )
+                
+        except Exception as e:
+            progress_dialog.destroy()
+            messagebox.showerror("Error", f"An error occurred during processing: {str(e)}")
     
     def edit_selected_item(self, event=None):
         """Edit the selected item"""
@@ -927,11 +1078,11 @@ class GeoTranslationEditor:
         # Focus on the editable field
         city_zh_entry.focus()
         
-        # Auto-search functionality
+        # Auto-search functionality using fallback translations
         def perform_auto_search():
-            """Perform automatic search for Chinese city name candidates"""
+            """Suggest Chinese city name using fallback translation database"""
             search_button.config(text="⏳ Searching...", state="disabled")
-            status_label.config(text="Searching Google for Chinese translations...", foreground="blue")
+            status_label.config(text="Looking up translation in local database...", foreground="blue")
             
             # Clear previous results
             search_listbox.delete(0, tk.END)
@@ -941,85 +1092,88 @@ class GeoTranslationEditor:
             
             dialog.update()
             
-            def search_thread():
-                try:
-                    # Get current city and country
-                    city_en = city_en_var.get().strip()
-                    country_en = country_en_var.get().strip()
+            try:
+                # Get current city and country
+                city_en = city_en_var.get().strip()
+                country_en = country_en_var.get().strip()
+                
+                if not city_en:
+                    status_label.config(text="❌ No city name to search for", foreground="red")
+                    search_button.config(text="🔍 Auto Search", state="normal")
+                    return
+                
+                # Use fallback translation to get suggestion
+                suggested_translation = self.get_fallback_translation(city_en, country_en)
+                
+                if suggested_translation:
+                    # Add the suggestion to the listbox
+                    display_text = f"1. {suggested_translation} (Database)"
+                    search_listbox.insert(tk.END, display_text)
                     
-                    if not city_en:
-                        return
+                    # Try variations if exact match not found
+                    variations = self.generate_city_variations(city_en)
+                    for variation in variations[1:]:  # Skip the original name
+                        var_result = self.get_fallback_translation(variation, country_en)
+                        if var_result and var_result != suggested_translation:
+                            display_text = f"{search_listbox.size() + 1}. {var_result} (Variation: {variation})"
+                            search_listbox.insert(tk.END, display_text)
                     
-                    # Update status to show search progress
-                    def update_search_status(message):
-                        dialog.after(0, lambda: status_label.config(text=message, foreground="blue"))
+                    # Show the search results
+                    search_frame.grid()
+                    use_selected_button.grid()
                     
-                    update_search_status("🔍 Querying Google search...")
-                    
-                    # Search for Chinese translation candidates
-                    candidates = self.search_chinese_city_candidates(city_en, country_en)
-                    
-                    # Update UI in main thread
-                    def update_ui():
-                        if candidates:
-                            # Populate the listbox with candidates
-                            for i, candidate in enumerate(candidates, 1):
-                                display_text = f"{i}. {candidate}"
-                                search_listbox.insert(tk.END, display_text)
-                            
-                            # Show the search results
-                            search_frame.grid()
-                            use_selected_button.grid()
-                            
-                            # Enable the use button when selection changes
-                            def on_selection_change(event):
-                                selection = search_listbox.curselection()
-                                if selection:
-                                    use_selected_button.config(state="normal")
-                                else:
-                                    use_selected_button.config(state="disabled")
-                            
-                            def on_double_click(event):
-                                """Auto-apply on double-click"""
-                                use_selected_result()
-                            
-                            search_listbox.bind('<<ListboxSelect>>', on_selection_change)
-                            search_listbox.bind('<Double-Button-1>', on_double_click)
-                            
-                            # Auto-select first item if current field is empty
-                            current_value = city_zh_var.get().strip()
-                            if not current_value or current_value == city_en:
-                                search_listbox.selection_set(0)
-                                search_listbox.event_generate('<<ListboxSelect>>')
-                                # Auto-apply first result
-                                first_candidate = candidates[0]
-                                city_zh_var.set(first_candidate)
-                                status_label.config(text=f"✅ Found {len(candidates)} suggestions. Auto-applied: {first_candidate}", foreground="green")
-                            else:
-                                status_label.config(text=f"✅ Found {len(candidates)} suggestions. Select one to replace current value.", foreground="green")
+                    # Enable the use button when selection changes
+                    def on_selection_change(event):
+                        selection = search_listbox.curselection()
+                        if selection:
+                            use_selected_button.config(state="normal")
                         else:
-                            status_label.config(text="❌ No Chinese translations found in search results", foreground="red")
-                        
-                        search_button.config(text="🔍 Auto Search", state="normal")
+                            use_selected_button.config(state="disabled")
                     
-                    dialog.after(0, update_ui)
+                    def on_double_click(event):
+                        """Auto-apply on double-click"""
+                        use_selected_result()
                     
-                except Exception as e:
-                    def show_error():
-                        status_label.config(text=f"❌ Search error: {str(e)}", foreground="red")
-                        search_button.config(text="🔍 Auto Search", state="normal")
-                    dialog.after(0, show_error)
-            
-            # Run search in background thread
-            threading.Thread(target=search_thread, daemon=True).start()
+                    search_listbox.bind('<<ListboxSelect>>', on_selection_change)
+                    search_listbox.bind('<Double-Button-1>', on_double_click)
+                    
+                    # Auto-select and apply first suggestion
+                    current_value = city_zh_var.get().strip()
+                    if not current_value or current_value == city_en:
+                        search_listbox.selection_set(0)
+                        search_listbox.event_generate('<<ListboxSelect>>')
+                        # Auto-apply first suggestion
+                        city_zh_var.set(suggested_translation)
+                        status_label.config(text=f"✅ Suggested translation applied: {suggested_translation}", foreground="green")
+                    else:
+                        search_listbox.selection_set(0)
+                        search_listbox.event_generate('<<ListboxSelect>>')
+                        status_label.config(text=f"✅ Found suggestion: {suggested_translation}. Click 'Use Selected' to apply.", foreground="green")
+                else:
+                    status_label.config(text=f"❌ No translation found for '{city_en}' in local database", foreground="red")
+                
+                search_button.config(text="🔍 Auto Search", state="normal")
+                
+            except Exception as e:
+                status_label.config(text=f"❌ Search error: {str(e)}", foreground="red")
+                search_button.config(text="🔍 Auto Search", state="normal")
         
         def use_selected_result():
             """Use the selected search result"""
             selection = search_listbox.curselection()
             if selection:
                 selected_text = search_listbox.get(selection[0])
-                # Extract just the Chinese name (remove the number prefix)
-                chinese_name = selected_text.split('. ', 1)[1] if '. ' in selected_text else selected_text
+                # Extract just the Chinese name (remove the number prefix and source info)
+                if '. ' in selected_text:
+                    chinese_part = selected_text.split('. ', 1)[1]
+                    # Remove source info like "(Database)" or "(Variation: ...)"
+                    if ' (' in chinese_part:
+                        chinese_name = chinese_part.split(' (')[0]
+                    else:
+                        chinese_name = chinese_part
+                else:
+                    chinese_name = selected_text
+                
                 city_zh_var.set(chinese_name)
                 status_label.config(text=f"✅ Applied: {chinese_name}", foreground="green")
         
