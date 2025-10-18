@@ -12,6 +12,8 @@ from pathlib import Path
 class MetadataExtractor:
     def __init__(self, geo_list_path='geo_chinese_.list'):
 
+        self.city_dict: dict[str, str] = {}
+
         self.geo_list_path = geo_list_path
         if not os.path.exists(self.geo_list_path):
             logging.warning(f"File {self.geo_list_path} not found. Geolocation enhancement will be disabled.")
@@ -42,11 +44,25 @@ class MetadataExtractor:
                         timezone = parts[9]
                         lat = float(parts[10])
                         lon = float(parts[11])
+                        # Save city translation mapping for quick lookup
+                        self.city_dict[city_en] = city_zn
                         self.geo_data.append((lat, lon, city_en, city_zn, region_en, region_zn, subregion_en, subregion_zn, country_code, country_en, country_zn, timezone))
                     except ValueError:
                         logging.error(f"Error parsing line in geo.list: {line}")
                         continue
             logging.info(f"Loaded {len(self.geo_data)} entries from {self.geo_list_path}")
+
+    def _get_city_translation(self, city_name: str) -> str:
+        #print(f"> DBG: Looking up city translation for: {city_name}")
+
+        if not city_name:
+            return None
+        if not city_name in self.city_dict:
+            return None
+
+        rc_city_zh = self.city_dict.get(city_name, city_name)
+        #print(f"> DBG: City translation found: {city_name} -> {rc_city_zh}")
+        return rc_city_zh
 
     def _run_exiftool(self, filepath):
         result = subprocess.run(

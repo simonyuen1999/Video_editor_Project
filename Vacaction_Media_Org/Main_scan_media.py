@@ -130,6 +130,45 @@ class MediaOrganizerDB:
         except sqlite3.Error as e:
             logging.error(f"Error adding media file to DB: {e}")
 
+    def update_city_translation(self, filepath, extractor):
+        try:
+            #logging.info(f"City translation from DB {filepath}")
+            city_en = None
+            city_zh = None
+            meta_city_zh = None
+            self.cursor.execute('''
+                SELECT filepath, city_en, city_zh FROM media_files
+                WHERE filepath = ?
+            ''', (filepath,))
+            result = self.cursor.fetchone()
+            if result:
+                city_en = result[1]
+                city_zh = result[2]
+
+            #logging.info(f"   From DB: city_en: {city_en}, city_zh: {city_zh}")
+
+            if city_en:
+                meta_city_zh = extractor._get_city_translation(city_en)
+
+            #logging.info(f"   Retrieved translation    city_en: {city_en} -> meta_city_zh: {meta_city_zh}")
+
+            if meta_city_zh and meta_city_zh != city_zh:
+                #logging.info(f"   Found new city translation meta_city_zh: {meta_city_zh}, updateing database.")
+                self.cursor.execute('''
+                    UPDATE media_files
+                    SET city_zh = ?
+                    WHERE filepath = ?
+                ''', (meta_city_zh, filepath))
+                self.conn.commit()
+                logging.info(f"Updated DB file {filepath}:\n > city_en: {city_en}, city_zh: {city_zh} -> meta_city_zh: {meta_city_zh}")
+            #else:
+            #    logging.info(f"   No update required for city translation: city_en: {city_en}, city_zh: {city_zh}, meta_city_zh: {meta_city_zh}\n")
+
+        except sqlite3.Error as e:
+            logging.error(f"Error updating city translation for {filepath}: {e}")
+            self.conn.rollback()
+            logging.debug(f"Rolled back changes for {filepath}")
+
     def update_media_file_geo(self, filepath, geo_data):
         try:
             self.cursor.execute('''
@@ -413,7 +452,26 @@ def main():
     default_directory = '/Volumes/Extreme SSD 1/Media'
     
     parser = argparse.ArgumentParser(
-        description="Organize vacation media files, extract metadata, and store in SQLite."
+        description="Organize vacation media files, extract metadata, and store in SQLite.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+
+==============================================================================
+Usage Note: Consider the parameter execution order for optimal performance.
+  --cleanup_thumbnails or -c : Remove all existing thumbnail files before file system scanning process. Default: False.
+  --jump2update or -j        : Skip the file scanning and processing. Just jump to next section. Default: False.
+  --syncFSnDB or -f          : Sync file system changes with the database. Default: False.
+  --updateCity or -u         : Update city translation in the database. Default: False.
+  --shareGeoInfo or -s       : Share (Update DB) geo info to the no geo media files at the end. Default: False.
+
+  The following parameters can be used together with the above options:
+  --debug-level : Set the logging debug level.
+  --deldb or -d : Delete database and start the re-scan process.
+  --time-diff : Time difference in min for proximity search (default is 240 minutes = 4 hours).
+  --geo-list : Specific path to the 'geo.list' file for enhanced geolocation (default: geo_chinese_.list).
+
+  Finally, specify the target directory to scan (default is "/Volumes/Extreme SSD 1/Media").
+"""
     )
     parser.add_argument(
         'directory', type=str, nargs='?', default=default_directory,
@@ -429,20 +487,24 @@ def main():
         help='Delete database and start the re-scan process. default: False (do not delete DB)'
     )
     parser.add_argument(
-        '--jump2update', '-j', default=False, action='store_true',
-        help='Skip the file scanning and jump to updating the database. default: False'
+        '--cleanup_thumbnails', '-c', default=False, action='store_true',
+        help='Remove all existing thumbnail files before scanning. default: False'
     )
     parser.add_argument(
-        '--skipDBupdate', '-s', default=False, action='store_true',
-        help='Default not skip DB update at the end. default: False'
+        '--jump2update', '-j', default=False, action='store_true',
+        help='Skip the file scanning and processing. Just jump to next section. default: False'
     )
     parser.add_argument(
         '--syncFSnDB', '-f', default=False, action='store_true',
         help='Sync file system changes with the database. default: False'
     )
     parser.add_argument(
-        '--cleanup-thumbnails', '-c', default=False, action='store_true',
-        help='Remove all existing thumbnail files before scanning. default: False'
+        '--updateCity', '-u', default=False, action='store_true',
+        help='Update city translation in the database. default: False'
+    )
+    parser.add_argument(
+        '--shareGeoInfo', '-s', default=False, action='store_true',
+        help='Share (Update DB) geo info to the no geo media files at the end.  default: False'
     )
     # Add search time_diff parameter for proximity search
     parser.add_argument(
@@ -471,6 +533,37 @@ def main():
         args.jump2update = False
         logging.info("Sync FS and DB enabled, disabling jump2update option (jump to DB Geo update section).")
 
+    # Summary of user options
+    print("\nUser options summary:")
+    print(f"  1. Delete DB and rescan: {args.deldb}")
+    if args.deldb:
+        print("    WARNING: Existing database will be deleted!")
+    print(f"  2. Cleanup thumbnails: {args.cleanup_thumbnails}")
+    if args.cleanup_thumbnails:
+        print("    WARNING: Existing thumbnails will be deleted!")
+    print(f"  3. Jump to update (skip scanning): {args.jump2update}")
+    if args.jump2update:
+        print("    WARNING: File scanning will be skipped!  Do not use this option for the first run.")
+    print(f"  4. Sync FS and DB: {args.syncFSnDB}")
+    if not args.syncFSnDB:
+        print("    WARNING: File system changes will not be synced with the database!")
+    print(f"  5. Update city translations: {args.updateCity}")
+    if args.updateCity:
+        print("    WARNING: City translations _en -> _zh in the database will be updated!")
+    print(f"  6. Share geo info to no-geo media files: {args.shareGeoInfo}")
+    if args.shareGeoInfo:
+        print("    WARNING: Geo info will be shared to media files without geo data!")
+        print("             This may overwrite existing geo data in those files in DB.")
+    print(f"\n  I. Time difference for proximity search: '{args.time_diff}' minutes")
+    print(f"  II. Geo list path: '{args.geo_list}'    User can specify different geolocation file.")
+    print(f"  III. Target directory: '{args.directory}'    The directory to scan for media files.\n")
+    # ask for user confirmation to proceed
+    proceed = input("Proceed with these settings? (y/n): ")
+    if proceed.lower() != 'y':
+        print(logging.info("User aborted the operation."))
+        # logging.info("User aborted the operation.")
+        sys.exit(0)
+
     # If user specified --deldb, delete the existing database file inside MetaOrganizerDB class.
     db = MediaOrganizerDB(rescan=args.deldb)
     extractor = MetadataExtractor(geo_list_path=args.geo_list)
@@ -479,8 +572,12 @@ def main():
     
     # Clean up existing thumbnails if requested
     if args.cleanup_thumbnails:
+        logging.info("Cleaning up existing thumbnails...")
         cleanup_thumbnails(target_directory)
-    
+        logging.info("Cleaned up existing thumbnails: completed.")
+    else:
+        logging.info("Skipping thumbnail cleanup as per user request.")
+
     all_files = scan_directory_recursive(target_directory)
 
     # ==================================================================================
@@ -516,7 +613,7 @@ def main():
             else:
                 logging.warning(f"Could not extract metadata for: {filepath}")
     else:
-        logging.info("Skipping file scanning as per user request (--jump2update or -j), go to DB update.")
+        logging.info("Skipping file scanning as per user request (--jump2update or -j), go to next step.")
 
     # ==================================================================================
     if args.syncFSnDB:
@@ -570,9 +667,32 @@ def main():
                 db.add_media_file(metadata)
             else:
                 logging.warning(f"Sync FS and DB: Could not extract metadata for new file: {filepath}")
+    else:
+        logging.info("Do not Sync File System and DB, go to next step.")
 
     # ==================================================================================
-    if not args.skipDBupdate:
+    # Update city translation if requested
+    if args.updateCity:
+        image_files_with_geo = db.get_files_with_geo()
+        for image_file in image_files_with_geo:
+            db.update_city_translation(image_file[0], extractor)
+        logging.info("City translation updated for all relevant image files.")
+    else:
+        logging.info("Skipping city translation update as per user request.")
+
+    # Parameter shareGeoInfo is default: False.
+    # The user does not specify this option, then no sharing geo info to these no-geo media files in DB.
+    if not args.shareGeoInfo:
+        # ---------------------------------------------------------------------------------
+        # Iterate through all files in DB, if media file (such as MP4) lacks geo but an other media file nearby has it, share.
+
+        # A robust approach for metadata sharing would involve:
+        # 1. Querying all media files with geo data.
+        # 2. For each media file (e.g., an image) with geo, find other media files (e.g., videos) within a certain
+        #    time and spatial proximity that lack detailed geo-location (city, region, etc.).
+        # 3. Propagate the detailed geo-location from the source media to the target media.
+        # -----------------------------------------------------------------------------
+
         # Post-processing for metadata sharing (MP4 from HEIC/Images)
         logging.info("Attempting to share geo metadata between related files...")
 
@@ -580,6 +700,7 @@ def main():
         # Once we have more media files (Image and Video) with geo data, we can use them to find nearby videos.
         image_files_with_geo = db.get_files_with_geo()
         logging.info(f">> Found {len(image_files_with_geo)} media files with geo data.")
+
         #for a in image_files_with_geo:
         #    logging.info(f"geo data: {a}")
         #input("Paused for debugging. Press Enter to continue...")
@@ -588,6 +709,7 @@ def main():
         # As long as the file has creation_time, we can try to find nearby images with geo data.
         all_files_without_geo = db.get_files_without_geo()
         logging.info(f">> Found {len(all_files_without_geo)} media files (mainly MP4) without geo data.")
+
         #for a in all_files_without_geo:
         #    logging.info(f"no geo data: {a}")
         #input("Paused for debugging. Press Enter to continue...")
@@ -687,30 +809,9 @@ def main():
                                 f"({min_time_diff:.0f} seconds)")
                 else:
                     logging.debug(f"No suitable image found for {media_filepath}")
+    else:
+        logging.info("Skipping geo metadata sharing as per user request.")
 
-        # For a real implementation, we'd query for images with geo data, then find nearby videos.
-        # For now, let's simulate by finding files that need geo and trying to fill them.
-
-        # Simplified metadata sharing logic (needs refinement for real-world use)
-        # Iterate through all files in DB, if an MP4 lacks geo but an image nearby has it, share.
-        # This part would be more complex, involving spatial and temporal queries.
-        # For this playbook, we'll assume the extractor can handle this during initial scan or a dedicated pass.
-
-        # A more robust approach for metadata sharing would involve:
-        # 1. Querying all media files with GPS data.
-        # 2. For each media file (e.g., an image) with GPS, find other media files (e.g., videos) within a certain
-        #    time and spatial proximity that lack detailed geo-location (city, region, etc.).
-        # 3. Propagate the detailed geo-location from the source media to the target media.
-
-        # Example of how one might iterate to find and update related files:
-        # for image_filepath, img_lat, img_lon, img_time in db.get_images_with_geo():
-        #     related_videos = db.get_media_by_time_and_location(img_time, img_lat, img_lon)
-        #     for video_filepath, vid_type, vid_lat, vid_lon, vid_time in related_videos:
-        #         if vid_type == 'video' and not db.has_detailed_geo(video_filepath):
-        #             geo_data = extractor.get_geo_from_coordinates(img_lat, img_lon) # Re-extract or use cached
-        #             if geo_data:
-        #                 db.update_media_file_geo(video_filepath, geo_data)
-        #                 logging.info(f"Shared geo data from {image_filepath} to {video_filepath}")
     # ==================================================================================
 
     db.close()

@@ -6,6 +6,8 @@ env/
 venv/
 *.sqlite3
 *.log
+*.backup
+*.bkup
 *.pot
 *.mo
 *.py[cod]

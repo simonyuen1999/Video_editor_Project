@@ -1262,15 +1262,33 @@ class GeoTranslationEditor:
             changed = False
             
             if new_city_zh != data_item['city_zh']:
-                # Update data
+                # Update normalized data
                 data_item['city_zh'] = new_city_zh
-                data_item['original_row']['City_zn'] = new_city_zh  # Update original row data
+                
+                # Update original row data - find the correct field name
+                city_zh_field = None
+                for field in ['City_zn', 'city_zh', 'City_zh']:
+                    if field in data_item['original_row']:
+                        city_zh_field = field
+                        break
+                if city_zh_field:
+                    data_item['original_row'][city_zh_field] = new_city_zh
+                
                 changed = True
             
             if new_country_zh != data_item['country_zh']:
-                # Update data
+                # Update normalized data
                 data_item['country_zh'] = new_country_zh
-                data_item['original_row']['Country_zn'] = new_country_zh  # Update original row data
+                
+                # Update original row data - find the correct field name
+                country_zh_field = None
+                for field in ['Country_zn', 'country_zh', 'Country_zh']:
+                    if field in data_item['original_row']:
+                        country_zh_field = field
+                        break
+                if country_zh_field:
+                    data_item['original_row'][country_zh_field] = new_country_zh
+                
                 changed = True
             
             if changed:
@@ -1322,7 +1340,28 @@ class GeoTranslationEditor:
                     writer.writeheader()
                     
                     for item in self.data:
-                        writer.writerow(item['original_row'])
+                        # Update original_row with current data before writing
+                        updated_row = item['original_row'].copy()
+                        
+                        # Update city Chinese name - try different possible field names
+                        city_zh_field = None
+                        for field in ['City_zn', 'city_zh', 'City_zh']:
+                            if field in updated_row:
+                                city_zh_field = field
+                                break
+                        if city_zh_field:
+                            updated_row[city_zh_field] = item['city_zh']
+                        
+                        # Update country Chinese name - try different possible field names
+                        country_zh_field = None
+                        for field in ['Country_zn', 'country_zh', 'Country_zh']:
+                            if field in updated_row:
+                                country_zh_field = field
+                                break
+                        if country_zh_field:
+                            updated_row[country_zh_field] = item['country_zh']
+                        
+                        writer.writerow(updated_row)
             
             self.modified = False
             messagebox.showinfo("Success", f"Changes saved successfully!\nBackup created: {backup_path}")
