@@ -1,6 +1,7 @@
 #!python
 from pathlib import Path
 import pickle
+import argparse
 
 # The translation mapping dictionary should be accessible everywhere in this module.
 hash_dict: dict[str, str] = {}
@@ -56,7 +57,7 @@ def save_hash_to_file(output_file: str = "geo_translate_English_Chinese_hash.pic
     with open(output_file, "wb") as f:
         pickle.dump(hash_dict, f)
 
-def main(input_file: str = "geo_edit.list") -> None:
+def main(input_file: str = "geo_chinese_.list") -> None:
     global hash_dict
     load_translation_mappings(input_file)
     save_hash_to_file()
@@ -64,4 +65,25 @@ def main(input_file: str = "geo_edit.list") -> None:
     print(f"Hash saved to geo_translate_English_Chinese_hash.pickle.bin")
 
 if __name__ == "__main__":
-        main()
+    parser = argparse.ArgumentParser(
+        description="Read in CSV file of geographic data and save English-Chinese translation mappings to a Pickle file.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Read-in CSV file (geographic data) into Python memory 'dict[str, str]',
+save to Pickle 'geo_translate_English_Chinese_hash.pickle.bin' binary file for later use.
+        
+The dict[str, str] maps English names to their Chinese translations, data from CSV file.
+    city_en -> city_zn
+    region_en -> region_zn
+    subregion_en -> subregion_zn
+    country_en -> country_zn
+"""
+    )
+    parser.add_argument(
+        '--input-file',
+        default='geo_chinese_.list',
+        help='Path to the input CSV file containing geographic data (default: geo_chinese_.list)'
+    )
+    
+    args = parser.parse_args()
+    main(args.input_file)
