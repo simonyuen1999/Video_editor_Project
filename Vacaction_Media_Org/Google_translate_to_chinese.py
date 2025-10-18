@@ -1,3 +1,4 @@
+#!python
 import pandas as pd
 from googletrans import Translator
 import argparse
