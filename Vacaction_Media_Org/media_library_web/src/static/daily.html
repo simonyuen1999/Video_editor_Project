@@ -142,11 +142,62 @@
             color: #666;
         }
 
+        /* 3-Day View Styles */
+        .day-section {
+            margin-bottom: 40px;
+            background: white;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .day-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 15px 20px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .day-header.previous {
+            background: linear-gradient(135deg, #91a7ff, #9bb5ff);
+        }
+
+        .day-header.current {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .day-header.next {
+            background: linear-gradient(135deg, #91a7ff, #9bb5ff);
+        }
+
+        .day-content {
+            padding: 20px;
+        }
+
+        .no-media-day {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+            font-style: italic;
+        }
+
         /* Thumbnail Mode Styles */
         .media-grid {
             display: grid;
             gap: 20px;
-            padding: 20px;
+            padding: 0;
+        }
+
+        .media-grid.thumbnail {
+            grid-template-columns: repeat(auto-fill, minmax(var(--thumbnail-size, 200px), 1fr));
+        }
+
+        .media-grid.list {
+            grid-template-columns: 1fr;
         }
 
         .media-grid.thumbnail {
@@ -327,7 +378,7 @@
         <div id="media-container">
             <div class="no-media">
                 <h3>Select a date to view media</h3>
-                <p>Use the date picker above to browse your vacation photos and videos by day</p>
+                <p>Use the date picker above to browse your vacation photos and videos for three consecutive days</p>
             </div>
         </div>
     </div>
@@ -348,7 +399,7 @@
     <script>
         let currentViewMode = 'thumbnail';
         let currentDate = null;
-        let mediaData = [];
+        let threeDaysMediaData = []; // Store media data for all three days
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
@@ -453,21 +504,136 @@
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('media-container').innerHTML = '';
 
-                // Format date for API call (assuming the API expects YYYY-MM-DD format)
-                const dateFrom = selectedDate + ' 00:00:00';
-                const dateTo = selectedDate + ' 23:59:59';
+                // Calculate previous and next dates
+                const selectedDateObj = new Date(selectedDate);
                 
-                const response = await fetch(`/api/media?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}&order=asc`);
-                mediaData = await response.json();
+                const previousDateObj = new Date(selectedDateObj);
+                previousDateObj.setDate(previousDateObj.getDate() - 1);
+                const previousDate = previousDateObj.toISOString().split('T')[0];
+                
+                const nextDateObj = new Date(selectedDateObj);
+                nextDateObj.setDate(nextDateObj.getDate() + 1);
+                const nextDate = nextDateObj.toISOString().split('T')[0];
 
+                // Load media for all three days
+                const dates = [
+                    { date: previousDate, label: 'Previous Day', type: 'previous' },
+                    { date: selectedDate, label: 'Selected Day', type: 'current' },
+                    { date: nextDate, label: 'Next Day', type: 'next' }
+                ];
+
+                const mediaPromises = dates.map(async (dateInfo) => {
+                    const dateFrom = dateInfo.date + ' 00:00:00';
+                    const dateTo = dateInfo.date + ' 23:59:59';
+                    
+                    try {
+                        const response = await fetch(`/api/media?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}&order=asc`);
+                        const data = await response.json();
+                        return {
+                            ...dateInfo,
+                            media: data
+                        };
+                    } catch (error) {
+                        console.error(`Error loading media for ${dateInfo.date}:`, error);
+                        return {
+                            ...dateInfo,
+                            media: []
+                        };
+                    }
+                });
+
+                const threeDaysData = await Promise.all(mediaPromises);
+                
                 document.getElementById('loading').style.display = 'none';
-                displayMedia(mediaData);
+                displayThreeDaysMedia(threeDaysData);
 
             } catch (error) {
                 console.error('Error loading media:', error);
                 document.getElementById('loading').style.display = 'none';
-                showError('Failed to load media for the selected date.');
+                showError('Failed to load media for the selected dates.');
             }
+        }
+
+        function displayThreeDaysMedia(threeDaysData) {
+            // Store the data globally for view mode changes
+            threeDaysMediaData = threeDaysData;
+            
+            const container = document.getElementById('media-container');
+            container.innerHTML = '';
+
+            threeDaysData.forEach(dayData => {
+                const daySection = document.createElement('div');
+                daySection.className = 'day-section';
+
+                // Format date for display
+                const dateObj = new Date(dayData.date);
+                const formattedDate = dateObj.toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+
+                // Create day header
+                const dayHeader = document.createElement('div');
+                dayHeader.className = `day-header ${dayData.type}`;
+                dayHeader.innerHTML = `
+                    <span>${dayData.label}</span>
+                    <span>${formattedDate}</span>
+                `;
+
+                // Create day content
+                const dayContent = document.createElement('div');
+                dayContent.className = 'day-content';
+
+                if (dayData.media.length === 0) {
+                    dayContent.innerHTML = `
+                        <div class="no-media-day">
+                            No media found for this date
+                        </div>
+                    `;
+                } else {
+                    const mediaGrid = document.createElement('div');
+                    mediaGrid.className = `media-grid ${currentViewMode}`;
+                    
+                    mediaGrid.innerHTML = dayData.media.map(media => {
+                        const isVideo = media.file_extension && 
+                            ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
+                        
+                        const displayTime = formatCreationTime(media.creation_time);
+                        const location = media.city_zh && media.city_en ? 
+                            `${media.city_zh} | ${media.city_en}` : 
+                            (media.city_zh || media.city_en || 'Unknown location');
+
+                        return `
+                            <div class="media-item ${currentViewMode}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                                ${isVideo ? 
+                                    `<video class="media-thumbnail" controls>
+                                        <source src="/api/media/${media.id}/file" type="video/${media.file_extension?.substring(1) || 'mp4'}">
+                                        Your browser does not support the video tag.
+                                    </video>` :
+                                    `<img class="media-thumbnail" src="/api/media/${media.id}/thumbnail" alt="${media.filename}" loading="lazy">`
+                                }
+                                <div class="media-info">
+                                    <div class="media-title">${media.filename}</div>
+                                    <div class="media-meta">
+                                        📅 ${displayTime}<br>
+                                        📍 ${location}
+                                        ${media.people_count > 0 ? `<br>👥 ${media.people_count} people` : ''}
+                                        ${media.talking_detected ? '<br>🗣️ Talking detected' : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    dayContent.appendChild(mediaGrid);
+                }
+
+                daySection.appendChild(dayHeader);
+                daySection.appendChild(dayContent);
+                container.appendChild(daySection);
+            });
         }
 
         function displayMedia(data) {
@@ -536,9 +702,9 @@
             const sizeControl = document.querySelector('.thumbnail-size-control');
             sizeControl.style.display = mode === 'thumbnail' ? 'flex' : 'none';
 
-            // Re-render media if we have data
-            if (mediaData.length > 0) {
-                displayMedia(mediaData);
+            // Re-render media if we have data - use cached data to avoid reloading
+            if (threeDaysMediaData.length > 0) {
+                displayThreeDaysMedia(threeDaysMediaData);
             }
         }
 
@@ -549,6 +715,11 @@
             // Update CSS custom properties
             document.documentElement.style.setProperty('--thumbnail-size', size + 'px');
             document.documentElement.style.setProperty('--thumbnail-height', (size * 0.75) + 'px');
+            
+            // Update all existing media grids
+            document.querySelectorAll('.media-grid').forEach(grid => {
+                grid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${size}px, 1fr))`;
+            });
         }
 
         function formatCreationTime(timeStr) {
