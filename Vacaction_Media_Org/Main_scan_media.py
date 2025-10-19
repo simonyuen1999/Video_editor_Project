@@ -137,20 +137,21 @@ class MediaOrganizerDB:
             city_zh = None
             meta_city_zh = None
             self.cursor.execute('''
-                SELECT filepath, city_en, city_zh FROM media_files
+                SELECT filepath, city_en, city_zh, country_en FROM media_files
                 WHERE filepath = ?
             ''', (filepath,))
             result = self.cursor.fetchone()
             if result:
                 city_en = result[1]
                 city_zh = result[2]
+                country_en = result[3]
 
-            #logging.info(f"   From DB: city_en: {city_en}, city_zh: {city_zh}")
+            #logging.info(f"   From DB: city_en: {city_en}, city_zh: {city_zh}, country_en: {country_en}")
 
             if city_en:
-                meta_city_zh = extractor._get_city_translation(city_en)
+                meta_city_zh = extractor._get_city_translation(city_en, country_en)
 
-            #logging.info(f"   Retrieved translation    city_en: {city_en} -> meta_city_zh: {meta_city_zh}")
+            #logging.info(f"   Retrieved translation    city_en: {city_en}, country_en: {country_en} -> meta_city_zh: {meta_city_zh}")
 
             if meta_city_zh and meta_city_zh != city_zh:
                 #logging.info(f"   Found new city translation meta_city_zh: {meta_city_zh}, updateing database.")

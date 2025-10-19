@@ -44,25 +44,87 @@ class MetadataExtractor:
                         timezone = parts[9]
                         lat = float(parts[10])
                         lon = float(parts[11])
-                        # Save city translation mapping for quick lookup
-                        self.city_dict[city_en] = city_zn
+                        # Save city translation mapping with country for unique identification
+                        # Key format: (city_en, country_en) -> city_zh
+                        self.city_dict[(city_en, country_en)] = city_zn
                         self.geo_data.append((lat, lon, city_en, city_zn, region_en, region_zn, subregion_en, subregion_zn, country_code, country_en, country_zn, timezone))
                     except ValueError:
                         logging.error(f"Error parsing line in geo.list: {line}")
                         continue
             logging.info(f"Loaded {len(self.geo_data)} entries from {self.geo_list_path}")
+            logging.info(f"City translation dictionary contains {len(self.city_dict)} unique (city, country) pairs")
+            
+            # Debug: Show some statistics about potential duplicates
+            city_counts = {}
+            for (city, country) in self.city_dict.keys():
+                if city in city_counts:
+                    city_counts[city] += 1
+                else:
+                    city_counts[city] = 1
+            
+            duplicates = {city: count for city, count in city_counts.items() if count > 1}
+            if duplicates:
+                logging.info(f"Found {len(duplicates)} city names that appear in multiple countries:")
+                for city, count in sorted(duplicates.items())[:10]:  # Show first 10
+                    countries = [country for (c, country) in self.city_dict.keys() if c == city]
+                    logging.info(f"  {city}: {count} countries ({', '.join(countries[:3])}{'...' if len(countries) > 3 else ''})")
+            else:
+                logging.info("No duplicate city names found across different countries")
 
-    def _get_city_translation(self, city_name: str) -> str:
-        #print(f"> DBG: Looking up city translation for: {city_name}")
-
+    def _get_city_translation(self, city_name: str, country_name: str = None) -> str:
+        """
+        Get Chinese translation for a city name, using country for disambiguation.
+        
+        Args:
+            city_name: English city name
+            country_name: English country name (optional, for disambiguation)
+            
+        Returns:
+            Chinese city name if found, None otherwise
+        """
         if not city_name:
             return None
-        if not city_name in self.city_dict:
-            return None
+            
+        # Try exact match with country first (most accurate)
+        if country_name:
+            key = (city_name, country_name)
+            if key in self.city_dict:
+                rc_city_zh = self.city_dict[key]
+                logging.debug(f"City translation found (exact): {city_name}, {country_name} -> {rc_city_zh}")
+                return rc_city_zh
+        
+        # Fallback: try to find any match for the city name (less accurate)
+        # This handles cases where country might be None or not matching exactly
+        for (stored_city, stored_country), stored_translation in self.city_dict.items():
+            if stored_city == city_name:
+                logging.debug(f"City translation found (fallback): {city_name} -> {stored_translation} (from {stored_country})")
+                return stored_translation
+        
+        logging.debug(f"No city translation found for: {city_name}" + (f" in {country_name}" if country_name else ""))
+        return None
 
-        rc_city_zh = self.city_dict.get(city_name, city_name)
-        #print(f"> DBG: City translation found: {city_name} -> {rc_city_zh}")
-        return rc_city_zh
+    def get_city_disambiguation_stats(self):
+        """
+        Returns statistics about cities that would benefit from country disambiguation.
+        Useful for understanding the impact of the country-based lookup.
+        """
+        city_counts = {}
+        for (city, country) in self.city_dict.keys():
+            if city in city_counts:
+                city_counts[city].append(country)
+            else:
+                city_counts[city] = [country]
+        
+        duplicates = {city: countries for city, countries in city_counts.items() if len(countries) > 1}
+        
+        stats = {
+            'total_cities': len(city_counts),
+            'unique_city_names': len(city_counts),
+            'cities_with_multiple_countries': len(duplicates),
+            'duplicate_examples': dict(list(duplicates.items())[:5])  # First 5 examples
+        }
+        
+        return stats
 
     def _run_exiftool(self, filepath):
         result = subprocess.run(
