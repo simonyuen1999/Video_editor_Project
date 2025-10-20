@@ -52,7 +52,6 @@ class Media(db.Model):
             'country_en': self.country_en,
             'country_zh': self.country_zh,
             'timezone': self.timezone,
-            'people_count': self.people_count,
             'activities': self.activities,
             'scenery': self.scenery,
             'talking_detected': self.talking_detected,

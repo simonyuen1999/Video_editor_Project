@@ -134,13 +134,65 @@
 
         .media-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
             gap: 20px;
             max-height: 600px;
             overflow-y: auto;
             padding: 10px;
             background: #f8f9fa;
             border-radius: 10px;
+        }
+
+        .media-grid.thumbnail {
+            grid-template-columns: repeat(auto-fill, minmax(var(--thumbnail-size, 250px), 1fr));
+        }
+
+        .media-grid.list {
+            grid-template-columns: 1fr;
+        }
+
+        .view-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .view-mode-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .view-mode-btn {
+            padding: 8px 16px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .view-mode-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .view-mode-btn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        .thumbnail-size-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .size-slider {
+            width: 150px;
         }
 
         .media-card {
@@ -207,6 +259,94 @@
             padding: 3px 8px;
             border-radius: 15px;
             font-size: 0.75rem;
+        }
+
+        /* Enhanced Media Card Styles for View Modes */
+        .media-card.list-view {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .media-card.list-view img, .media-card.list-view video {
+            width: 100px;
+            height: 80px;
+            flex-shrink: 0;
+            margin-right: 20px;
+            border-radius: 8px;
+        }
+
+        .media-card.list-view .media-card-content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 0;
+        }
+
+        .media-card.list-view h3 {
+            grid-column: 1 / -1;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .media-info-section {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+        }
+
+        .info-label {
+            font-weight: 500;
+            color: #555;
+        }
+
+        .info-value {
+            color: #777;
+        }
+
+        .analysis-section {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #eee;
+        }
+
+        .analysis-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .analysis-tag {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .talking-indicator {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .scenery-tag {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .activity-tag {
+            background: #e1f5fe;
+            color: #0277bd;
         }
 
         .modal {
@@ -307,6 +447,7 @@
             <a href="index.html" class="active" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.4); font-weight: bold;">🗺️ Map View</a>
             <a href="daily.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">📅 Daily View</a>
             <a href="city.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">🏙️ City View</a>
+            <a href="special.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">🎯 Special View</a>
         </div>
 
         <div class="main-content">
@@ -337,14 +478,6 @@
                     <div class="filter-group">
                         <label for="date-to">Date To</label>
                         <input type="datetime-local" id="date-to">
-                    </div>
-                    <div class="filter-group">
-                        <label for="has-people">Has People</label>
-                        <select id="has-people">
-                            <option value="">All</option>
-                            <option value="true">Yes</option>
-                            <option value="false">No</option>
-                        </select>
                     </div>
                     <div class="filter-group">
                         <label for="talking">Talking Detected</label>
@@ -385,13 +518,31 @@
 
         <div class="panel">
             <h2>📱 Media Gallery</h2>
+            
+            <!-- View Controls -->
+            <div id="view-controls" class="view-controls" style="display: none;">
+                <div class="view-mode-buttons">
+                    <button id="thumbnail-mode-btn" class="view-mode-btn active" onclick="setViewMode('thumbnail')">
+                        🏞️ Thumbnails
+                    </button>
+                    <button id="list-mode-btn" class="view-mode-btn" onclick="setViewMode('list')">
+                        📋 List View
+                    </button>
+                </div>
+                <div class="thumbnail-size-control" id="thumbnail-size-control">
+                    <label for="thumbnail-size">Size:</label>
+                    <input type="range" id="thumbnail-size" class="size-slider" min="200" max="400" value="250" onchange="updateThumbnailSize(this.value)">
+                    <span id="size-display">250px</span>
+                </div>
+            </div>
+            
             <div id="initial-message" class="loading">
                 🎯 Select date range and search criteria above, then click "Search Media" to find your photos and videos.
             </div>
             <div id="loading" class="loading" style="display: none;">Searching media...</div>
             <div id="loading-images" class="loading" style="display: none;">Loading images...</div>
             <div id="error" class="error" style="display: none;"></div>
-            <div id="media-grid" class="media-grid" style="display: none;">
+            <div id="media-grid" class="media-grid thumbnail" style="display: none;">
                 <!-- Media cards will be loaded here -->
             </div>
         </div>
@@ -442,6 +593,8 @@
             loadCities();
             loadCountries();
             setupEventListeners();
+            // Initialize view mode to thumbnail by default
+            setViewMode('thumbnail');
             // Don't load media automatically - wait for user search
         });
 
@@ -469,10 +622,6 @@
                     <div class="stat-card">
                         <span class="number">${stats.total_with_location}</span>
                         <span class="label">With Location</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="number">${stats.total_with_people}</span>
-                        <span class="label">With People</span>
                     </div>
                     <div class="stat-card">
                         <span class="number">${stats.total_with_talking}</span>
@@ -641,13 +790,45 @@
             }
         }
 
+        // View mode functions
+        function setViewMode(mode) {
+            const grid = document.getElementById('media-grid');
+            const thumbnailBtn = document.getElementById('thumbnail-mode-btn');
+            const listBtn = document.getElementById('list-mode-btn');
+            const thumbnailSizeControl = document.getElementById('thumbnail-size-control');
+            
+            // Update grid classes
+            grid.className = `media-grid ${mode}`;
+            
+            // Update button states
+            thumbnailBtn.classList.toggle('active', mode === 'thumbnail');
+            listBtn.classList.toggle('active', mode === 'list');
+            
+            // Show/hide thumbnail size control
+            thumbnailSizeControl.style.display = mode === 'thumbnail' ? 'flex' : 'none';
+            
+            // Re-render current data if available
+            if (searchResults && searchResults.length > 0) {
+                displayMedia(searchResults);
+            } else if (loadedMediaData && loadedMediaData.length > 0) {
+                displayMedia(loadedMediaData);
+            }
+        }
+
+        function updateThumbnailSize(size) {
+            const grid = document.getElementById('media-grid');
+            const sizeDisplay = document.getElementById('size-display');
+            
+            grid.style.setProperty('--thumbnail-size', `${size}px`);
+            sizeDisplay.textContent = `${size}px`;
+        }
+
         // Get search parameters from form
         function getSearchParams() {
             const city = document.getElementById('city-filter').value;
             const country = document.getElementById('country-filter').value;
             const dateFrom = document.getElementById('date-from').value;
             const dateTo = document.getElementById('date-to').value;
-            const hasPeople = document.getElementById('has-people').value;
             const talking = document.getElementById('talking').value;
             
             const params = {};
@@ -655,7 +836,6 @@
             if (country) params.country = country;
             if (dateFrom) params.date_from = dateFrom;
             if (dateTo) params.date_to = dateTo;
-            if (hasPeople) params.has_people = hasPeople;
             if (talking) params.talking = talking;
             
             return params;
@@ -728,6 +908,7 @@
             
             document.getElementById('search-results').style.display = 'none';
             document.getElementById('media-grid').style.display = 'none';
+            document.getElementById('view-controls').style.display = 'none';
             document.getElementById('initial-message').style.display = 'block';
             
             // Clear map markers
@@ -739,52 +920,127 @@
             document.getElementById('country-filter').value = '';
             document.getElementById('date-from').value = '';
             document.getElementById('date-to').value = '';
-            document.getElementById('has-people').value = '';
             document.getElementById('talking').value = '';
         }
 
         // Display media in grid
         function displayMedia(data) {
             const grid = document.getElementById('media-grid');
+            const viewControls = document.getElementById('view-controls');
             
             if (data.length === 0) {
                 grid.innerHTML = '<div class="loading">No media found matching your filters.</div>';
+                viewControls.style.display = 'none';
                 return;
             }
+            
+            // Show view controls when we have data
+            viewControls.style.display = 'flex';
+            
+            // Get current view mode
+            const currentViewMode = grid.classList.contains('list') ? 'list' : 'thumbnail';
             
             grid.innerHTML = data.map(media => {
                 const isVideo = media.file_extension && 
                     ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
                 
-                const tags = [];
-                if (media.city_en && media.country_en) tags.push(`${media.city_en}, ${media.country_en}`);
-                if (media.people_count > 0) tags.push(`${media.people_count} people`);
-                if (media.talking_detected) tags.push('Talking');
-                if (media.activities && media.activities.length > 0) tags.push(...media.activities);
-                if (media.scenery && media.scenery.length > 0) tags.push(...media.scenery);
+                // Format file size
+                const formatFileSize = (bytes) => {
+                    if (!bytes) return 'Unknown';
+                    const sizes = ['B', 'KB', 'MB', 'GB'];
+                    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+                    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+                };
                 
                 // Format creation time for display
                 let displayTime = formatCreationTime(media.creation_time);
                 
-                return `
-                    <div class="media-card" onclick="openMediaModal(${media.id})">
-                        ${isVideo ? 
-                            `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
-                                    style="pointer-events: none;"></video>` :
-                            `<img src="/api/media/${media.id}/thumbnail" alt="Media" 
-                                  loading="lazy"
-                                  onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`
-                        }
-                        <div class="media-card-content">
-                            <h3>${media.filename || 'Unknown File'}</h3>
-                            <div class="meta">📅 ${displayTime}</div>
-                            ${media.city_zh && media.country_zh ? `<div class="meta">📍 ${media.city_zh}, ${media.country_zh}</div>` : ''}
-                            <div class="tags">
-                                ${tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                // Parse activities and scenery arrays and filter out people-related entries
+                const activities = (Array.isArray(media.activities) ? media.activities : 
+                    (typeof media.activities === 'string' && media.activities ? 
+                     JSON.parse(media.activities) : []))
+                    .filter(activity => !activity.toLowerCase().includes('people') && !activity.toLowerCase().includes('person'));
+                const scenery = (Array.isArray(media.scenery) ? media.scenery : 
+                    (typeof media.scenery === 'string' && media.scenery ? 
+                     JSON.parse(media.scenery) : []))
+                    .filter(scene => !scene.toLowerCase().includes('people') && !scene.toLowerCase().includes('person'));
+                
+                if (currentViewMode === 'list') {
+                    return `
+                        <div class="media-card list-view" onclick="openMediaModal(${media.id})">
+                            ${isVideo ? 
+                                `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
+                                        style="pointer-events: none;"></video>` :
+                                `<img src="/api/media/${media.id}/thumbnail" alt="Media" 
+                                      loading="lazy"
+                                      onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`
+                            }
+                            <div class="media-card-content">
+                                <h3>${media.filename || 'Unknown File'}</h3>
+                                <div class="media-info-section">
+                                    <div class="info-item">
+                                        <span class="info-label">📅 Date:</span>
+                                        <span class="info-value">${displayTime}</span>
+                                    </div>
+                                    <div class="info-item">
+                                        <span class="info-label">📏 Size:</span>
+                                        <span class="info-value">${formatFileSize(media.size)}</span>
+                                    </div>
+                                    ${media.city_zh && media.country_zh ? `
+                                    <div class="info-item">
+                                        <span class="info-label">📍 Location:</span>
+                                        <span class="info-value">${media.city_zh}, ${media.country_zh}</span>
+                                    </div>` : ''}
+                                    ${media.talking_detected ? `
+                                    <div class="info-item">
+                                        <span class="info-label">�️ Talking:</span>
+                                        <span class="info-value">Detected</span>
+                                    </div>` : ''}
+                                </div>
+                                <div class="media-info-section">
+                                    ${activities.length > 0 || scenery.length > 0 || media.talking_detected ? `
+                                    <div class="analysis-section">
+                                        <div class="analysis-tags">
+                                            ${media.talking_detected ? `<span class="analysis-tag talking-indicator">Talking</span>` : ''}
+                                            ${activities.map(activity => `<span class="analysis-tag activity-tag">${activity}</span>`).join('')}
+                                            ${scenery.map(scene => `<span class="analysis-tag scenery-tag">${scene}</span>`).join('')}
+                                        </div>
+                                    </div>` : ''}
+                                </div>
                             </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                } else {
+                    // Thumbnail view
+                    const tags = [];
+                    if (media.city_en && media.country_en) tags.push(`${media.city_en}, ${media.country_en}`);
+                    if (media.talking_detected) tags.push('Talking');
+                    if (activities.length > 0) tags.push(...activities);
+                    if (scenery.length > 0) tags.push(...scenery);
+                    
+                    return `
+                        <div class="media-card" onclick="openMediaModal(${media.id})">
+                            ${isVideo ? 
+                                `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
+                                        style="pointer-events: none;"></video>` :
+                                `<img src="/api/media/${media.id}/thumbnail" alt="Media" 
+                                      loading="lazy"
+                                      onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`
+                            }
+                            <div class="media-card-content">
+                                <h3>${media.filename || 'Unknown File'}</h3>
+                                <div class="meta">📅 ${displayTime}</div>
+                                <div class="meta">📏 ${formatFileSize(media.size)}</div>
+                                ${media.city_zh && media.country_zh ? `<div class="meta">📍 ${media.city_zh}, ${media.country_zh}</div>` : ''}
+                                ${media.talking_detected ? `<div class="meta">🗣️ Talking detected</div>` : ''}
+                                ${tags.length > 0 ? `
+                                <div class="tags">
+                                    ${tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                                </div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }
             }).join('');
         }
 
@@ -856,49 +1112,7 @@
         }
 
         // Display media in grid (only called after user confirms loading)
-        function displayMedia(data) {
-            const grid = document.getElementById('media-grid');
-            
-            if (data.length === 0) {
-                grid.innerHTML = '<div class="loading">No media found matching your search criteria.</div>';
-                return;
-            }
-            
-            grid.innerHTML = data.map(media => {
-                const isVideo = media.file_extension && 
-                    ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
-                
-                const tags = [];
-                if (media.city_en && media.country_en) tags.push(`${media.city_en}, ${media.country_en}`);
-                if (media.people_count > 0) tags.push(`${media.people_count} people`);
-                if (media.talking_detected) tags.push('Talking');
-                if (media.activities && media.activities.length > 0) tags.push(...media.activities);
-                if (media.scenery && media.scenery.length > 0) tags.push(...media.scenery);
-                
-                // Format creation time for display
-                let displayTime = formatCreationTime(media.creation_time);
-                
-                return `
-                    <div class="media-card" onclick="openMediaModal(${media.id})">
-                        ${isVideo ? 
-                            `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
-                                    style="pointer-events: none;"></video>` :
-                            `<img src="/api/media/${media.id}/thumbnail" alt="Media" 
-                                  loading="lazy"
-                                  onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`
-                        }
-                        <div class="media-card-content">
-                            <h3>${media.filename || 'Unknown File'}</h3>
-                            <div class="meta">📅 ${displayTime}</div>
-                            ${media.city_zh && media.country_zh ? `<div class="meta">📍 ${media.city_zh}, ${media.country_zh}</div>` : ''}
-                            <div class="tags">
-                                ${tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-        }
+        // This function is defined above and handles both thumbnail and list views
 
         // Filter by location
         function filterByLocation(city, country) {
@@ -933,7 +1147,6 @@
             const country = document.getElementById('country-filter').value.toLowerCase();
             const dateFrom = document.getElementById('date-from').value;
             const dateTo = document.getElementById('date-to').value;
-            const hasPeople = document.getElementById('has-people').value;
             const talking = document.getElementById('talking').value;
             
             filteredData = mediaData.filter(media => {
@@ -954,8 +1167,6 @@
                     if (dateTo && mediaTime && mediaTime > new Date(dateTo)) return false;
                 }
                 
-                if (hasPeople === 'true' && media.people_count <= 0) return false;
-                if (hasPeople === 'false' && media.people_count > 0) return false;
                 if (talking === 'true' && !media.talking_detected) return false;
                 if (talking === 'false' && media.talking_detected) return false;
                 
@@ -994,7 +1205,6 @@
                         <p><strong>Creation Time:</strong> ${displayTime}</p>
                         <p><strong>Location:</strong> ${media.city_zh || 'N/A'}, ${media.country_zh || 'N/A'}</p>
                         ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> ${media.latitude}, ${media.longitude}</p>` : ''}
-                        <p><strong>People Count:</strong> ${media.people_count || 0}</p>
                         <p><strong>Talking Detected:</strong> ${media.talking_detected ? 'Yes' : 'No'}</p>
                         ${media.activities && media.activities.length > 0 ? `<p><strong>Activities:</strong> ${media.activities.join(', ')}</p>` : ''}
                         ${media.scenery && media.scenery.length > 0 ? `<p><strong>Scenery:</strong> ${media.scenery.join(', ')}</p>` : ''}
@@ -1036,7 +1246,7 @@
         // Setup event listeners
         function setupEventListeners() {
             // Filter inputs
-            ['city-filter', 'country-filter', 'date-from', 'date-to', 'has-people', 'talking'].forEach(id => {
+            ['city-filter', 'country-filter', 'date-from', 'date-to', 'talking'].forEach(id => {
                 document.getElementById(id).addEventListener('input', applyFilters);
                 document.getElementById(id).addEventListener('change', applyFilters);
             });

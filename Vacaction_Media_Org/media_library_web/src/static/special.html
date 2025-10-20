@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Daily Media View - Vacation Media Organizer</title>
+    <title>Special View - Vacation Media Organizer</title>
     <style>
         * {
             margin: 0;
@@ -67,34 +67,56 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
 
-        .day-selector {
+        .selection-container {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 15px;
+            gap: 30px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
 
-        .day-input {
-            padding: 10px;
+        .selection-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .selection-label {
+            font-weight: bold;
+            color: #333;
+            font-size: 1.1rem;
+        }
+
+        .selection-dropdown {
+            padding: 12px 15px;
             border: 2px solid #ddd;
             border-radius: 8px;
             font-size: 16px;
-            text-align: center;
+            min-width: 250px;
+            background: white;
+            cursor: pointer;
         }
 
-        .nav-button {
-            padding: 10px 20px;
-            background: linear-gradient(135deg, #667eea, #764ba2);
+        .selection-dropdown:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .clear-button {
+            padding: 12px 20px;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
             color: white;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             font-size: 16px;
             transition: transform 0.2s ease;
+            margin-top: 10px;
         }
 
-        .nav-button:hover {
+        .clear-button:hover {
             transform: translateY(-2px);
         }
 
@@ -142,54 +164,42 @@
             color: #666;
         }
 
-        /* 3-Day View Styles */
-        .day-section {
-            margin-bottom: 40px;
+        .media-info-header {
             background: white;
             border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-        }
-
-        .day-header {
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            color: white;
             padding: 15px 20px;
-            font-size: 1.2rem;
-            font-weight: bold;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
         }
 
-        .day-header.previous {
-            background: linear-gradient(135deg, #91a7ff, #9bb5ff);
+        .media-info-header h2 {
+            color: #333;
+            margin: 0 0 5px 0;
         }
 
-        .day-header.current {
-            background: linear-gradient(135deg, #667eea, #764ba2);
+        .media-count {
+            color: #667eea;
+            font-weight: bold;
         }
 
-        .day-header.next {
-            background: linear-gradient(135deg, #91a7ff, #9bb5ff);
-        }
-
-        .day-content {
-            padding: 20px;
-        }
-
-        .no-media-day {
-            text-align: center;
+        .selection-type {
             color: #666;
-            padding: 20px;
             font-style: italic;
         }
 
-        /* Thumbnail Mode Styles */
+        /* Media Grid Styles */
         .media-grid {
             display: grid;
             gap: 20px;
-            padding: 0;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
         }
 
         .media-grid.thumbnail {
@@ -200,41 +210,62 @@
             grid-template-columns: 1fr;
         }
 
-        .media-grid.thumbnail {
-            grid-template-columns: repeat(auto-fill, minmax(var(--thumbnail-size, 200px), 1fr));
-        }
-
         .media-item {
-            background: white;
             border-radius: 10px;
             overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            background: #f8f9fa;
         }
 
         .media-item:hover {
             transform: translateY(-5px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        }
+
+        .media-item.thumbnail {
+            text-align: center;
+        }
+
+        .media-item.list {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            gap: 15px;
         }
 
         .media-thumbnail {
             width: 100%;
             height: var(--thumbnail-height, 150px);
             object-fit: cover;
+            border-radius: 8px;
+        }
+
+        .media-item.list .media-thumbnail {
+            width: 120px;
+            height: 90px;
+            flex-shrink: 0;
         }
 
         .media-info {
-            padding: 10px;
+            padding: 15px;
+        }
+
+        .media-item.list .media-info {
+            padding: 0;
+            flex-grow: 1;
         }
 
         .media-title {
             font-weight: bold;
-            margin-bottom: 5px;
-            font-size: 14px;
+            margin-bottom: 8px;
+            color: #333;
+            word-break: break-word;
         }
 
         .media-meta {
-            font-size: 12px;
+            font-size: 0.9rem;
             color: #666;
+            line-height: 1.4;
         }
 
         /* Enhanced Media Information Styles */
@@ -246,7 +277,7 @@
             display: flex;
             justify-content: space-between;
             margin-bottom: 4px;
-            font-size: 12px;
+            font-size: 0.85rem;
         }
 
         .info-label {
@@ -256,6 +287,7 @@
 
         .info-value {
             color: #777;
+            text-align: right;
         }
 
         .analysis-section {
@@ -276,7 +308,7 @@
             color: #1976d2;
             padding: 2px 8px;
             border-radius: 12px;
-            font-size: 10px;
+            font-size: 11px;
             font-weight: 500;
         }
 
@@ -295,45 +327,13 @@
             color: #0277bd;
         }
 
-        /* List Mode Styles */
-        .media-grid.list {
-            grid-template-columns: 1fr;
-        }
-
-        .media-item.list {
-            display: flex;
-            align-items: center;
-            padding: 10px;
-        }
-
-        .media-item.list .media-thumbnail {
-            width: 80px;
-            height: 60px;
-            margin-right: 15px;
-            border-radius: 6px;
-        }
-
-        .media-item.list .media-info {
-            flex: 1;
-            padding: 0;
-        }
-
-        .media-item.list .media-title {
-            font-size: 16px;
-            margin-bottom: 5px;
-        }
-
-        .media-item.list .media-meta {
-            font-size: 14px;
-        }
-
         .no-media {
             text-align: center;
             padding: 60px 20px;
             color: #666;
             background: white;
-            border-radius: 10px;
-            margin: 20px;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
         }
 
         .no-media h3 {
@@ -341,6 +341,7 @@
             color: #333;
         }
 
+        /* Modal Styles */
         .modal {
             display: none;
             position: fixed;
@@ -394,27 +395,74 @@
             border-radius: 10px;
             margin-bottom: 20px;
         }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .selection-container {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .selection-dropdown {
+                min-width: auto;
+                width: 100%;
+            }
+
+            .view-controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .media-info-header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .media-item.list {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .media-item.list .media-thumbnail {
+                width: 100%;
+                height: 150px;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>📅 Daily Media View</h1>
-            <p>Browse your vacation memories day by day</p>
+            <h1>🎯 Special View</h1>
+            <p>Browse your vacation memories by activities and scenery</p>
         </div>
 
         <div class="nav-links">
             <a href="index.html">🗺️ Map View</a>
-            <a href="daily.html" class="active">📅 Daily View</a>
+            <a href="daily.html">📅 Daily View</a>
             <a href="city.html">🏙️ City View</a>
-            <a href="special.html">🎯 Special View</a>
+            <a href="special.html" class="active">🎯 Special View</a>
         </div>
 
         <div class="control-panel">
-            <div class="day-selector">
-                <button class="nav-button" id="prev-day">⬅️ Previous Day</button>
-                <input type="date" id="selected-date" class="day-input">
-                <button class="nav-button" id="next-day">Next Day ➡️</button>
+            <div class="selection-container">
+                <div class="selection-group">
+                    <label class="selection-label">🎨 Activities</label>
+                    <select id="activities-select" class="selection-dropdown">
+                        <option value="">Select an activity...</option>
+                    </select>
+                </div>
+                
+                <div class="selection-group">
+                    <label class="selection-label">🏞️ Scenery</label>
+                    <select id="scenery-select" class="selection-dropdown">
+                        <option value="">Select scenery...</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div style="text-align: center;">
+                <button class="clear-button" id="clear-selections">Clear All Selections</button>
             </div>
 
             <div class="view-controls">
@@ -431,14 +479,22 @@
             </div>
         </div>
 
+        <div id="media-info-header" class="media-info-header" style="display: none;">
+            <div>
+                <h2 id="selection-title">Selection</h2>
+                <span class="media-count" id="media-count">0 photos and videos</span>
+                <div class="selection-type" id="selection-type">No selection made</div>
+            </div>
+        </div>
+
         <div id="loading" class="loading" style="display: none;">
-            <h3>Loading media...</h3>
+            <h3>Loading...</h3>
         </div>
 
         <div id="media-container">
             <div class="no-media">
-                <h3>Select a date to view media</h3>
-                <p>Use the date picker above to browse your vacation photos and videos for three consecutive days</p>
+                <h3>Select an activity or scenery to view media</h3>
+                <p>Choose from the dropdown menus above to browse photos and videos containing specific activities or scenery</p>
             </div>
         </div>
     </div>
@@ -458,255 +514,187 @@
 
     <script>
         let currentViewMode = 'thumbnail';
-        let currentDate = null;
-        let threeDaysMediaData = []; // Store media data for all three days
+        let currentSelection = null;
+        let currentSelectionType = null; // 'activity' or 'scenery'
+        let mediaData = [];
+        let allActivities = [];
+        let allScenery = [];
 
-        // Initialize the application
+        // Initialize the page
         document.addEventListener('DOMContentLoaded', function() {
-            setupEventListeners();
-            loadStatsAndSetDefaultDate();
+            loadActivitiesAndScenery();
+            initializeEventListeners();
+            updateThumbnailSize();
         });
 
-        function setupEventListeners() {
-            // Date navigation
-            document.getElementById('prev-day').addEventListener('click', () => navigateDay(-1));
-            document.getElementById('next-day').addEventListener('click', () => navigateDay(1));
-            document.getElementById('selected-date').addEventListener('change', loadMediaForSelectedDate);
+        function initializeEventListeners() {
+            // Selection dropdowns
+            document.getElementById('activities-select').addEventListener('change', handleActivitySelection);
+            document.getElementById('scenery-select').addEventListener('change', handleScenerySelection);
+            document.getElementById('clear-selections').addEventListener('click', clearAllSelections);
 
             // View mode buttons
             document.querySelectorAll('.view-mode-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const mode = btn.getAttribute('data-mode');
-                    setViewMode(mode);
+                btn.addEventListener('click', function() {
+                    setViewMode(this.getAttribute('data-mode'));
                 });
             });
 
             // Thumbnail size control
-            const sizeSlider = document.getElementById('thumbnail-size');
-            sizeSlider.addEventListener('input', updateThumbnailSize);
+            document.getElementById('thumbnail-size').addEventListener('input', updateThumbnailSize);
 
-            // Modal close
-            document.querySelector('.close').addEventListener('click', function() {
-                document.getElementById('media-modal').style.display = 'none';
+            // Modal controls
+            document.querySelector('.close').addEventListener('click', closeModal);
+            document.getElementById('media-modal').addEventListener('click', function(e) {
+                if (e.target === this) {
+                    closeModal();
+                }
             });
-            
-            // Close modal when clicking outside
-            window.addEventListener('click', function(event) {
-                const modal = document.getElementById('media-modal');
-                if (event.target === modal) {
-                    modal.style.display = 'none';
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    closeModal();
                 }
             });
         }
 
-        async function loadStatsAndSetDefaultDate() {
+        async function loadActivitiesAndScenery() {
             try {
-                const response = await fetch('/api/media/stats');
-                const stats = await response.json();
+                document.getElementById('loading').style.display = 'block';
                 
-                // Use earliest date if available, otherwise fall back to today
-                if (stats.date_range && stats.date_range.earliest) {
-                    setDefaultDate(stats.date_range.earliest);
-                } else {
-                    setDefaultDate();
-                }
+                // Load activities
+                const activitiesResponse = await fetch('/api/media/activities');
+                allActivities = await activitiesResponse.json();
+                
+                // Load scenery
+                const sceneryResponse = await fetch('/api/media/scenery');
+                allScenery = await sceneryResponse.json();
+                
+                // Populate dropdowns
+                populateActivitiesDropdown();
+                populateSceneryDropdown();
+                
+                document.getElementById('loading').style.display = 'none';
+
             } catch (error) {
-                console.error('Error loading stats:', error);
-                // Fall back to today's date if stats loading fails
-                setDefaultDate();
+                console.error('Error loading activities and scenery:', error);
+                document.getElementById('loading').style.display = 'none';
+                showError('Failed to load activities and scenery options.');
             }
         }
 
-        function setDefaultDate(earliestDate = null) {
-            let defaultDate;
+        function populateActivitiesDropdown() {
+            const activitiesSelect = document.getElementById('activities-select');
+            activitiesSelect.innerHTML = '<option value="">Select an activity...</option>';
             
-            if (earliestDate) {
-                // Convert database format "YYYY-MM-DD HH-MM-SS" to date format "YYYY-MM-DD"
-                try {
-                    let formatted = earliestDate;
-                    if (formatted.match(/\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}/)) {
-                        formatted = formatted.replace(/ (\d{2})-(\d{2})-(\d{2})/, ' $1:$2:$3');
-                    }
-                    const date = new Date(formatted);
-                    defaultDate = date.toISOString().split('T')[0];
-                } catch (error) {
-                    console.error('Error parsing earliest date:', error);
-                    defaultDate = new Date().toISOString().split('T')[0];
-                }
-            } else {
-                // Fall back to today
-                defaultDate = new Date().toISOString().split('T')[0];
+            allActivities.forEach(activity => {
+                const option = document.createElement('option');
+                option.value = activity;
+                option.textContent = activity;
+                activitiesSelect.appendChild(option);
+            });
+        }
+
+        function populateSceneryDropdown() {
+            const scenerySelect = document.getElementById('scenery-select');
+            scenerySelect.innerHTML = '<option value="">Select scenery...</option>';
+            
+            allScenery.forEach(scenery => {
+                const option = document.createElement('option');
+                option.value = scenery;
+                option.textContent = scenery;
+                scenerySelect.appendChild(option);
+            });
+        }
+
+        async function handleActivitySelection() {
+            const selectedActivity = document.getElementById('activities-select').value;
+            
+            if (!selectedActivity) {
+                clearAllSelections();
+                return;
             }
+
+            // Reset scenery selection
+            document.getElementById('scenery-select').value = '';
             
-            document.getElementById('selected-date').value = defaultDate;
-            currentDate = defaultDate;
-            loadMediaForSelectedDate();
+            currentSelection = selectedActivity;
+            currentSelectionType = 'activity';
+            
+            await loadMediaForSelection();
         }
 
-        function navigateDay(direction) {
-            const dateInput = document.getElementById('selected-date');
-            const currentDateObj = new Date(dateInput.value);
-            currentDateObj.setDate(currentDateObj.getDate() + direction);
+        async function handleScenerySelection() {
+            const selectedScenery = document.getElementById('scenery-select').value;
             
-            const newDate = currentDateObj.toISOString().split('T')[0];
-            dateInput.value = newDate;
-            currentDate = newDate;
-            loadMediaForSelectedDate();
+            if (!selectedScenery) {
+                clearAllSelections();
+                return;
+            }
+
+            // Reset activity selection
+            document.getElementById('activities-select').value = '';
+            
+            currentSelection = selectedScenery;
+            currentSelectionType = 'scenery';
+            
+            await loadMediaForSelection();
         }
 
-        async function loadMediaForSelectedDate() {
-            const selectedDate = document.getElementById('selected-date').value;
-            if (!selectedDate) return;
-
-            currentDate = selectedDate;
+        function clearAllSelections() {
+            document.getElementById('activities-select').value = '';
+            document.getElementById('scenery-select').value = '';
+            currentSelection = null;
+            currentSelectionType = null;
+            mediaData = [];
             
+            // Hide info header
+            document.getElementById('media-info-header').style.display = 'none';
+            
+            // Show default message
+            document.getElementById('media-container').innerHTML = `
+                <div class="no-media">
+                    <h3>Select an activity or scenery to view media</h3>
+                    <p>Choose from the dropdown menus above to browse photos and videos containing specific activities or scenery</p>
+                </div>
+            `;
+        }
+
+        async function loadMediaForSelection() {
             try {
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('media-container').innerHTML = '';
+                document.getElementById('media-info-header').style.display = 'none';
 
-                // Calculate previous and next dates
-                const selectedDateObj = new Date(selectedDate);
+                const params = new URLSearchParams();
+                params.append('order', 'asc');
                 
-                const previousDateObj = new Date(selectedDateObj);
-                previousDateObj.setDate(previousDateObj.getDate() - 1);
-                const previousDate = previousDateObj.toISOString().split('T')[0];
-                
-                const nextDateObj = new Date(selectedDateObj);
-                nextDateObj.setDate(nextDateObj.getDate() + 1);
-                const nextDate = nextDateObj.toISOString().split('T')[0];
-
-                // Load media for all three days
-                const dates = [
-                    { date: previousDate, label: 'Previous Day', type: 'previous' },
-                    { date: selectedDate, label: 'Selected Day', type: 'current' },
-                    { date: nextDate, label: 'Next Day', type: 'next' }
-                ];
-
-                const mediaPromises = dates.map(async (dateInfo) => {
-                    const dateFrom = dateInfo.date + ' 00:00:00';
-                    const dateTo = dateInfo.date + ' 23:59:59';
-                    
-                    try {
-                        const response = await fetch(`/api/media?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}&order=asc`);
-                        const data = await response.json();
-                        return {
-                            ...dateInfo,
-                            media: data
-                        };
-                    } catch (error) {
-                        console.error(`Error loading media for ${dateInfo.date}:`, error);
-                        return {
-                            ...dateInfo,
-                            media: []
-                        };
-                    }
-                });
-
-                const threeDaysData = await Promise.all(mediaPromises);
-                
-                document.getElementById('loading').style.display = 'none';
-                displayThreeDaysMedia(threeDaysData);
-
-            } catch (error) {
-                console.error('Error loading media:', error);
-                document.getElementById('loading').style.display = 'none';
-                showError('Failed to load media for the selected dates.');
-            }
-        }
-
-        function displayThreeDaysMedia(threeDaysData) {
-            // Store the data globally for view mode changes
-            threeDaysMediaData = threeDaysData;
-            
-            const container = document.getElementById('media-container');
-            container.innerHTML = '';
-
-            threeDaysData.forEach(dayData => {
-                const daySection = document.createElement('div');
-                daySection.className = 'day-section';
-
-                // Format date for display
-                const dateObj = new Date(dayData.date);
-                const formattedDate = dateObj.toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                });
-
-                // Create day header
-                const dayHeader = document.createElement('div');
-                dayHeader.className = `day-header ${dayData.type}`;
-                dayHeader.innerHTML = `
-                    <span>${dayData.label}</span>
-                    <span>${formattedDate}</span>
-                `;
-
-                // Create day content
-                const dayContent = document.createElement('div');
-                dayContent.className = 'day-content';
-
-                if (dayData.media.length === 0) {
-                    dayContent.innerHTML = `
-                        <div class="no-media-day">
-                            No media found for this date
-                        </div>
-                    `;
-                } else {
-                    const mediaGrid = document.createElement('div');
-                    mediaGrid.className = `media-grid ${currentViewMode}`;
-                    
-                    mediaGrid.innerHTML = dayData.media.map(media => {
-                        const isVideo = media.file_extension && 
-                            ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
-                        
-                        const displayTime = formatCreationTime(media.creation_time);
-                        const location = media.city_zh && media.city_en ? 
-                            `${media.city_zh} | ${media.city_en}` : 
-                            (media.city_zh || media.city_en || 'Unknown location');
-
-                        // Parse activities and scenery arrays and filter out people-related entries
-                        const activities = (Array.isArray(media.activities) ? media.activities : 
-                            (typeof media.activities === 'string' && media.activities ? 
-                             JSON.parse(media.activities) : []))
-                            .filter(activity => !activity.toLowerCase().includes('people') && !activity.toLowerCase().includes('person'));
-                        const scenery = (Array.isArray(media.scenery) ? media.scenery : 
-                            (typeof media.scenery === 'string' && media.scenery ? 
-                             JSON.parse(media.scenery) : []))
-                            .filter(scene => !scene.toLowerCase().includes('people') && !scene.toLowerCase().includes('person'));
-
-                        return `
-                            <div class="media-item ${currentViewMode}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
-                                ${isVideo ? 
-                                    `<video class="media-thumbnail" muted preload="none">
-                                        <source src="/api/media/${media.id}/thumbnail" type="video/${media.file_extension?.substring(1) || 'mp4'}">
-                                    </video>` :
-                                    `<img class="media-thumbnail" src="/api/media/${media.id}/thumbnail" alt="${media.filename}" loading="lazy">`
-                                }
-                                <div class="media-info">
-                                    <div class="media-title">${media.filename}</div>
-                                    <div class="media-meta">
-                                        📅 ${displayTime}<br>
-                                        📍 ${location}
-                                        ${media.talking_detected ? '<br>🗣️ Talking detected' : ''}
-                                    </div>
-                                    ${activities.length > 0 || scenery.length > 0 ? `
-                                    <div class="analysis-tags">
-                                        ${activities.map(activity => `<span class="analysis-tag activity-tag">${activity}</span>`).join('')}
-                                        ${scenery.map(scene => `<span class="analysis-tag scenery-tag">${scene}</span>`).join('')}
-                                    </div>` : ''}
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-
-                    dayContent.appendChild(mediaGrid);
+                if (currentSelectionType === 'activity') {
+                    params.append('activity', currentSelection);
+                } else if (currentSelectionType === 'scenery') {
+                    params.append('scenery', currentSelection);
                 }
 
-                daySection.appendChild(dayHeader);
-                daySection.appendChild(dayContent);
-                container.appendChild(daySection);
-            });
+                const response = await fetch(`/api/media?${params.toString()}`);
+                mediaData = await response.json();
+
+                document.getElementById('loading').style.display = 'none';
+                
+                // Update info header
+                document.getElementById('selection-title').textContent = currentSelection;
+                document.getElementById('media-count').textContent = `${mediaData.length} ${mediaData.length === 1 ? 'item' : 'items'}`;
+                document.getElementById('selection-type').textContent = `Filtered by ${currentSelectionType}`;
+                
+                document.getElementById('media-info-header').style.display = 'flex';
+
+                displayMedia(mediaData);
+
+            } catch (error) {
+                console.error('Error loading media for selection:', error);
+                document.getElementById('loading').style.display = 'none';
+                showError('Failed to load media for the selected criteria.');
+            }
         }
 
         function displayMedia(data) {
@@ -715,8 +703,8 @@
             if (data.length === 0) {
                 container.innerHTML = `
                     <div class="no-media">
-                        <h3>No media found for ${currentDate}</h3>
-                        <p>Try selecting a different date</p>
+                        <h3>No media found for "${currentSelection}"</h3>
+                        <p>Try selecting a different ${currentSelectionType}</p>
                     </div>
                 `;
                 return;
@@ -841,9 +829,9 @@
             const sizeControl = document.querySelector('.thumbnail-size-control');
             sizeControl.style.display = mode === 'thumbnail' ? 'flex' : 'none';
 
-            // Re-render media if we have data - use cached data to avoid reloading
-            if (threeDaysMediaData.length > 0) {
-                displayThreeDaysMedia(threeDaysMediaData);
+            // Re-render media if we have data
+            if (mediaData.length > 0) {
+                displayMedia(mediaData);
             }
         }
 
@@ -855,10 +843,11 @@
             document.documentElement.style.setProperty('--thumbnail-size', size + 'px');
             document.documentElement.style.setProperty('--thumbnail-height', (size * 0.75) + 'px');
             
-            // Update all existing media grids
-            document.querySelectorAll('.media-grid').forEach(grid => {
-                grid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${size}px, 1fr))`;
-            });
+            // Update existing media grid
+            const mediaGrid = document.querySelector('.media-grid');
+            if (mediaGrid && currentViewMode === 'thumbnail') {
+                mediaGrid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${size}px, 1fr))`;
+            }
         }
 
         function formatCreationTime(timeStr) {
@@ -938,6 +927,10 @@
             }
         }
 
+        function closeModal() {
+            document.getElementById('media-modal').style.display = 'none';
+        }
+
         // Open file in system default application
         async function openFileInSystem(mediaId) {
             try {
@@ -957,20 +950,6 @@
                 alert('Error opening file: ' + error.message);
             }
         }
-
-        // Show error message
-        function showError(message) {
-            const container = document.getElementById('media-container');
-            container.innerHTML = `
-                <div class="no-media">
-                    <h3>Error</h3>
-                    <p>${message}</p>
-                </div>
-            `;
-        }
-
-        // Initialize thumbnail size
-        updateThumbnailSize();
     </script>
 </body>
 </html>

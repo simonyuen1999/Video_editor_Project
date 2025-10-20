@@ -17,8 +17,9 @@ def get_all_media():
         country = request.args.get('country')
         date_from = request.args.get('date_from')
         date_to = request.args.get('date_to')
-        has_people = request.args.get('has_people')
         talking = request.args.get('talking')
+        activity = request.args.get('activity')
+        scenery = request.args.get('scenery')
         order = request.args.get('order', 'asc')  # Default to ASC (oldest first)
         
         query = Media.query
@@ -44,11 +45,6 @@ def get_all_media():
         elif date_to:
             query = query.filter(Media.creation_time <= date_to)
             
-        if has_people == 'true':
-            query = query.filter(Media.people_count > 0)
-        elif has_people == 'false':
-            query = query.filter(Media.people_count == 0)
-            
         if talking == 'true':
             query = query.filter(Media.talking_detected == True)
         elif talking == 'false':
@@ -62,17 +58,70 @@ def get_all_media():
         
         media_records = query.all()
         
+        # Apply activity and scenery filtering after DB query (since JSON search is complex)
+        if activity or scenery:
+            filtered_records = []
+            for media in media_records:
+                include_record = False
+                
+                if activity:
+                    try:
+                        # Handle both JSON and comma-separated formats
+                        if media.activities:
+                            if media.activities.startswith('['):
+                                activities = json.loads(media.activities)
+                            else:
+                                activities = [act.strip() for act in media.activities.split(',') if act.strip()]
+                            
+                            if any(activity.lower() in act.lower() for act in activities):
+                                include_record = True
+                    except (json.JSONDecodeError, AttributeError):
+                        if media.activities and activity.lower() in media.activities.lower():
+                            include_record = True
+                
+                if scenery and not include_record:
+                    try:
+                        # Handle both JSON and comma-separated formats
+                        if media.scenery:
+                            if media.scenery.startswith('['):
+                                scenery_items = json.loads(media.scenery)
+                            else:
+                                scenery_items = [scene.strip() for scene in media.scenery.split(',') if scene.strip()]
+                            
+                            if any(scenery.lower() in scene.lower() for scene in scenery_items):
+                                include_record = True
+                    except (json.JSONDecodeError, AttributeError):
+                        if media.scenery and scenery.lower() in media.scenery.lower():
+                            include_record = True
+                
+                if include_record:
+                    filtered_records.append(media)
+            
+            media_records = filtered_records
+        
         # Convert to list of dictionaries and parse JSON fields
         result = []
         for media in media_records:
             media_dict = media.to_dict()
-            # Parse JSON strings back to lists
+            # Parse activities and scenery fields (handle both JSON and comma-separated formats)
             try:
-                media_dict['activities'] = json.loads(media_dict['activities']) if media_dict['activities'] else []
+                if media_dict['activities']:
+                    if media_dict['activities'].startswith('['):
+                        media_dict['activities'] = json.loads(media_dict['activities'])
+                    else:
+                        media_dict['activities'] = [activity.strip() for activity in media_dict['activities'].split(',') if activity.strip()]
+                else:
+                    media_dict['activities'] = []
             except:
                 media_dict['activities'] = []
             try:
-                media_dict['scenery'] = json.loads(media_dict['scenery']) if media_dict['scenery'] else []
+                if media_dict['scenery']:
+                    if media_dict['scenery'].startswith('['):
+                        media_dict['scenery'] = json.loads(media_dict['scenery'])
+                    else:
+                        media_dict['scenery'] = [scene.strip() for scene in media_dict['scenery'].split(',') if scene.strip()]
+                else:
+                    media_dict['scenery'] = []
             except:
                 media_dict['scenery'] = []
             result.append(media_dict)
@@ -88,13 +137,25 @@ def get_media(media_id):
         media = Media.query.get_or_404(media_id)
         media_dict = media.to_dict()
         
-        # Parse JSON strings back to lists
+        # Parse activities and scenery fields (handle both JSON and comma-separated formats)
         try:
-            media_dict['activities'] = json.loads(media_dict['activities']) if media_dict['activities'] else []
+            if media_dict['activities']:
+                if media_dict['activities'].startswith('['):
+                    media_dict['activities'] = json.loads(media_dict['activities'])
+                else:
+                    media_dict['activities'] = [activity.strip() for activity in media_dict['activities'].split(',') if activity.strip()]
+            else:
+                media_dict['activities'] = []
         except:
             media_dict['activities'] = []
         try:
-            media_dict['scenery'] = json.loads(media_dict['scenery']) if media_dict['scenery'] else []
+            if media_dict['scenery']:
+                if media_dict['scenery'].startswith('['):
+                    media_dict['scenery'] = json.loads(media_dict['scenery'])
+                else:
+                    media_dict['scenery'] = [scene.strip() for scene in media_dict['scenery'].split(',') if scene.strip()]
+            else:
+                media_dict['scenery'] = []
         except:
             media_dict['scenery'] = []
         
@@ -250,7 +311,6 @@ def get_stats():
             Media.latitude.isnot(None), 
             Media.longitude.isnot(None)
         ).count()
-        total_with_people = Media.query.filter(Media.people_count > 0).count()
         total_with_talking = Media.query.filter(Media.talking_detected == True).count()
         
         # Get date range from creation_time
@@ -262,7 +322,6 @@ def get_stats():
         return jsonify({
             'total_media': total_media,
             'total_with_location': total_with_location,
-            'total_with_people': total_with_people,
             'total_with_talking': total_with_talking,
             'date_range': {
                 'earliest': date_range.earliest,
@@ -311,5 +370,107 @@ def get_countries():
             })
         
         return jsonify(country_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@media_bp.route('/media/activities', methods=['GET'])
+def get_activities():
+    """Get all unique activities from all media records"""
+    try:
+        # Get all media records that have activities
+        media_records = Media.query.filter(
+            Media.activities.isnot(None),
+            Media.activities != '',
+            Media.activities != '[]'
+        ).all()
+        
+        all_activities = set()
+        
+        for media in media_records:
+            if media.activities:
+                # Handle both JSON array format and comma-separated string format
+                try:
+                    # Try parsing as JSON first
+                    if media.activities.startswith('['):
+                        activities = json.loads(media.activities)
+                    else:
+                        # Handle comma-separated string format
+                        activities = [activity.strip() for activity in media.activities.split(',') if activity.strip()]
+                    
+                    for activity in activities:
+                        # Filter out people-related activities and clean up the activity name
+                        activity_clean = activity.strip()
+                        if (activity_clean and 
+                            not activity_clean.lower().startswith('people') and 
+                            'people' not in activity_clean.lower() and
+                            'person' not in activity_clean.lower()):
+                            all_activities.add(activity_clean)
+                except (json.JSONDecodeError, AttributeError) as e:
+                    # Handle comma-separated string format as fallback
+                    if isinstance(media.activities, str):
+                        activities = [activity.strip() for activity in media.activities.split(',') if activity.strip()]
+                        for activity in activities:
+                            activity_clean = activity.strip()
+                            if (activity_clean and 
+                                not activity_clean.lower().startswith('people') and 
+                                'people' not in activity_clean.lower() and
+                                'person' not in activity_clean.lower()):
+                                all_activities.add(activity_clean)
+        
+        # Convert to sorted list
+        activities_list = sorted(list(all_activities))
+        
+        return jsonify(activities_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@media_bp.route('/media/scenery', methods=['GET'])
+def get_scenery():
+    """Get all unique scenery items from all media records"""
+    try:
+        # Get all media records that have scenery
+        media_records = Media.query.filter(
+            Media.scenery.isnot(None),
+            Media.scenery != '',
+            Media.scenery != '[]'
+        ).all()
+        
+        all_scenery = set()
+        
+        for media in media_records:
+            if media.scenery:
+                # Handle both JSON array format and comma-separated string format
+                try:
+                    # Try parsing as JSON first
+                    if media.scenery.startswith('['):
+                        scenery = json.loads(media.scenery)
+                    else:
+                        # Handle comma-separated string format
+                        scenery = [scene.strip() for scene in media.scenery.split(',') if scene.strip()]
+                    
+                    for scene in scenery:
+                        # Filter out people-related scenery and clean up the scene name
+                        scene_clean = scene.strip()
+                        if (scene_clean and 
+                            not scene_clean.lower().startswith('people') and 
+                            'people' not in scene_clean.lower() and
+                            'person' not in scene_clean.lower()):
+                            all_scenery.add(scene_clean)
+                except (json.JSONDecodeError, AttributeError):
+                    # Handle comma-separated string format as fallback
+                    if isinstance(media.scenery, str):
+                        scenery = [scene.strip() for scene in media.scenery.split(',') if scene.strip()]
+                        for scene in scenery:
+                            scene_clean = scene.strip()
+                            if (scene_clean and 
+                                not scene_clean.lower().startswith('people') and 
+                                'people' not in scene_clean.lower() and
+                                'person' not in scene_clean.lower()):
+                                all_scenery.add(scene_clean)
+        
+        # Convert to sorted list
+        scenery_list = sorted(list(all_scenery))
+        
+        return jsonify(scenery_list)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
