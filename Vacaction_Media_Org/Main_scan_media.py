@@ -250,6 +250,16 @@ class MediaOrganizerDB:
         )
         return self.cursor.fetchall()
 
+    def get_all_media_files(self):
+        """Get all media files from database with their current analysis status."""
+        self.cursor.execute(
+            '''SELECT filepath, people_count, activities, scenery, talking_detected 
+               FROM media_files 
+               WHERE creation_time IS NOT NULL 
+               ORDER BY filepath'''
+        )
+        return self.cursor.fetchall()
+
     def generate_thumbnail(self, filepath, thumbnail_size=(300, 300)):
         """
         Generate thumbnail for image or video files.
@@ -464,6 +474,7 @@ Usage Note: Consider the parameter execution order for optimal performance.
   --syncFSnDB or -f          : Sync file system changes with the database. Default: False.
   --updateCity or -u         : Update city translation in the database. Default: False.
   --shareGeoInfo or -s       : Share (Update DB) geo info to the no geo media files at the end. Default: False.
+  --updateMediaInfo or -m    : Update media analysis info (people count, activities, scenery, talking) in database. Default: False.
 
   The following parameters can be used together with the above options:
   --debug-level : Set the logging debug level.
@@ -516,6 +527,10 @@ Usage Note: Consider the parameter execution order for optimal performance.
         '--geo-list', type=str, default='geo_chinese_.list',
         help='Path to the geo.list file for enhanced geolocation (default: geo_chinese_.list).'
     )
+    parser.add_argument(
+        '--updateMediaInfo', '-m', default=False, action='store_true',
+        help='Update media analysis info (people count, activities, scenery, talking) in the database. default: False'
+    )
     # The geo_chinese_.list file for enhanced geolocation with Chinese name translations
 
     args = parser.parse_args()
@@ -534,36 +549,54 @@ Usage Note: Consider the parameter execution order for optimal performance.
         args.jump2update = False
         logging.info("Sync FS and DB enabled, disabling jump2update option (jump to DB Geo update section).")
 
-    # Summary of user options
-    print("\nUser options summary:")
-    print(f"  1. Delete DB and rescan: {args.deldb}")
-    if args.deldb:
-        print("    WARNING: Existing database will be deleted!")
-    print(f"  2. Cleanup thumbnails: {args.cleanup_thumbnails}")
-    if args.cleanup_thumbnails:
-        print("    WARNING: Existing thumbnails will be deleted!")
-    print(f"  3. Jump to update (skip scanning): {args.jump2update}")
-    if args.jump2update:
-        print("    WARNING: File scanning will be skipped!  Do not use this option for the first run.")
-    print(f"  4. Sync FS and DB: {args.syncFSnDB}")
-    if not args.syncFSnDB:
-        print("    WARNING: File system changes will not be synced with the database!")
-    print(f"  5. Update city translations: {args.updateCity}")
-    if args.updateCity:
-        print("    WARNING: City translations _en -> _zh in the database will be updated!")
-    print(f"  6. Share geo info to no-geo media files: {args.shareGeoInfo}")
-    if args.shareGeoInfo:
-        print("    WARNING: Geo info will be shared to media files without geo data!")
-        print("             This may overwrite existing geo data in those files in DB.")
-    print(f"\n  I. Time difference for proximity search: '{args.time_diff}' minutes")
-    print(f"  II. Geo list path: '{args.geo_list}'    User can specify different geolocation file.")
-    print(f"  III. Target directory: '{args.directory}'    The directory to scan for media files.\n")
-    # ask for user confirmation to proceed
-    proceed = input("Proceed with these settings? (y/n): ")
-    if proceed.lower() != 'y':
-        print(logging.info("User aborted the operation."))
-        # logging.info("User aborted the operation.")
-        sys.exit(0)
+    # If the user specified --updateMediaInfo, disable jump2update to ensure DB is ready for analysis update.
+    if args.updateMediaInfo:
+        print("""
+Option 'updateMediaInfo' is specified.
+    The program will only update media analysis info in the DB.
+    This includes updating people count, activities, scenery, and talking information.
+    After this process, the program will exit.    
+""")
+        # ask for user confirmation to proceed
+        proceed = input("Proceed with this settings? (y/n): ")
+        if proceed.lower() != 'y':
+            print(logging.info("User aborted the operation."))
+            sys.exit(0)
+    else:
+        # Summary of user options
+        print("\nUser options summary:")
+        print(f"  1. Delete DB and rescan: {args.deldb}")
+        if args.deldb:
+            print("    WARNING: Existing database will be deleted!")
+        print(f"  2. Cleanup thumbnails: {args.cleanup_thumbnails}")
+        if args.cleanup_thumbnails:
+            print("    WARNING: Existing thumbnails will be deleted!")
+        print(f"  3. Jump to update (skip scanning): {args.jump2update}")
+        if args.jump2update:
+            print("    WARNING: File scanning will be skipped!  Do not use this option for the first run.")
+        print(f"  4. Sync FS and DB: {args.syncFSnDB}")
+        if not args.syncFSnDB:
+            print("    WARNING: File system changes will not be synced with the database!")
+        print(f"  5. Update city translations: {args.updateCity}")
+        if args.updateCity:
+            print("    WARNING: City translations _en -> _zh in the database will be updated!")
+        print(f"  6. Share geo info to no-geo media files: {args.shareGeoInfo}")
+        if args.shareGeoInfo:
+            print("    WARNING: Geo info will be shared to media files without geo data!")
+            print("             This may overwrite existing geo data in those files in DB.")
+        print(f"  7. Update media analysis info: {args.updateMediaInfo}")
+        if args.updateMediaInfo:
+            print("    WARNING: Media analysis (people, activities, scenery, talking) will be updated!")
+            print("             This process analyzes all media files and may take significant time.")
+        print(f"\n  I. Time difference for proximity search: '{args.time_diff}' minutes")
+        print(f"  II. Geo list path: '{args.geo_list}'    User can specify different geolocation file.")
+        print(f"  III. Target directory: '{args.directory}'    The directory to scan for media files.\n")
+        # ask for user confirmation to proceed
+        proceed = input("Proceed with these settings? (y/n): ")
+        if proceed.lower() != 'y':
+            print(logging.info("User aborted the operation."))
+            # logging.info("User aborted the operation.")
+            sys.exit(0)
 
     # If user specified --deldb, delete the existing database file inside MetaOrganizerDB class.
     db = MediaOrganizerDB(rescan=args.deldb)
@@ -580,6 +613,118 @@ Usage Note: Consider the parameter execution order for optimal performance.
         logging.info("Skipping thumbnail cleanup as per user request.")
 
     all_files = scan_directory_recursive(target_directory)
+
+    # ==================================================================================
+    # Update media analysis information if requested
+    if args.updateMediaInfo:
+        logging.info("Starting media analysis update process...")
+        
+        # Get all media files from database
+        db_media_files = db.get_all_media_files()
+        logging.info(f"Found {len(db_media_files)} media files in database")
+        
+        # Track statistics
+        stats = {
+            'total_files': len(db_media_files),
+            'files_deleted': 0,
+            'files_updated': 0,
+            'files_skipped': 0,
+            'files_error': 0
+        }
+        
+        for i, (filepath, people_count, activities, scenery, talking_detected) in enumerate(db_media_files, 1):
+            logging.debug(f"Processing {i}/{len(db_media_files)}: {os.path.basename(filepath)}")
+            
+            # Debug: Log the actual database values
+            logging.debug(f"DB values - people_count: {people_count} (type: {type(people_count)}), "
+                         f"activities: '{activities}' (type: {type(activities)}), "
+                         f"scenery: '{scenery}' (type: {type(scenery)}), "
+                         f"talking_detected: {talking_detected} (type: {type(talking_detected)})")
+            
+            # Check if physical file exists
+            if not os.path.exists(filepath):
+                logging.info(f"File no longer exists, deleting DB entry: {filepath}")
+                try:
+                    db.cursor.execute('DELETE FROM media_files WHERE filepath = ?', (filepath,))
+                    db.conn.commit()
+                    stats['files_deleted'] += 1
+                    logging.info(f"Deleted DB entry for missing file: {filepath}")
+                except Exception as e:
+                    logging.error(f"Error deleting DB entry for {filepath}: {e}")
+                    stats['files_error'] += 1
+                continue
+            
+            # Check if media analysis info already exists
+            # Only skip if the file has meaningful analysis data
+            has_meaningful_analysis = (
+                (people_count is not None and people_count > 0) or 
+                (activities is not None and activities.strip() != '') or 
+                (scenery is not None and scenery.strip() != '') or 
+                (talking_detected is not None and talking_detected != 0)
+            )
+            
+            # Debug: Log the condition evaluation
+            logging.debug(f"Analysis check - people: {people_count is not None and people_count > 0}, "
+                         f"activities: {activities is not None and (activities.strip() != '' if activities else False)}, "
+                         f"scenery: {scenery is not None and (scenery.strip() != '' if scenery else False)}, "
+                         f"talking: {talking_detected is not None and talking_detected != 0}, "
+                         f"has_meaningful_analysis: {has_meaningful_analysis}")
+            
+            if has_meaningful_analysis:
+                logging.debug(f"Skipping file with existing analysis: {filepath}")
+                stats['files_skipped'] += 1
+                continue
+            
+            # Perform media analysis
+            try:
+                logging.info(f"> Analyzing media file: {os.path.basename(filepath)}")
+                analysis_result = extractor._analysis_mediafile(filepath)
+                
+                # Convert activities list to string for database storage
+                activities_str = ','.join(analysis_result.get('activities', []))
+                
+                # Update database with analysis results
+                semantic_data = {
+                    'people_count': analysis_result.get('people_count', 0),
+                    'activities': activities_str,
+                    'scenery': analysis_result.get('scenery', ''),
+                    'talking_detected': 1 if analysis_result.get('talking_detected', False) else 0
+                }
+                
+                db.update_media_file_semantic(filepath, semantic_data)
+                stats['files_updated'] += 1
+                
+                # Log the analysis results
+                logging.info(f"> Updated analysis for {os.path.basename(filepath)}: "
+                           f"people={analysis_result.get('people_count', 0)}, "
+                           f"activities={activities_str}, "
+                           f"scenery={analysis_result.get('scenery', '')}, "
+                           f"talking={analysis_result.get('talking_detected', False)}")
+                
+            except Exception as e:
+                logging.error(f"Error analyzing media file {filepath}: {e}")
+                stats['files_error'] += 1
+        
+        # Print summary and exit
+        logging.info("=" * 80)
+        logging.info("MEDIA ANALYSIS UPDATE SUMMARY")
+        logging.info("=" * 80)
+        logging.info(f"Total files processed: {stats['total_files']}")
+        logging.info(f"Files updated with analysis: {stats['files_updated']}")
+        logging.info(f"Files skipped (already analyzed): {stats['files_skipped']}")
+        logging.info(f"DB entries deleted (missing files): {stats['files_deleted']}")
+        logging.info(f"Files with errors: {stats['files_error']}")
+        logging.info("=" * 80)
+        
+        print("\nMedia Analysis Update Complete!")
+        print(f"✓ Updated {stats['files_updated']} files with new analysis")
+        print(f"✓ Skipped {stats['files_skipped']} files (already analyzed)")
+        print(f"✓ Deleted {stats['files_deleted']} orphaned DB entries")
+        if stats['files_error'] > 0:
+            print(f"⚠ {stats['files_error']} files had errors during analysis")
+        
+        db.close()
+        sys.exit(0)
 
     # ==================================================================================
     # After the first run, DB is created.  For the rest of the runs, we can skip already scanned files.

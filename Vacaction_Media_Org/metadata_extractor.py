@@ -9,6 +9,49 @@ from datetime import datetime
 import pickle
 from pathlib import Path
 
+# Optional imports for media analysis
+try:
+    import cv2
+    import numpy as np
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    logging.warning("OpenCV not available. Visual analysis will be limited.")
+
+try:
+    import librosa
+    LIBROSA_AVAILABLE = True
+    
+    # Configure librosa to suppress audio backend warnings
+    import warnings
+    # Suppress specific librosa/audioread warnings
+    warnings.filterwarnings('ignore', message='PySoundFile failed')
+    warnings.filterwarnings('ignore', message='audioread')
+    warnings.filterwarnings('ignore', category=UserWarning, module='librosa')
+    
+except ImportError:
+    LIBROSA_AVAILABLE = False
+    logging.warning("Librosa not available. Audio analysis will be disabled.")
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+    
+    # Try to enable HEIC support
+    try:
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+        HEIF_AVAILABLE = True
+        logging.debug("HEIC support enabled via pillow-heif")
+    except ImportError:
+        HEIF_AVAILABLE = False
+        logging.debug("pillow-heif not available, HEIC support may be limited")
+        
+except ImportError:
+    PIL_AVAILABLE = False
+    HEIF_AVAILABLE = False
+    logging.warning("PIL/Pillow not available. Image processing will be limited.")
+
 class MetadataExtractor:
     def __init__(self, geo_list_path='geo_chinese_.list'):
 
@@ -125,6 +168,529 @@ class MetadataExtractor:
         }
         
         return stats
+
+    def _analysis_mediafile(self, filepath):
+        """
+        Analyze image or video file to extract semantic information.
+        
+        Args:
+            filepath: Path to the media file to analyze
+            
+        Returns:
+            dict: Analysis results containing:
+                - people_count: Number of people detected (int)
+                - activities: List of detected activities (list of strings)
+                - scenery: Description of scenery/environment (string)
+                - talking_detected: Whether talking/speech is detected (bool)
+        """
+        if not os.path.exists(filepath):
+            logging.error(f"File not found: {filepath}")
+            return {
+                'people_count': 0,
+                'activities': [],
+                'scenery': '',
+                'talking_detected': False
+            }
+        
+        extension = os.path.splitext(filepath)[1].lower()
+        
+        # Initialize results
+        analysis_result = {
+            'people_count': 0,
+            'activities': [],
+            'scenery': '',
+            'talking_detected': False
+        }
+        
+        try:
+            if extension in ['.jpg', '.jpeg', '.png', '.heic']:
+                # Analyze image file
+                analysis_result.update(self._analyze_image(filepath))
+            elif extension in ['.mp4', '.mov', '.avi', '.mkv', '.webm']:
+                # Analyze video file
+                analysis_result.update(self._analyze_video(filepath))
+            else:
+                logging.warning(f"Unsupported file type for analysis: {extension}")
+                
+        except Exception as e:
+            logging.error(f"Error analyzing media file {filepath}: {e}\n")
+            logging.debug(f"Analysis result (partial) for {filepath}: {analysis_result}")
+
+        return analysis_result
+    
+    def _analyze_image(self, filepath):
+        """Analyze image file for people, activities, and scenery."""
+        result = {
+            'people_count': 0,
+            'activities': [],
+            'scenery': '',
+            'talking_detected': False  # Images don't have audio
+        }
+        
+        if not CV2_AVAILABLE:
+            logging.debug("OpenCV not available, skipping image analysis")
+            return result
+            
+        try:
+            # Load image using OpenCV
+            image = cv2.imread(filepath)
+            if image is None:
+                # Try loading with PIL for HEIC files and other formats OpenCV can't handle
+                if PIL_AVAILABLE:
+                    try:
+                        logging.debug(f"OpenCV failed, trying PIL for: {filepath}")
+                        pil_image = Image.open(filepath)
+                        
+                        # Convert PIL image to OpenCV format
+                        # Handle different modes (RGBA, RGB, L, etc.)
+                        if pil_image.mode == 'RGBA':
+                            # Convert RGBA to RGB with white background
+                            rgb_image = Image.new('RGB', pil_image.size, (255, 255, 255))
+                            rgb_image.paste(pil_image, mask=pil_image.split()[-1])  # Use alpha channel as mask
+                            pil_image = rgb_image
+                        elif pil_image.mode != 'RGB':
+                            pil_image = pil_image.convert('RGB')
+                        
+                        # Convert PIL RGB to OpenCV BGR
+                        image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+                        logging.debug(f"Successfully loaded with PIL: {filepath}")
+                        
+                    except Exception as pil_error:
+                        logging.error(f"PIL also failed to load image {filepath}: {pil_error}")
+                        return result
+                else:
+                    logging.warning(f"Could not load image (OpenCV failed, PIL not available): {filepath}")
+                    return result
+            
+            # People detection using Haar Cascades (basic approach)
+            result['people_count'] = self._detect_people_in_frame(image)
+            
+            # Scene analysis
+            result['scenery'] = self._analyze_scene(image)
+            
+            # Activity detection (basic approach based on image content)
+            result['activities'] = self._detect_activities_in_image(image)
+            
+        except Exception as e:
+            logging.error(f"Error analyzing image {filepath}: {e}\n")
+            logging.debug(f"Analysis result (partial) for {filepath}: {result}")
+
+        return result
+    
+    def _analyze_video(self, filepath):
+        """Analyze video file for people, activities, scenery, and audio."""
+        result = {
+            'people_count': 0,
+            'activities': [],
+            'scenery': '',
+            'talking_detected': False
+        }
+        
+        try:
+            # Analyze video frames
+            if CV2_AVAILABLE:
+                video_result = self._analyze_video_frames(filepath)
+                result.update(video_result)
+            
+            # Analyze audio for talking detection
+            if LIBROSA_AVAILABLE:
+                audio_result = self._analyze_audio(filepath)
+                result['talking_detected'] = audio_result.get('talking_detected', False)
+                
+        except Exception as e:
+            logging.error(f"Error analyzing video {filepath}: {e}\n")
+            logging.debug(f"Analysis result (partial) for {filepath}: {result}")
+
+        return result
+    
+    def _analyze_video_frames(self, filepath):
+        """Analyze video frames for visual content."""
+        result = {
+            'people_count': 0,
+            'activities': [],
+            'scenery': ''
+        }
+        
+        try:
+            cap = cv2.VideoCapture(filepath)
+            if not cap.isOpened():
+                logging.warning(f"Could not open video: {filepath}")
+                return result
+            
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            duration = frame_count / fps if fps > 0 else 0
+            
+            # Sample frames for analysis (every 2 seconds or max 10 frames)
+            sample_interval = max(1, int(fps * 2)) if fps > 0 else 30
+            max_samples = min(10, frame_count // sample_interval)
+            
+            people_counts = []
+            scenery_descriptions = []
+            activities_detected = set()
+            
+            for i in range(0, frame_count, sample_interval):
+                if len(people_counts) >= max_samples:
+                    break
+                    
+                cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                ret, frame = cap.read()
+                
+                if ret:
+                    # Analyze this frame
+                    people_count = self._detect_people_in_frame(frame)
+                    people_counts.append(people_count)
+                    
+                    scenery = self._analyze_scene(frame)
+                    if scenery:
+                        scenery_descriptions.append(scenery)
+                    
+                    activities = self._detect_activities_in_image(frame)
+                    activities_detected.update(activities)
+            
+            cap.release()
+            
+            # Aggregate results
+            result['people_count'] = max(people_counts) if people_counts else 0
+            result['activities'] = list(activities_detected)
+            result['scenery'] = self._aggregate_scenery_descriptions(scenery_descriptions)
+            
+        except Exception as e:
+            logging.error(f"Error analyzing video frames {filepath}: {e}\n")
+            logging.debug(f"Analysis result (partial) for {filepath}: {result}")
+
+        return result
+    
+    def _detect_people_in_frame(self, frame):
+        """Detect people in a single frame using Haar Cascades."""
+        try:
+            # Convert to grayscale for face detection
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            
+            # Use Haar Cascade for face detection (proxy for people)
+            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+            
+            # Also try upper body detection
+            body_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_upperbody.xml')
+            bodies = body_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(50, 50))
+            
+            # Take the maximum of face or body detection
+            people_count = max(len(faces), len(bodies))
+            
+            logging.debug(f"Detected {len(faces)} faces and {len(bodies)} bodies, count: {people_count}")
+            return people_count
+            
+        except Exception as e:
+            logging.error(f"Error detecting people in frame: {e}\n")
+            return 0
+    
+    def _analyze_scene(self, frame):
+        """Analyze scene content to determine scenery type."""
+        try:
+            # Basic scene analysis based on color distribution and edges
+            height, width = frame.shape[:2]
+            
+            # Convert to HSV for better color analysis
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            
+            # Analyze color distribution
+            hist_h = cv2.calcHist([hsv], [0], None, [180], [0, 180])
+            hist_s = cv2.calcHist([hsv], [1], None, [256], [0, 256])
+            hist_v = cv2.calcHist([hsv], [2], None, [256], [0, 256])
+            
+            # Edge detection for structure analysis
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, 50, 150)
+            edge_density = np.sum(edges > 0) / (height * width)
+            
+            # Basic scenery classification based on color and structure
+            scenery_type = self._classify_scenery(hist_h, hist_s, hist_v, edge_density)
+            
+            return scenery_type
+            
+        except Exception as e:
+            logging.error(f"Error analyzing scene: {e}\n")
+            return ""
+    
+    def _classify_scenery(self, hist_h, hist_s, hist_v, edge_density):
+        """Classify scenery based on color histograms and edge density."""
+        try:
+            # Normalize histograms
+            hist_h = hist_h.flatten() / np.sum(hist_h)
+            hist_s = hist_s.flatten() / np.sum(hist_s)
+            hist_v = hist_v.flatten() / np.sum(hist_v)
+            
+            # Check for dominant colors
+            green_range = np.sum(hist_h[35:85])  # Green hues
+            blue_range = np.sum(hist_h[100:130])  # Blue hues
+            
+            # Check saturation and brightness
+            high_saturation = np.sum(hist_s[128:])  # High saturation
+            low_brightness = np.sum(hist_v[:64])   # Low brightness
+            high_brightness = np.sum(hist_v[192:]) # High brightness
+            
+            # Classification logic
+            if blue_range > 0.3 and high_saturation > 0.4:
+                return "waterscape"
+            elif green_range > 0.4 and high_saturation > 0.3:
+                return "nature/outdoor"
+            elif edge_density > 0.15:  # High edge density suggests buildings/urban
+                return "urban/architectural"
+            elif low_brightness > 0.5:
+                return "indoor/low-light"
+            elif high_brightness > 0.6 and high_saturation < 0.2:
+                return "bright/overexposed"
+            else:
+                return "general"
+                
+        except Exception as e:
+            logging.error(f"Error classifying scenery: {e}")
+            return "unknown"
+    
+    def _detect_activities_in_image(self, frame):
+        """Detect activities based on image content."""
+        activities = []
+        
+        try:
+            # Basic activity detection based on scene analysis
+            scenery = self._analyze_scene(frame)
+            
+            if "waterscape" in scenery:
+                activities.extend(["swimming", "boating", "beach"])
+            elif "nature" in scenery:
+                activities.extend(["hiking", "sightseeing", "outdoor"])
+            elif "urban" in scenery:
+                activities.extend(["sightseeing", "walking", "tourism"])
+            elif "indoor" in scenery:
+                activities.extend(["indoor", "dining", "visiting"])
+                
+            # Additional activity detection could be added here
+            # (e.g., object detection for specific activities)
+            
+        except Exception as e:
+            logging.error(f"Error detecting activities: {e}")
+            
+        return activities
+    
+    def _analyze_audio(self, filepath):
+        """Analyze audio content for talking detection."""
+        result = {'talking_detected': False}
+        
+        try:
+            # Check if file exists
+            if not os.path.exists(filepath):
+                logging.warning(f"Audio file not found: {filepath}")
+                return result
+            
+            # Get file extension to determine approach
+            extension = os.path.splitext(filepath)[1].lower()
+            
+            # For video files, we need to be more careful with audio loading
+            if extension in ['.mp4', '.mov', '.avi', '.mkv', '.webm']:
+                # Check if video has audio streams first
+                if not self._has_audio_stream(filepath):
+                    logging.debug(f"No audio streams detected in video: {filepath}")
+                    return result
+                
+                # Always try ffmpeg first for video files to avoid librosa warnings
+                audio_data = self._extract_audio_from_video(filepath)
+                if audio_data is None:
+                    logging.debug(f"Could not extract audio from video: {filepath}")
+                    return result
+                y, sr = audio_data
+            else:
+                # For audio files, use librosa directly with warning suppression
+                try:
+                    import warnings
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        y, sr = librosa.load(filepath, duration=30, sr=None)  # Preserve original sample rate
+                except Exception as load_error:
+                    logging.warning(f"Could not load audio file {filepath}: {load_error}")
+                    return result
+            
+            if len(y) == 0:
+                logging.debug(f"Empty audio data for: {filepath}")
+                return result
+            
+            # Voice activity detection using spectral features
+            talking_detected = self._detect_voice_activity(y, sr)
+            result['talking_detected'] = talking_detected
+            
+        except Exception as e:
+            logging.error(f"Error analyzing audio {filepath}: {e}")
+            
+        return result
+    
+    def _has_audio_stream(self, filepath):
+        """Check if video file has audio streams."""
+        try:
+            import ffmpeg
+            probe = ffmpeg.probe(filepath, v='quiet')
+            audio_streams = [stream for stream in probe['streams'] if stream['codec_type'] == 'audio']
+            return len(audio_streams) > 0
+        except Exception:
+            # If we can't probe, assume it might have audio
+            return True
+
+    def _extract_audio_from_video(self, filepath):
+        """Extract audio from video file using multiple fallback methods."""
+        try:
+            # Method 1: Use ffmpeg to extract audio first (most reliable for MP4)
+            try:
+                import ffmpeg
+                import tempfile
+                import warnings
+                
+                # Create temporary audio file
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_audio:
+                    temp_audio_path = temp_audio.name
+                
+                try:
+                    # Check if video has audio streams first
+                    probe = ffmpeg.probe(filepath)
+                    audio_streams = [stream for stream in probe['streams'] if stream['codec_type'] == 'audio']
+                    
+                    if not audio_streams:
+                        logging.debug(f"No audio streams found in video: {filepath}")
+                        return None
+                    
+                    # Extract audio using ffmpeg (force PCM format for compatibility)
+                    (
+                        ffmpeg
+                        .input(filepath)
+                        .output(
+                            temp_audio_path, 
+                            acodec='pcm_s16le',  # Force PCM format
+                            ac=1,                # Mono
+                            ar=22050,           # Standard sample rate
+                            t=30,               # First 30 seconds
+                            loglevel='quiet'    # Suppress ffmpeg output
+                        )
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True, quiet=True)
+                    )
+                    
+                    # Load the extracted audio with suppressed warnings
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        y, sr = librosa.load(temp_audio_path, sr=22050)
+                    
+                    # Clean up temporary file
+                    os.unlink(temp_audio_path)
+                    
+                    if len(y) > 0:
+                        logging.debug(f"Successfully extracted audio using ffmpeg: {filepath}")
+                        return y, sr
+                    else:
+                        logging.debug(f"Empty audio extracted from: {filepath}")
+                        return None
+                        
+                except Exception as ffmpeg_error:
+                    # Clean up temporary file if it exists
+                    if os.path.exists(temp_audio_path):
+                        os.unlink(temp_audio_path)
+                    logging.debug(f"ffmpeg extraction failed for {filepath}: {ffmpeg_error}")
+                    
+            except ImportError:
+                logging.debug("ffmpeg-python not available for audio extraction")
+            
+            # Method 2: Try librosa with audioread backend (suppress warnings)
+            try:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    # Force audioread backend and suppress all warnings
+                    old_environ = os.environ.get('LIBROSA_CACHE_DIR')
+                    os.environ['LIBROSA_CACHE_DIR'] = '/tmp'  # Use tmp for cache
+                    
+                    y, sr = librosa.load(filepath, duration=30, sr=22050, res_type='kaiser_fast')
+                    
+                    # Restore environment
+                    if old_environ:
+                        os.environ['LIBROSA_CACHE_DIR'] = old_environ
+                    elif 'LIBROSA_CACHE_DIR' in os.environ:
+                        del os.environ['LIBROSA_CACHE_DIR']
+                    
+                if len(y) > 0:
+                    logging.debug(f"Successfully extracted audio using librosa+audioread: {filepath}")
+                    return y, sr
+            except Exception as e:
+                logging.debug(f"librosa+audioread failed for {filepath}: {e}")
+            
+            # Method 3: Try with different librosa parameters
+            try:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    # Try with offset to skip potential problematic header
+                    y, sr = librosa.load(filepath, duration=25, offset=2.0, sr=22050, mono=True)
+                    
+                if len(y) > 0:
+                    logging.debug(f"Successfully extracted audio using librosa offset method: {filepath}")
+                    return y, sr
+            except Exception as e:
+                logging.debug(f"librosa offset method failed for {filepath}: {e}")
+            
+            # All methods failed
+            logging.debug(f"All audio extraction methods failed for: {filepath}")
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error in audio extraction from {filepath}: {e}")
+            return None
+    
+    def _detect_voice_activity(self, audio, sample_rate):
+        """Detect voice activity in audio signal."""
+        try:
+            # Compute spectral features
+            spectral_centroids = librosa.feature.spectral_centroid(y=audio, sr=sample_rate)[0]
+            spectral_rolloff = librosa.feature.spectral_rolloff(y=audio, sr=sample_rate)[0]
+            zero_crossing_rate = librosa.feature.zero_crossing_rate(audio)[0]
+            
+            # Compute MFCC features (useful for voice detection)
+            mfccs = librosa.feature.mfcc(y=audio, sr=sample_rate, n_mfcc=13)
+            
+            # Voice activity detection heuristics
+            # Voice typically has:
+            # - Moderate spectral centroid (300-3000 Hz)
+            # - Regular patterns in MFCCs
+            # - Moderate zero crossing rate
+            
+            avg_centroid = np.mean(spectral_centroids)
+            avg_zcr = np.mean(zero_crossing_rate)
+            mfcc_variance = np.var(mfccs, axis=1)
+            
+            # Heuristic thresholds for voice detection
+            voice_detected = (
+                300 < avg_centroid < 3000 and  # Typical voice frequency range
+                0.01 < avg_zcr < 0.3 and       # Moderate zero crossing rate
+                np.mean(mfcc_variance) > 50    # Sufficient MFCC variance
+            )
+            
+            logging.debug(f"Voice detection - Centroid: {avg_centroid:.2f}, ZCR: {avg_zcr:.4f}, Voice: {voice_detected}")
+            
+            return voice_detected
+            
+        except Exception as e:
+            logging.error(f"Error detecting voice activity: {e}")
+            return False
+    
+    def _aggregate_scenery_descriptions(self, descriptions):
+        """Aggregate multiple scenery descriptions into a single description."""
+        if not descriptions:
+            return ""
+        
+        # Count occurrences of each scenery type
+        scenery_counts = {}
+        for desc in descriptions:
+            scenery_counts[desc] = scenery_counts.get(desc, 0) + 1
+        
+        # Return the most common scenery type
+        if scenery_counts:
+            return max(scenery_counts.items(), key=lambda x: x[1])[0]
+        return ""
 
     def _run_exiftool(self, filepath):
         result = subprocess.run(
