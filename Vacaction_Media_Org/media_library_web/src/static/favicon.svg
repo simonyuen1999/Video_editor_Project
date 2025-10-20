@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Camera body -->
+  <rect x="15" y="35" width="70" height="45" rx="8" ry="8" fill="#333" stroke="#000" stroke-width="2"/>
+  
+  <!-- Camera lens -->
+  <circle cx="50" cy="57" r="18" fill="#666" stroke="#000" stroke-width="2"/>
+  <circle cx="50" cy="57" r="12" fill="#222" stroke="#333" stroke-width="1"/>
+  <circle cx="50" cy="57" r="8" fill="#000"/>
+  
+  <!-- Camera flash -->
+  <rect x="20" y="20" width="15" height="20" rx="3" ry="3" fill="#444" stroke="#000" stroke-width="1"/>
+  
+  <!-- Camera viewfinder -->
+  <rect x="40" y="20" width="20" height="12" rx="2" ry="2" fill="#555" stroke="#000" stroke-width="1"/>
+  
+  <!-- Camera button -->
+  <circle cx="75" cy="45" r="4" fill="#666" stroke="#000" stroke-width="1"/>
+  
+  <!-- Camera strap lugs -->
+  <rect x="10" y="40" width="8" height="6" rx="1" ry="1" fill="#222"/>
+  <rect x="82" y="40" width="8" height="6" rx="1" ry="1" fill="#222"/>
+</svg>

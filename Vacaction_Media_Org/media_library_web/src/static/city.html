@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Special View - Vacation Media Organizer</title>
+    <title>City View - Vacation Media Organizer</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <style>
         * {
@@ -68,39 +68,26 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.2);
         }
 
-        .selection-container {
+        .city-selector {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 30px;
+            gap: 15px;
             margin-bottom: 20px;
             flex-wrap: wrap;
         }
 
-        .selection-group {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .selection-label {
-            font-weight: bold;
-            color: #333;
-            font-size: 1.1rem;
-        }
-
-        .selection-dropdown {
+        .city-select {
             padding: 12px 15px;
             border: 2px solid #ddd;
             border-radius: 8px;
             font-size: 16px;
-            min-width: 250px;
+            min-width: 300px;
             background: white;
             cursor: pointer;
         }
 
-        .selection-dropdown:focus {
+        .city-select:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -114,7 +101,6 @@
             cursor: pointer;
             font-size: 16px;
             transition: transform 0.2s ease;
-            margin-top: 10px;
         }
 
         .clear-button:hover {
@@ -188,9 +174,8 @@
             font-weight: bold;
         }
 
-        .selection-type {
-            color: #666;
-            font-style: italic;
+        .media-info-header a:hover {
+            background: #5a6fd8 !important;
         }
 
         /* Media Grid Styles */
@@ -267,6 +252,64 @@
             font-size: 0.9rem;
             color: #666;
             line-height: 1.4;
+        }
+
+        /* Enhanced Media Information Styles */
+        .media-info-section {
+            margin-top: 8px;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 4px;
+            font-size: 12px;
+        }
+
+        .info-label {
+            font-weight: 500;
+            color: #555;
+        }
+
+        .info-value {
+            color: #777;
+        }
+
+        .analysis-section {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #eee;
+        }
+
+        .analysis-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .analysis-tag {
+            background: #e3f2fd;
+            color: #1976d2;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 500;
+        }
+
+        .talking-indicator {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+
+        .scenery-tag {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .activity-tag {
+            background: #e1f5fe;
+            color: #0277bd;
         }
 
         /* Enhanced Media Information Styles */
@@ -399,12 +442,12 @@
 
         /* Responsive design */
         @media (max-width: 768px) {
-            .selection-container {
+            .city-selector {
                 flex-direction: column;
                 align-items: stretch;
             }
 
-            .selection-dropdown {
+            .city-select {
                 min-width: auto;
                 width: 100%;
             }
@@ -434,36 +477,23 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎯 Special View</h1>
-            <p>Browse your vacation memories by activities and scenery</p>
+            <h1>🏙️ City View</h1>
+            <p>Browse your vacation memories by city</p>
         </div>
 
         <div class="nav-links">
             <a href="index.html">🗺️ Map View</a>
             <a href="daily.html">📅 Daily View</a>
-            <a href="city.html">🏙️ City View</a>
-            <a href="special.html" class="active">🎯 Special View</a>
+            <a href="city.html" class="active">🏙️ City View</a>
+            <a href="special.html">🎯 Special View</a>
         </div>
 
         <div class="control-panel">
-            <div class="selection-container">
-                <div class="selection-group">
-                    <label class="selection-label">🎨 Activities</label>
-                    <select id="activities-select" class="selection-dropdown">
-                        <option value="">Select an activity...</option>
-                    </select>
-                </div>
-                
-                <div class="selection-group">
-                    <label class="selection-label">🏞️ Scenery</label>
-                    <select id="scenery-select" class="selection-dropdown">
-                        <option value="">Select scenery...</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div style="text-align: center;">
-                <button class="clear-button" id="clear-selections">Clear All Selections</button>
+            <div class="city-selector">
+                <select id="city-select" class="city-select">
+                    <option value="">Select a city...</option>
+                </select>
+                <button class="clear-button" id="clear-city">Clear Selection</button>
             </div>
 
             <div class="view-controls">
@@ -482,20 +512,20 @@
 
         <div id="media-info-header" class="media-info-header" style="display: none;">
             <div>
-                <h2 id="selection-title">Selection</h2>
+                <h2 id="selected-city-name">City Name</h2>
                 <span class="media-count" id="media-count">0 photos and videos</span>
-                <div class="selection-type" id="selection-type">No selection made</div>
             </div>
+            <a id="view-on-map" href="#" style="background: #667eea; color: white; text-decoration: none; padding: 8px 16px; border-radius: 8px; transition: background 0.3s ease;">📍 View on Map</a>
         </div>
 
         <div id="loading" class="loading" style="display: none;">
-            <h3>Loading...</h3>
+            <h3>Loading media...</h3>
         </div>
 
         <div id="media-container">
             <div class="no-media">
-                <h3>Select an activity or scenery to view media</h3>
-                <p>Choose from the dropdown menus above to browse photos and videos containing specific activities or scenery</p>
+                <h3>Select a city to view media</h3>
+                <p>Choose a city from the dropdown above to browse all photos and videos from that location</p>
             </div>
         </div>
     </div>
@@ -515,24 +545,21 @@
 
     <script>
         let currentViewMode = 'thumbnail';
-        let currentSelection = null;
-        let currentSelectionType = null; // 'activity' or 'scenery'
-        let mediaData = [];
-        let allActivities = [];
-        let allScenery = [];
+        let currentCity = null;
+        let cityMediaData = [];
+        let allCities = [];
 
         // Initialize the page
         document.addEventListener('DOMContentLoaded', function() {
-            loadActivitiesAndScenery();
+            loadCities();
             initializeEventListeners();
             updateThumbnailSize();
         });
 
         function initializeEventListeners() {
-            // Selection dropdowns
-            document.getElementById('activities-select').addEventListener('change', handleActivitySelection);
-            document.getElementById('scenery-select').addEventListener('change', handleScenerySelection);
-            document.getElementById('clear-selections').addEventListener('click', clearAllSelections);
+            // City selection
+            document.getElementById('city-select').addEventListener('change', handleCitySelection);
+            document.getElementById('clear-city').addEventListener('click', clearCitySelection);
 
             // View mode buttons
             document.querySelectorAll('.view-mode-btn').forEach(btn => {
@@ -560,141 +587,110 @@
             });
         }
 
-        async function loadActivitiesAndScenery() {
+        async function loadCities() {
             try {
                 document.getElementById('loading').style.display = 'block';
                 
-                // Load activities
-                const activitiesResponse = await fetch('/api/media/activities');
-                allActivities = await activitiesResponse.json();
+                const response = await fetch('/api/media/cities');
+                allCities = await response.json();
                 
-                // Load scenery
-                const sceneryResponse = await fetch('/api/media/scenery');
-                allScenery = await sceneryResponse.json();
+                const citySelect = document.getElementById('city-select');
+                citySelect.innerHTML = '<option value="">Select a city...</option>';
                 
-                // Populate dropdowns
-                populateActivitiesDropdown();
-                populateSceneryDropdown();
-                
+                allCities.forEach(city => {
+                    const option = document.createElement('option');
+                    option.value = city.value;
+                    option.textContent = city.display;
+                    citySelect.appendChild(option);
+                });
+
                 document.getElementById('loading').style.display = 'none';
+                
+                // Check if there's a city parameter in URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const cityParam = urlParams.get('city');
+                if (cityParam) {
+                    citySelect.value = cityParam;
+                    handleCitySelection();
+                }
 
             } catch (error) {
-                console.error('Error loading activities and scenery:', error);
+                console.error('Error loading cities:', error);
                 document.getElementById('loading').style.display = 'none';
-                showError('Failed to load activities and scenery options.');
+                showError('Failed to load cities list.');
             }
         }
 
-        function populateActivitiesDropdown() {
-            const activitiesSelect = document.getElementById('activities-select');
-            activitiesSelect.innerHTML = '<option value="">Select an activity...</option>';
+        async function handleCitySelection() {
+            const selectedCity = document.getElementById('city-select').value;
             
-            allActivities.forEach(activity => {
-                const option = document.createElement('option');
-                option.value = activity;
-                option.textContent = activity;
-                activitiesSelect.appendChild(option);
-            });
-        }
-
-        function populateSceneryDropdown() {
-            const scenerySelect = document.getElementById('scenery-select');
-            scenerySelect.innerHTML = '<option value="">Select scenery...</option>';
-            
-            allScenery.forEach(scenery => {
-                const option = document.createElement('option');
-                option.value = scenery;
-                option.textContent = scenery;
-                scenerySelect.appendChild(option);
-            });
-        }
-
-        async function handleActivitySelection() {
-            const selectedActivity = document.getElementById('activities-select').value;
-            
-            if (!selectedActivity) {
-                clearAllSelections();
+            if (!selectedCity) {
+                clearCitySelection();
                 return;
             }
 
-            // Reset scenery selection
-            document.getElementById('scenery-select').value = '';
+            currentCity = selectedCity;
             
-            currentSelection = selectedActivity;
-            currentSelectionType = 'activity';
+            // Update URL without refreshing page
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.set('city', selectedCity);
+            window.history.pushState({}, '', newUrl);
             
-            await loadMediaForSelection();
+            await loadMediaForCity(selectedCity);
         }
 
-        async function handleScenerySelection() {
-            const selectedScenery = document.getElementById('scenery-select').value;
+        function clearCitySelection() {
+            document.getElementById('city-select').value = '';
+            currentCity = null;
+            cityMediaData = [];
             
-            if (!selectedScenery) {
-                clearAllSelections();
-                return;
-            }
-
-            // Reset activity selection
-            document.getElementById('activities-select').value = '';
+            // Update URL
+            const newUrl = new URL(window.location);
+            newUrl.searchParams.delete('city');
+            window.history.pushState({}, '', newUrl);
             
-            currentSelection = selectedScenery;
-            currentSelectionType = 'scenery';
-            
-            await loadMediaForSelection();
-        }
-
-        function clearAllSelections() {
-            document.getElementById('activities-select').value = '';
-            document.getElementById('scenery-select').value = '';
-            currentSelection = null;
-            currentSelectionType = null;
-            mediaData = [];
-            
-            // Hide info header
+            // Hide info header and map link
             document.getElementById('media-info-header').style.display = 'none';
+            document.getElementById('view-on-map').style.display = 'none';
             
             // Show default message
             document.getElementById('media-container').innerHTML = `
                 <div class="no-media">
-                    <h3>Select an activity or scenery to view media</h3>
-                    <p>Choose from the dropdown menus above to browse photos and videos containing specific activities or scenery</p>
+                    <h3>Select a city to view media</h3>
+                    <p>Choose a city from the dropdown above to browse all photos and videos from that location</p>
                 </div>
             `;
         }
 
-        async function loadMediaForSelection() {
+        async function loadMediaForCity(cityName) {
             try {
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('media-container').innerHTML = '';
                 document.getElementById('media-info-header').style.display = 'none';
 
-                const params = new URLSearchParams();
-                params.append('order', 'asc');
-                
-                if (currentSelectionType === 'activity') {
-                    params.append('activity', currentSelection);
-                } else if (currentSelectionType === 'scenery') {
-                    params.append('scenery', currentSelection);
-                }
-
-                const response = await fetch(`/api/media?${params.toString()}`);
-                mediaData = await response.json();
+                const response = await fetch(`/api/media?city=${encodeURIComponent(cityName)}&order=asc`);
+                cityMediaData = await response.json();
 
                 document.getElementById('loading').style.display = 'none';
                 
                 // Update info header
-                document.getElementById('selection-title').textContent = currentSelection;
-                document.getElementById('media-count').textContent = `${mediaData.length} ${mediaData.length === 1 ? 'item' : 'items'}`;
-                document.getElementById('selection-type').textContent = `Filtered by ${currentSelectionType}`;
+                const selectedCityDisplay = allCities.find(city => city.value === cityName)?.display || cityName;
+                document.getElementById('selected-city-name').textContent = selectedCityDisplay;
+                document.getElementById('media-count').textContent = `${cityMediaData.length} ${cityMediaData.length === 1 ? 'item' : 'items'}`;
+                
+                // Update "View on Map" link
+                const mapLink = document.getElementById('view-on-map');
+                mapLink.href = `index.html?city=${encodeURIComponent(cityName)}`;
+                mapLink.style.display = 'inline-block';
                 
                 document.getElementById('media-info-header').style.display = 'flex';
 
-                displayMedia(mediaData);
+                displayMedia(cityMediaData);
 
             } catch (error) {
-                console.error('Error loading media for selection:', error);
+                console.error('Error loading media for city:', error);
                 document.getElementById('loading').style.display = 'none';
-                showError('Failed to load media for the selected criteria.');
+                showError('Failed to load media for the selected city.');
             }
         }
 
@@ -704,8 +700,8 @@
             if (data.length === 0) {
                 container.innerHTML = `
                     <div class="no-media">
-                        <h3>No media found for "${currentSelection}"</h3>
-                        <p>Try selecting a different ${currentSelectionType}</p>
+                        <h3>No media found for ${currentCity}</h3>
+                        <p>Try selecting a different city</p>
                     </div>
                 `;
                 return;
@@ -831,8 +827,8 @@
             sizeControl.style.display = mode === 'thumbnail' ? 'flex' : 'none';
 
             // Re-render media if we have data
-            if (mediaData.length > 0) {
-                displayMedia(mediaData);
+            if (cityMediaData.length > 0) {
+                displayMedia(cityMediaData);
             }
         }
 
