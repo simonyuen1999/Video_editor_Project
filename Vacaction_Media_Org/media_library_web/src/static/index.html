@@ -462,15 +462,15 @@
                 <h2>🔍 Filters & Search</h2>
                 <div class="filters">
                     <div class="filter-group">
-                        <label for="city-filter">City</label>
-                        <select id="city-filter">
-                            <option value="">Select a city...</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
                         <label for="country-filter">Country</label>
                         <select id="country-filter">
                             <option value="">Select a country...</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label for="city-filter">City</label>
+                        <select id="city-filter" disabled>
+                            <option value="">Select a country first...</option>
                         </select>
                     </div>
                     <div class="filter-group">
@@ -592,9 +592,18 @@
         document.addEventListener('DOMContentLoaded', function() {
             initializeMap();
             loadStats();
-            loadCities();
             loadCountries();
             setupEventListeners();
+            
+            // Add country selection change handler
+            document.getElementById('country-filter').addEventListener('change', function() {
+                const selectedCountry = this.value;
+                loadCitiesByCountry(selectedCountry);
+                
+                // Clear any existing search results when country changes
+                document.getElementById('search-results').style.display = 'none';
+                document.getElementById('initial-message').style.display = 'block';
+            });
             // Initialize view mode to thumbnail by default
             setViewMode('thumbnail');
             // Don't load media automatically - wait for user search
@@ -698,26 +707,6 @@
             }
         }
 
-        // Load cities into dropdown
-        async function loadCities() {
-            try {
-                const response = await fetch('/api/media/cities');
-                const cities = await response.json();
-                
-                const citySelect = document.getElementById('city-filter');
-                citySelect.innerHTML = '<option value="">Select a city...</option>';
-                
-                cities.forEach(cityData => {
-                    const option = document.createElement('option');
-                    option.value = cityData.value;  // city_en
-                    option.textContent = cityData.display;  // "city_en | city_zh"
-                    citySelect.appendChild(option);
-                });
-            } catch (error) {
-                console.error('Error loading cities:', error);
-            }
-        }
-
         // Load countries into dropdown
         async function loadCountries() {
             try {
@@ -735,6 +724,40 @@
                 });
             } catch (error) {
                 console.error('Error loading countries:', error);
+            }
+        }
+
+        // Load cities by selected country
+        async function loadCitiesByCountry(country) {
+            try {
+                const citySelect = document.getElementById('city-filter');
+                
+                if (!country) {
+                    citySelect.innerHTML = '<option value="">Select a country first...</option>';
+                    citySelect.disabled = true;
+                    return;
+                }
+                
+                citySelect.disabled = false;
+                citySelect.innerHTML = '<option value="">Loading cities...</option>';
+                
+                const response = await fetch(`/api/media/cities-by-country?country=${encodeURIComponent(country)}`);
+                const cities = await response.json();
+                
+                citySelect.innerHTML = '<option value="">Select a city...</option>';
+                
+                cities.forEach(cityData => {
+                    const option = document.createElement('option');
+                    option.value = cityData.value;  // city_en||country_en format for search
+                    option.textContent = cityData.display;  // "city_en | city_zh" (no country since already selected)
+                    option.dataset.cityEn = cityData.city_en;
+                    option.dataset.countryEn = cityData.country_en;
+                    citySelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading cities:', error);
+                const citySelect = document.getElementById('city-filter');
+                citySelect.innerHTML = '<option value="">Error loading cities</option>';
             }
         }
 
@@ -834,8 +857,16 @@
             const talking = document.getElementById('talking').value;
             
             const params = {};
-            if (city) params.city = city;
-            if (country) params.country = country;
+            
+            // For Map View: if city is selected, use the combined city||country format
+            // If only country is selected, use country filter
+            if (city) {
+                // City value already contains city||country format from loadCitiesByCountry
+                params.city = city;
+            } else if (country) {
+                params.country = country;
+            }
+            
             if (dateFrom) params.date_from = dateFrom;
             if (dateTo) params.date_to = dateTo;
             if (talking) params.talking = talking;
@@ -1247,10 +1278,18 @@
 
         // Setup event listeners
         function setupEventListeners() {
-            // Filter inputs
-            ['city-filter', 'country-filter', 'date-from', 'date-to', 'talking'].forEach(id => {
+            // Filter inputs (excluding city and country filters which are handled separately)
+            ['date-from', 'date-to', 'talking'].forEach(id => {
                 document.getElementById(id).addEventListener('input', applyFilters);
                 document.getElementById(id).addEventListener('change', applyFilters);
+            });
+            
+            // City filter change handler (triggers search automatically when city is selected)
+            document.getElementById('city-filter').addEventListener('change', function() {
+                if (this.value) {
+                    // Auto-search when a city is selected
+                    searchMedia();
+                }
             });
             
             // Modal close

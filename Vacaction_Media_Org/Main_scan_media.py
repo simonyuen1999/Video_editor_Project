@@ -155,9 +155,19 @@ class MediaOrganizerDB:
             # Generate thumbnail after successfully adding to database
             filepath = metadata.get('filepath')
             if filepath and os.path.exists(filepath):
-                thumbnail_path = self.generate_thumbnail(filepath)
-                if thumbnail_path:
-                    logging.info(f"Generated thumbnail: {thumbnail_path}")
+                # Check if thumbnail already exists before generating
+                file_dir = os.path.dirname(filepath)
+                file_name = os.path.basename(filepath)
+                name_without_ext = os.path.splitext(file_name)[0]
+                thumbnail_path = os.path.join(file_dir, f"{name_without_ext}_thumb.jpg")
+                
+                if not os.path.exists(thumbnail_path):
+                    # Only generate thumbnail if it doesn't exist
+                    generated_thumbnail_path = self.generate_thumbnail(filepath)
+                    if generated_thumbnail_path:
+                        logging.info(f"Generated new thumbnail: {generated_thumbnail_path}")
+                else:
+                    logging.debug(f"Thumbnail already exists, skipping: {thumbnail_path}")
                     
         except sqlite3.IntegrityError:
             logging.debug(f"File already exists in DB, skipping: {metadata.get('filepath')}")
@@ -495,7 +505,9 @@ def cleanup_thumbnails(path):
 
 def main():
     default_directory = '/Volumes/Extreme SSD 1/Media'
-    
+
+    default_zh_geo_list_file = 'geo_chinese_.list'
+
     parser = argparse.ArgumentParser(
         description="Organize vacation media files, extract metadata, and store in SQLite.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -513,7 +525,7 @@ Usage Note: Consider the parameter execution order for optimal performance.
   The following parameters can be used together with the above options:
   --debug-level : Set the logging debug level.
   --deldb or -d : Delete database and start the re-scan process.
-  --time-diff : Time difference in min for proximity search (default is 240 minutes = 4 hours).
+  --time-diff : Time difference in min for proximity search (default is 60 minutes = 1 hour).
   --geo-list : Specific path to the 'geo.list' file for enhanced geolocation (default: geo_chinese_.list).
 
   Finally, specify the target directory to scan (required). If not provided, you will be prompted to enter one.
@@ -546,16 +558,16 @@ Usage Note: Consider the parameter execution order for optimal performance.
     )
     parser.add_argument(
         '--updateCity', '-u', default=False, action='store_true',
-        help='Update city translation in the database. default: False'
+        help=f"Use '{default_zh_geo_list_file}' to update city_zh translation in the database. default: False"
     )
     parser.add_argument(
-        '--shareGeoInfo', '-s', default=True, action='store_true',
-        help='Share (Update DB) geo info to these no geo media files.  default: True.'
+        '--shareGeoInfo', '-s', default=False, action='store_true',
+        help='Default not to update (share) geo info to these no geo media files.  default: False.'
     )
     # Add search time_diff parameter for proximity search
     parser.add_argument(
-        '--time-diff', type=int, default=240,
-        help='Time difference in min for proximity search (default: 240 minutes = 4 hours) 5h=300, 6h=360, 7h=420.'
+        '--time-diff', type=int, default=60,
+        help='Time difference in min for proximity search (default: 60 minutes = 1 hour) 2h=120, 3h=180, 4h=240.'
     )
     parser.add_argument(
         '--geo-list', type=str, default='geo_chinese_.list',
@@ -568,6 +580,9 @@ Usage Note: Consider the parameter execution order for optimal performance.
     # The geo_chinese_.list file for enhanced geolocation with Chinese name translations
 
     args = parser.parse_args()
+
+    if args.geo_list != 'geo_chinese_.list':
+        default_zh_geo_list_file = args.geo_list
 
     # Prompt for directory if not provided
     if args.directory is None:
@@ -630,11 +645,13 @@ Option 'updateMediaInfo' is specified.
             print("     WARNING: File system changes will not be synced with the database!")
         print(f"  5. Update city translations: {args.updateCity}")
         if args.updateCity:
-            print("     WARNING: City translations _en -> _zh in the database will be updated!")
+            print(f"     WARNING: Use '{default_zh_geo_list_file}' file to update city_zh (Chinese name only) in the database.")
+            print( "              Search city_en entry and translate city_zh column accordingly.")
         print(f"  6. Share geo info to no-geo media files: {args.shareGeoInfo}")
         if args.shareGeoInfo:
             print("     WARNING: Geo info will be shared to media files without geo data!")
             print("              This may overwrite existing geo data in those files in DB.")
+            print(f"              Use proximity search: '{args.time_diff}' minutes (see below).")
         print(f"  7. Update media analysis info: {args.updateMediaInfo}")
         if args.updateMediaInfo:
             print("     WARNING: Media analysis (people, activities, scenery, talking) will be updated!")
@@ -822,10 +839,20 @@ Option 'updateMediaInfo' is specified.
         thumbnail_count = 0
         for filepath in current_files_set:
             if os.path.exists(filepath):
-                thumbnail_path = db.generate_thumbnail(filepath)
-                if thumbnail_path:
-                    thumbnail_count += 1
-                    logging.debug(f"Generated thumbnail: {thumbnail_path}")
+                # Check if thumbnail already exists before generating
+                file_dir = os.path.dirname(filepath)
+                file_name = os.path.basename(filepath)
+                name_without_ext = os.path.splitext(file_name)[0]
+                thumbnail_path = os.path.join(file_dir, f"{name_without_ext}_thumb.jpg")
+                
+                if not os.path.exists(thumbnail_path):
+                    # Only generate thumbnail if it doesn't exist
+                    generated_thumbnail_path = db.generate_thumbnail(filepath)
+                    if generated_thumbnail_path:
+                        thumbnail_count += 1
+                        logging.debug(f"Generated new thumbnail: {generated_thumbnail_path}")
+                else:
+                    logging.debug(f"Thumbnail already exists, skipping: {thumbnail_path}")
         logging.info(f"Sync FS and DB: Generated {thumbnail_count} new thumbnails")
         
         db.cursor.execute('SELECT filepath FROM media_files')

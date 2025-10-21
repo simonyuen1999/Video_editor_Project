@@ -44,10 +44,33 @@ def get_all_media():
         
         # Apply filters based on new schema
         if city:
-            query = query.filter(db.or_(
-                Media.city_en.ilike(f'%{city}%'),
-                Media.city_zh.ilike(f'%{city}%')
-            ))
+            # If the city parameter encodes both city and country using 'city||country'
+            if '||' in city:
+                try:
+                    city_en, country_en = city.split('||', 1)
+                    city_en = city_en.strip()
+                    country_en = country_en.strip()
+                    if city_en and country_en:
+                        query = query.filter(
+                            Media.city_en.ilike(f'%{city_en}%'),
+                            Media.country_en.ilike(f'%{country_en}%')
+                        )
+                    else:
+                        # Fallback to original behavior if parsing failed
+                        query = query.filter(db.or_(
+                            Media.city_en.ilike(f'%{city}%'),
+                            Media.city_zh.ilike(f'%{city}%')
+                        ))
+                except Exception:
+                    query = query.filter(db.or_(
+                        Media.city_en.ilike(f'%{city}%'),
+                        Media.city_zh.ilike(f'%{city}%')
+                    ))
+            else:
+                query = query.filter(db.or_(
+                    Media.city_en.ilike(f'%{city}%'),
+                    Media.city_zh.ilike(f'%{city}%')
+                ))
         if country:
             query = query.filter(db.or_(
                 Media.country_en.ilike(f'%{country}%'),
@@ -537,7 +560,8 @@ def get_cities():
                 full_display = f"{city_display} | {country_display}"
                 
                 city_list.append({
-                    'value': f"{lat},{lon}",  # Store standardized coordinates as value
+                    'value': f"{lat},{lon}",  # Keep coordinates as compatibility value
+                    'search_value': f"{geo_city_en}||{geo_country_en}",  # For searching by city and country
                     'display': full_display,
                     'city_en': geo_city_en,
                     'city_zh': city_zh,
@@ -580,6 +604,7 @@ def get_cities():
                     
                     city_list.append({
                         'value': f"{db_coords.latitude},{db_coords.longitude}",
+                        'search_value': f"{city_en}||{country_en}",
                         'display': full_display,
                         'city_en': city_en,
                         'city_zh': city_zh,
@@ -620,7 +645,8 @@ def get_cities_from_database():
             full_display = f"{city_display} | {country_display}"
             
             city_list.append({
-                'value': f"{lat},{lng}",  # Store coordinates as value
+                'value': f"{lat},{lng}",  # Store coordinates as value (compatibility)
+                'search_value': f"{city_en}||{country_en}",
                 'display': full_display,
                 'city_en': city_en,
                 'city_zh': city_zh,
@@ -652,6 +678,49 @@ def get_countries():
             })
         
         return jsonify(country_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@media_bp.route('/media/cities-by-country', methods=['GET'])
+def get_cities_by_country():
+    """Get cities filtered by country"""
+    try:
+        country = request.args.get('country')
+        if not country:
+            return jsonify({'error': 'Country parameter is required'}), 400
+        
+        # Group by city to get unique cities with representative coordinates
+        from sqlalchemy import func
+        cities = db.session.query(
+            Media.city_en,
+            Media.city_zh,
+            func.min(Media.latitude).label('latitude'),
+            func.min(Media.longitude).label('longitude')
+        ).filter(
+            Media.city_en.isnot(None),
+            Media.city_en != '',
+            Media.country_en == country
+        ).group_by(Media.city_en, Media.city_zh).order_by(Media.city_en.asc()).all()
+        
+        city_list = []
+        for city_en, city_zh, latitude, longitude in cities:
+            # For Map View, city display doesn't need country info since country is already selected
+            display_name = f"{city_en} | {city_zh}" if city_zh else city_en
+            # Search value combines city and country for backend filtering
+            search_value = f"{city_en}||{country}"
+            city_data = {
+                'value': search_value,
+                'display': display_name,
+                'city_en': city_en,
+                'country_en': country
+            }
+            # Include coordinates if available (for "View on Map" functionality)
+            if latitude is not None and longitude is not None:
+                city_data['latitude'] = latitude
+                city_data['longitude'] = longitude
+            city_list.append(city_data)
+        
+        return jsonify(city_list)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

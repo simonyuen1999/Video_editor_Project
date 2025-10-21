@@ -718,68 +718,62 @@ class MetadataExtractor:
 
         CreateDate = None
         
-        # Priority-based date extraction (from most to least reliable)
-        # 1. DateTimeOriginal - Original capture time (most reliable)
-        if "DateTimeOriginal" in metadata[0]:
-            raw_date = metadata[0].get("DateTimeOriginal", "N/A")
-            if raw_date and raw_date != "N/A":
-                # Convert YYYY:MM:DD HH:MM:SS format to YYYY-MM-DD HH:MM:SS format
-                CreateDate = raw_date.replace(":", "-", 2)  # Replace only first 2 colons
-                logger.debug(f"Using DateTimeOriginal as CreateDate: {CreateDate}")
+        # New priority-based date extraction logic:
+        # 1. If both CreationDate and CreateDate exist, use CreationDate
+        # 2. If CreationDate is None, use CreateDate
+        # 3. If both are None, fall back to DateTimeOriginal
+        # 4. If all above are None, fall back to GPSDateTime
         
-        # 2. CreateDate - File creation time
-        elif "CreateDate" in metadata[0]:
-            raw_date = metadata[0].get("CreateDate", "N/A")
-            if raw_date and raw_date != "N/A":
-                # Convert YYYY:MM:DD HH:MM:SS format to YYYY-MM-DD HH:MM:SS format
-                CreateDate = raw_date.replace(":", "-", 2)  # Replace only first 2 colons
-                logger.debug(f"Using CreateDate as CreateDate: {CreateDate}")
+        creation_date_raw = metadata[0].get("CreationDate", None)
+        create_date_raw = metadata[0].get("CreateDate", None)
+        datetime_original_raw = metadata[0].get("DateTimeOriginal", None)
+        gps_datetime_raw = metadata[0].get("GPSDateTime", None)
         
-        # 3. CreationDate - Alternative creation time
-        elif "CreationDate" in metadata[0]:
-            raw_date = metadata[0].get("CreationDate", "N/A")
-            if raw_date and raw_date != "N/A":
-                # CreationDate format: 2023:10:05 14:30:00+08:00, we only want the date and time part
-                CreateDate = raw_date.split("+")[0].replace(":", "-", 2)
-                logger.debug(f"Using CreationDate as CreateDate: {CreateDate}")
+        # Check CreationDate first (highest priority when available)
+        if creation_date_raw and creation_date_raw != "N/A":
+            # CreationDate format: 2023:10:05 14:30:00+08:00, we only want the date and time part
+            CreateDate = creation_date_raw.split("+")[0].replace(":", "-", 2)
+            logger.debug(f"Using CreationDate as CreateDate: {CreateDate}")
         
-        # 4. GPSDateTime - GPS timestamp (when available)
-        elif "GPSDateTime" in metadata[0]:
-            raw_date = metadata[0].get("GPSDateTime", "N/A")
-            if raw_date and raw_date != "N/A":
-                # GPSDateTime format: 2023:10:05 14:30:00Z, replace the 'Z' and convert format
-                CreateDate = raw_date.replace("Z", "").replace(":", "-", 2)
-                logger.debug(f"Using GPSDateTime as CreateDate: {CreateDate}")
+        # If CreationDate is None, use CreateDate
+        elif create_date_raw and create_date_raw != "N/A":
+            # Convert YYYY:MM:DD HH:MM:SS format to YYYY-MM-DD HH:MM:SS format
+            CreateDate = create_date_raw.replace(":", "-", 2)  # Replace only first 2 colons
+            logger.debug(f"Using CreateDate as CreateDate: {CreateDate}")
         
-        # 5. FileCreateDate - File system creation (least reliable)
-        elif "FileCreateDate" in metadata[0]:
-            raw_date = metadata[0].get("FileCreateDate", "N/A")
-            if raw_date and raw_date != "N/A":
-                # Convert format and remove timezone info if present
-                CreateDate = raw_date.split("+")[0].split("-")[0].replace(":", "-", 2)
-                logger.debug(f"Using FileCreateDate as CreateDate: {CreateDate}")
+        # If both CreationDate and CreateDate are None, fall back to DateTimeOriginal
+        elif datetime_original_raw and datetime_original_raw != "N/A":
+            # Convert YYYY:MM:DD HH:MM:SS format to YYYY-MM-DD HH:MM:SS format
+            CreateDate = datetime_original_raw.replace(":", "-", 2)  # Replace only first 2 colons
+            logger.debug(f"Using DateTimeOriginal as CreateDate: {CreateDate}")
+        
+        # Final fallback to GPSDateTime
+        elif gps_datetime_raw and gps_datetime_raw != "N/A":
+            # GPSDateTime format: 2023:10:05 14:30:00Z, replace the 'Z' and convert format
+            CreateDate = gps_datetime_raw.replace("Z", "").replace(":", "-", 2)
+            logger.debug(f"Using GPSDateTime as CreateDate: {CreateDate}")
         
         # If no date found, log all available date fields for debugging
         if not CreateDate:
             available_dates = {
                 field: metadata[0].get(field, 'N/A') 
-                for field in ['DateTimeOriginal', 'CreateDate', 'CreationDate', 'GPSDateTime', 'FileCreateDate', 'ModifyDate']
+                for field in ['CreationDate', 'CreateDate', 'DateTimeOriginal', 'GPSDateTime', 'FileCreateDate', 'ModifyDate']
                 if field in metadata[0]
             }
             logger.debug(f"No usable creation date found for {filepath}. Available date fields: {available_dates}")
 
         # Store individual date fields for debugging analysis
-        GPSDateTime = metadata[0].get('GPSDateTime', 'N/A') if 'GPSDateTime' in metadata[0] else None
-        DateTimeOriginal = metadata[0].get('DateTimeOriginal', 'N/A') if 'DateTimeOriginal' in metadata[0] else None
-        CreationDate = metadata[0].get('CreationDate', 'N/A') if 'CreationDate' in metadata[0] else None
+        GPSDateTime = gps_datetime_raw if gps_datetime_raw else None
+        DateTimeOriginal = datetime_original_raw if datetime_original_raw else None
+        CreationDate = creation_date_raw if creation_date_raw else None
 
-        # Log all date fields for analysis (priority-based extraction)
+        # Log all date fields for analysis (new priority-based extraction)
         logger.debug(f"File: {filepath}\n"
                     f"  Final CreateDate: {CreateDate}\n"
-                    f"  Available fields - DateTimeOriginal: {DateTimeOriginal}, "
-                    f"CreateDate: {metadata[0].get('CreateDate', 'N/A')}, "
-                    f"CreationDate: {CreationDate}, "
-                    f"GPSDateTime: {GPSDateTime}")
+                    f"  Priority order - CreationDate: {CreationDate}, "
+                    f"CreateDate: {create_date_raw}, "
+                    f"DateTimeOriginal: {DateTimeOriginal}, "
+                    f"GPSDateTime: {GPSDateTime}\n")
 
         dummy_exif_data = {
             "SourceFile": filepath,
