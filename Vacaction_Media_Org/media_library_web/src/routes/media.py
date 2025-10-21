@@ -5,8 +5,26 @@ import os
 import subprocess
 import platform
 import mimetypes
+import sys
+
+# Add the parent directory to the path to import metadata_extractor
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
+from metadata_extractor import MetadataExtractor
 
 media_bp = Blueprint('media', __name__)
+
+# Initialize MetadataExtractor for geo data
+# Look for geo list file in the project root directory
+geo_list_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'geo_chinese_.list')
+metadata_extractor = None
+if os.path.exists(geo_list_path):
+    try:
+        metadata_extractor = MetadataExtractor(geo_list_path)
+    except Exception as e:
+        print(f"Warning: Could not initialize MetadataExtractor: {e}")
+        metadata_extractor = None
+else:
+    print(f"Warning: Geo list file not found at {geo_list_path}")
 
 @media_bp.route('/media', methods=['GET'])
 def get_all_media():
@@ -331,21 +349,285 @@ def get_stats():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@media_bp.route('/media/date-range', methods=['GET'])
+def get_date_range():
+    """Get the earliest and latest creation_time dates from media records"""
+    try:
+        date_range = db.session.query(
+            db.func.min(Media.creation_time).label('earliest'),
+            db.func.max(Media.creation_time).label('latest')
+        ).filter(
+            Media.creation_time.isnot(None),
+            Media.creation_time != '',
+            Media.creation_time != 'null'
+        ).first()
+        
+        return jsonify({
+            'earliest': date_range.earliest,
+            'latest': date_range.latest
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@media_bp.route('/media/filename-patterns', methods=['GET'])
+def get_filename_patterns():
+    """Get unique filename patterns (filename without extension, with DJI files removing last 3 chars, others last 2 chars)"""
+    try:
+        # Get all filenames from database
+        filenames = db.session.query(Media.filename).filter(
+            Media.filename.isnot(None),
+            Media.filename != ''
+        ).all()
+        
+        # Process filenames: remove extension, then remove suffix based on file type
+        patterns = set()
+        for filename_row in filenames:
+            filename = filename_row.filename
+            
+            # Remove file extension
+            if '.' in filename:
+                base_filename = filename.rsplit('.', 1)[0]  # Remove last extension
+            else:
+                base_filename = filename
+            
+            # Determine pattern based on filename prefix
+            if base_filename.upper().startswith('DJI_'):
+                import re
+                # For DJI files: keep DJI_ plus first 8 digits only
+                dji_match = re.match(r'^DJI_(\d+)', base_filename, re.IGNORECASE)
+                if dji_match:
+                    # Extract all digits after DJI_ and take first 8
+                    digits = dji_match.group(1)
+                    # Take only the first 8 digits
+                    if len(digits) > 8:
+                        pattern = f"DJI_{digits[:8]}"
+                    else:
+                        pattern = f"DJI_{digits}"
+                    patterns.add(pattern)
+                else:
+                    # Fallback for DJI files without digits - remove last 3 characters
+                    if len(base_filename) > 3:
+                        pattern = base_filename[:-3]
+                        patterns.add(pattern)
+            else:
+                # For other files, remove last 2 characters from base filename
+                if len(base_filename) > 2:
+                    pattern = base_filename[:-2]
+                    patterns.add(pattern)
+        
+        # Sort patterns alphabetically
+        sorted_patterns = sorted(list(patterns))
+        
+        return jsonify(sorted_patterns)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@media_bp.route('/media/by-filename-pattern', methods=['GET'])
+def get_media_by_filename_pattern():
+    """Get media files matching a filename pattern (handling DJI vs regular files)"""
+    try:
+        pattern = request.args.get('pattern')
+        if not pattern:
+            return jsonify({'error': 'pattern parameter is required'}), 400
+        
+        # Find all media files where the processed filename matches the pattern
+        all_media = Media.query.filter(
+            Media.filename.isnot(None),
+            Media.filename != ''
+        ).all()
+        
+        matching_media = []
+        for media in all_media:
+            filename = media.filename
+            
+            # Remove file extension
+            if '.' in filename:
+                base_filename = filename.rsplit('.', 1)[0]
+            else:
+                base_filename = filename
+            
+            # Generate pattern based on filename type
+            file_pattern = None
+            if base_filename.upper().startswith('DJI_'):
+                import re
+                # For DJI files: keep DJI_ plus first 8 digits only
+                dji_match = re.match(r'^DJI_(\d+)', base_filename, re.IGNORECASE)
+                if dji_match:
+                    # Extract all digits after DJI_ and take first 8
+                    digits = dji_match.group(1)
+                    # Take only the first 8 digits
+                    if len(digits) > 8:
+                        file_pattern = f"DJI_{digits[:8]}"
+                    else:
+                        file_pattern = f"DJI_{digits}"
+                else:
+                    # Fallback for DJI files without digits - remove last 3 characters
+                    if len(base_filename) > 3:
+                        file_pattern = base_filename[:-3]
+            else:
+                # For other files, remove last 2 characters
+                if len(base_filename) > 2:
+                    file_pattern = base_filename[:-2]
+            
+            # Check if this file matches the requested pattern
+            if file_pattern == pattern:
+                matching_media.append(media)
+        
+        # Sort by creation time
+        matching_media.sort(key=lambda x: x.creation_time or '')
+        
+        # Convert to dict format
+        result = []
+        for media in matching_media:
+            media_dict = media.to_dict()
+            result.append(media_dict)
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @media_bp.route('/media/cities', methods=['GET'])
 def get_cities():
-    """Get all unique cities in ascending order with both English and Chinese names"""
+    """Get all unique cities with standardized coordinates from geo list data"""
     try:
-        cities = db.session.query(Media.city_en, Media.city_zh).filter(
+        if not metadata_extractor or not metadata_extractor.geo_list_path:
+            # Fallback to database data if geo list is not available
+            return get_cities_from_database()
+        
+        # Get unique city+country combinations from database
+        city_countries = db.session.query(
+            Media.city_en, 
+            Media.country_en
+        ).filter(
             Media.city_en.isnot(None), 
-            Media.city_en != ''
+            Media.city_en != '',
+            Media.country_en.isnot(None),
+            Media.country_en != ''
+        ).distinct().all()
+        
+        city_list = []
+        processed_combinations = set()
+        
+        # For each city+country combination from database, get standardized geo data
+        for city_en, country_en in city_countries:
+            combination_key = (city_en, country_en)
+            
+            # Skip if we've already processed this combination
+            if combination_key in processed_combinations:
+                continue
+            processed_combinations.add(combination_key)
+            
+            # Find matching geo data
+            matching_geo = None
+            for geo_entry in metadata_extractor.geo_data:
+                # geo_entry format: (lat, lon, city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone)
+                geo_city_en = geo_entry[2]
+                geo_country_en = geo_entry[9]
+                
+                if geo_city_en == city_en and geo_country_en == country_en:
+                    matching_geo = geo_entry
+                    break
+            
+            if matching_geo:
+                # Use standardized coordinates and names from geo list
+                lat, lon, geo_city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, geo_country_en, country_zh, timezone = matching_geo
+                
+                city_display = f"{geo_city_en} | {city_zh}" if city_zh else geo_city_en
+                country_display = f"{geo_country_en} | {country_zh}" if country_zh else geo_country_en
+                full_display = f"{city_display} | {country_display}"
+                
+                city_list.append({
+                    'value': f"{lat},{lon}",  # Store standardized coordinates as value
+                    'display': full_display,
+                    'city_en': geo_city_en,
+                    'city_zh': city_zh,
+                    'country_en': geo_country_en,
+                    'country_zh': country_zh,
+                    'latitude': lat,
+                    'longitude': lon
+                })
+            else:
+                # City+country not found in geo list, get Chinese name from database if available
+                db_city_zh = db.session.query(Media.city_zh).filter(
+                    Media.city_en == city_en,
+                    Media.country_en == country_en,
+                    Media.city_zh.isnot(None),
+                    Media.city_zh != ''
+                ).first()
+                
+                db_country_zh = db.session.query(Media.country_zh).filter(
+                    Media.city_en == city_en,
+                    Media.country_en == country_en,
+                    Media.country_zh.isnot(None),
+                    Media.country_zh != ''
+                ).first()
+                
+                # Get first available coordinates for this city+country from database
+                db_coords = db.session.query(Media.latitude, Media.longitude).filter(
+                    Media.city_en == city_en,
+                    Media.country_en == country_en,
+                    Media.latitude.isnot(None),
+                    Media.longitude.isnot(None)
+                ).first()
+                
+                if db_coords:
+                    city_zh = db_city_zh.city_zh if db_city_zh else None
+                    country_zh = db_country_zh.country_zh if db_country_zh else None
+                    
+                    city_display = f"{city_en} | {city_zh}" if city_zh else city_en
+                    country_display = f"{country_en} | {country_zh}" if country_zh else country_en
+                    full_display = f"{city_display} | {country_display}"
+                    
+                    city_list.append({
+                        'value': f"{db_coords.latitude},{db_coords.longitude}",
+                        'display': full_display,
+                        'city_en': city_en,
+                        'city_zh': city_zh,
+                        'country_en': country_en,
+                        'country_zh': country_zh,
+                        'latitude': db_coords.latitude,
+                        'longitude': db_coords.longitude
+                    })
+        
+        # Sort by city name
+        city_list.sort(key=lambda x: x['city_en'])
+        
+        return jsonify(city_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def get_cities_from_database():
+    """Fallback method to get cities directly from database (original implementation)"""
+    try:
+        cities = db.session.query(
+            Media.city_en, 
+            Media.city_zh, 
+            Media.country_en, 
+            Media.country_zh,
+            Media.latitude,
+            Media.longitude
+        ).filter(
+            Media.city_en.isnot(None), 
+            Media.city_en != '',
+            Media.latitude.isnot(None),
+            Media.longitude.isnot(None)
         ).distinct().order_by(Media.city_en.asc()).all()
         
         city_list = []
-        for city_en, city_zh in cities:
-            display_name = f"{city_en} | {city_zh}" if city_zh else city_en
+        for city_en, city_zh, country_en, country_zh, lat, lng in cities:
+            city_display = f"{city_en} | {city_zh}" if city_zh else city_en
+            country_display = f"{country_en} | {country_zh}" if country_zh else country_en
+            full_display = f"{city_display} | {country_display}"
+            
             city_list.append({
-                'value': city_en,
-                'display': display_name
+                'value': f"{lat},{lng}",  # Store coordinates as value
+                'display': full_display,
+                'city_en': city_en,
+                'city_zh': city_zh,
+                'country_en': country_en,
+                'country_zh': country_zh,
+                'latitude': lat,
+                'longitude': lng
             })
         
         return jsonify(city_list)
@@ -473,4 +755,189 @@ def get_scenery():
         
         return jsonify(scenery_list)
     except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@media_bp.route('/media/without-time', methods=['GET'])
+def get_media_without_time():
+    """Get all media records that don't have creation_time set"""
+    try:
+        # Query for media files where creation_time is NULL or empty string
+        media_records = Media.query.filter(
+            db.or_(
+                Media.creation_time.is_(None),
+                Media.creation_time == '',
+                Media.creation_time == 'NULL'
+            )
+        ).order_by(Media.filename.asc()).all()
+        
+        # Convert to list of dictionaries and parse JSON fields
+        result = []
+        for media in media_records:
+            media_dict = media.to_dict()
+            # Parse activities and scenery fields (handle both JSON and comma-separated formats)
+            try:
+                if media_dict['activities']:
+                    if media_dict['activities'].startswith('['):
+                        media_dict['activities'] = json.loads(media_dict['activities'])
+                    else:
+                        media_dict['activities'] = [activity.strip() for activity in media_dict['activities'].split(',') if activity.strip()]
+                else:
+                    media_dict['activities'] = []
+            except:
+                media_dict['activities'] = []
+            try:
+                if media_dict['scenery']:
+                    if media_dict['scenery'].startswith('['):
+                        media_dict['scenery'] = json.loads(media_dict['scenery'])
+                    else:
+                        media_dict['scenery'] = [scene.strip() for scene in media_dict['scenery'].split(',') if scene.strip()]
+                else:
+                    media_dict['scenery'] = []
+            except:
+                media_dict['scenery'] = []
+            result.append(media_dict)
+        
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@media_bp.route('/media/<int:media_id>/time', methods=['PUT'])
+def update_media_creation_time(media_id):
+    """Update the creation_time for a specific media record"""
+    try:
+        # Get the media record
+        media = Media.query.get_or_404(media_id)
+        
+        # Get the new creation_time from request body
+        data = request.get_json()
+        if not data or 'creation_time' not in data:
+            return jsonify({'error': 'creation_time is required'}), 400
+        
+        new_creation_time = data['creation_time']
+        
+        # Validate the format (should be YYYY-MM-DD HH:MM:SS)
+        try:
+            from datetime import datetime
+            datetime.strptime(new_creation_time, '%Y-%m-%d %H:%M:%S')
+        except ValueError:
+            return jsonify({'error': 'Invalid datetime format. Expected YYYY-MM-DD HH:MM:SS'}), 400
+        
+        # Update the creation_time
+        media.creation_time = new_creation_time
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Creation time updated successfully for {media.filename}',
+            'creation_time': new_creation_time
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@media_bp.route('/media/bulk-update', methods=['PUT'])
+def bulk_update_media():
+    """Bulk update media files with city, date, and GPS information"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Request data is required'}), 400
+        
+        media_ids = data.get('media_ids', [])
+        city_en = data.get('city_en')
+        city_zh = data.get('city_zh')
+        country_en = data.get('country_en')
+        country_zh = data.get('country_zh')
+        latitude = data.get('latitude')
+        longitude = data.get('longitude')
+        creation_time = data.get('creation_time')
+        
+        if not media_ids:
+            return jsonify({'error': 'media_ids is required'}), 400
+        
+        # Validate creation_time format if provided
+        if creation_time:
+            try:
+                from datetime import datetime
+                datetime.strptime(creation_time, '%Y-%m-%d %H:%M:%S')
+            except ValueError:
+                return jsonify({'error': 'Invalid datetime format. Expected YYYY-MM-DD HH:MM:SS'}), 400
+        
+        updated_files = []
+        failed_files = []
+        
+        for media_id in media_ids:
+            try:
+                media = Media.query.get(media_id)
+                if not media:
+                    failed_files.append({'id': media_id, 'error': 'Media not found'})
+                    continue
+                
+                # Update database fields
+                if city_en is not None:
+                    media.city_en = city_en
+                if city_zh is not None:
+                    media.city_zh = city_zh
+                if country_en is not None:
+                    media.country_en = country_en
+                if country_zh is not None:
+                    media.country_zh = country_zh
+                if latitude is not None:
+                    media.latitude = latitude
+                if longitude is not None:
+                    media.longitude = longitude
+                if creation_time is not None:
+                    media.creation_time = creation_time
+                
+                # Update file metadata using exiftool if any GPS or date info provided
+                if latitude is not None and longitude is not None and creation_time is not None:
+                    try:
+                        # Build exiftool command
+                        cmd = ['exiftool']
+                        cmd.extend(['-DateTimeOriginal=' + creation_time.replace(' ', ' ')])
+                        cmd.extend([f'-GPSLatitude={latitude}'])
+                        cmd.extend([f'-GPSLongitude={longitude}'])
+                        cmd.extend(['-overwrite_original'])
+                        cmd.append(media.filepath)
+                        
+                        # Execute exiftool command
+                        result = subprocess.run(cmd, capture_output=True, text=True)
+                        if result.returncode != 0:
+                            print(f"Exiftool warning/error for {media.filename}: {result.stderr}")
+                        
+                    except Exception as exif_error:
+                        print(f"Failed to update EXIF data for {media.filename}: {exif_error}")
+                        # Continue with database update even if EXIF update fails
+                
+                updated_files.append({
+                    'id': media.id,
+                    'filename': media.filename,
+                    'updated_fields': {
+                        'city_en': city_en,
+                        'city_zh': city_zh,
+                        'country_en': country_en,
+                        'country_zh': country_zh,
+                        'latitude': latitude,
+                        'longitude': longitude,
+                        'creation_time': creation_time
+                    }
+                })
+                
+            except Exception as e:
+                failed_files.append({'id': media_id, 'error': str(e)})
+        
+        # Commit all database changes
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'updated_count': len(updated_files),
+            'failed_count': len(failed_files),
+            'updated_files': updated_files,
+            'failed_files': failed_files
+        })
+        
+    except Exception as e:
+        db.session.rollback()
         return jsonify({'error': str(e)}), 500

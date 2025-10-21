@@ -16,7 +16,41 @@ except ImportError:
     PIL_AVAILABLE = False
     logging.warning("PIL/Pillow not available. Thumbnail generation will be skipped.")
 
-# Configure logging
+# Configure logging with both console and file output
+def setup_logging(debug=False):
+    """Setup logging configuration for the application"""
+    log_level = logging.DEBUG if debug else logging.INFO
+    log_format = '%(asctime)s - %(levelname)s - %(message)s'
+    
+    # Clear any existing handlers to avoid duplication
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Configure root logger
+    logging.basicConfig(
+        level=log_level,
+        format=log_format,
+        handlers=[
+            logging.StreamHandler(),  # Console output
+            logging.FileHandler('media_organizer.log', mode='a')  # File output
+        ],
+        force=True  # Force reconfiguration
+    )
+    
+    # Add debug file handler for metadata extraction details when in debug mode
+    if debug:
+        debug_handler = logging.FileHandler('metadata_extraction_debug.log', mode='a')
+        debug_handler.setLevel(logging.DEBUG)
+        debug_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        debug_handler.setFormatter(debug_formatter)
+        
+        # Add to metadata_extractor logger specifically
+        metadata_logger = logging.getLogger('metadata_extractor')
+        metadata_logger.setLevel(logging.DEBUG)  # Ensure the logger level is set
+        metadata_logger.addHandler(debug_handler)
+
+# Setup basic logging (will be enhanced by setup_logging() if needed)
 logging.basicConfig(level=logging.INFO, format=
     '%(asctime)s - %(levelname)s - %(message)s')
 
@@ -482,12 +516,12 @@ Usage Note: Consider the parameter execution order for optimal performance.
   --time-diff : Time difference in min for proximity search (default is 240 minutes = 4 hours).
   --geo-list : Specific path to the 'geo.list' file for enhanced geolocation (default: geo_chinese_.list).
 
-  Finally, specify the target directory to scan (default is "/Volumes/Extreme SSD 1/Media").
+  Finally, specify the target directory to scan (required). If not provided, you will be prompted to enter one.
 """
     )
     parser.add_argument(
-        'directory', type=str, nargs='?', default=default_directory,
-        help=f'The target directory to scan (default: "{default_directory}").'
+        'directory', type=str, nargs='?', default=None,
+        help='The target directory to scan (required).'
     )
     parser.add_argument(
         '--debug-level', type=str, default='INFO',
@@ -515,8 +549,8 @@ Usage Note: Consider the parameter execution order for optimal performance.
         help='Update city translation in the database. default: False'
     )
     parser.add_argument(
-        '--shareGeoInfo', '-s', default=False, action='store_true',
-        help='Share (Update DB) geo info to the no geo media files at the end.  default: False'
+        '--shareGeoInfo', '-s', default=True, action='store_true',
+        help='Share (Update DB) geo info to these no geo media files.  default: True.'
     )
     # Add search time_diff parameter for proximity search
     parser.add_argument(
@@ -535,6 +569,18 @@ Usage Note: Consider the parameter execution order for optimal performance.
 
     args = parser.parse_args()
 
+    # Prompt for directory if not provided
+    if args.directory is None:
+        print(f"\nNo scan directory specified. Default directory suggestion: {default_directory}")
+        user_input = input("Please enter the directory path to scan (or press Enter to use default): ").strip()
+        
+        if user_input:
+            args.directory = user_input
+        else:
+            args.directory = default_directory
+        
+        print(f"Using directory: {args.directory}")
+
     time_diff_seconds = args.time_diff * 60  # convert minutes to seconds
 
     # Set logging level based on user input
@@ -542,7 +588,12 @@ Usage Note: Consider the parameter execution order for optimal performance.
     if not isinstance(numeric_level, int):
         raise ValueError(f'Invalid debug level: {args.debug_level}')
     logging.getLogger().setLevel(numeric_level)
+    
+    # Setup enhanced logging with file output for debug mode
+    setup_logging(debug=(args.debug_level.upper() == 'DEBUG'))
     logging.info(f"Logging level set to {args.debug_level}")
+    if args.debug_level.upper() == 'DEBUG':
+        logging.info("Debug mode enabled: detailed logs will be saved to 'metadata_extraction_debug.log'")
 
     # When syncing FS and DB, it will re-scan all files, so disable jump2update to skip the normal scanning.
     if args.syncFSnDB:
@@ -567,27 +618,27 @@ Option 'updateMediaInfo' is specified.
         print("\nUser options summary:")
         print(f"  1. Delete DB and rescan: {args.deldb}")
         if args.deldb:
-            print("    WARNING: Existing database will be deleted!")
+            print("     WARNING: Existing database will be deleted!")
         print(f"  2. Cleanup thumbnails: {args.cleanup_thumbnails}")
         if args.cleanup_thumbnails:
             print("    WARNING: Existing thumbnails will be deleted!")
         print(f"  3. Jump to update (skip scanning): {args.jump2update}")
         if args.jump2update:
-            print("    WARNING: File scanning will be skipped!  Do not use this option for the first run.")
+            print("     WARNING: File scanning will be skipped!  Do not use this option for the first run.")
         print(f"  4. Sync FS and DB: {args.syncFSnDB}")
         if not args.syncFSnDB:
-            print("    WARNING: File system changes will not be synced with the database!")
+            print("     WARNING: File system changes will not be synced with the database!")
         print(f"  5. Update city translations: {args.updateCity}")
         if args.updateCity:
-            print("    WARNING: City translations _en -> _zh in the database will be updated!")
+            print("     WARNING: City translations _en -> _zh in the database will be updated!")
         print(f"  6. Share geo info to no-geo media files: {args.shareGeoInfo}")
         if args.shareGeoInfo:
-            print("    WARNING: Geo info will be shared to media files without geo data!")
-            print("             This may overwrite existing geo data in those files in DB.")
+            print("     WARNING: Geo info will be shared to media files without geo data!")
+            print("              This may overwrite existing geo data in those files in DB.")
         print(f"  7. Update media analysis info: {args.updateMediaInfo}")
         if args.updateMediaInfo:
-            print("    WARNING: Media analysis (people, activities, scenery, talking) will be updated!")
-            print("             This process analyzes all media files and may take significant time.")
+            print("     WARNING: Media analysis (people, activities, scenery, talking) will be updated!")
+            print("              This process analyzes all media files and may take significant time.")
         print(f"\n  I. Time difference for proximity search: '{args.time_diff}' minutes")
         print(f"  II. Geo list path: '{args.geo_list}'    User can specify different geolocation file.")
         print(f"  III. Target directory: '{args.directory}'    The directory to scan for media files.\n")
@@ -828,7 +879,7 @@ Option 'updateMediaInfo' is specified.
 
     # Parameter shareGeoInfo is default: False.
     # The user does not specify this option, then no sharing geo info to these no-geo media files in DB.
-    if not args.shareGeoInfo:
+    if args.shareGeoInfo:
         # ---------------------------------------------------------------------------------
         # Iterate through all files in DB, if media file (such as MP4) lacks geo but an other media file nearby has it, share.
 
@@ -863,8 +914,8 @@ Option 'updateMediaInfo' is specified.
         # Pre-calculate image_time for all image files for efficiency
         updated_image_files_with_geo = []
         for image_file in image_files_with_geo:
-            # convert image_file[1] (YYYY-MM-DD HH:MM:SS format) to datetime object,  
-            image_datetime = datetime.strptime(image_file[1], '%Y-%m-%d %H-%M-%S')
+            # convert image_file[1] (creation_time in YYYY-MM-DD HH:MM:SS format) to datetime object  
+            image_datetime = datetime.strptime(image_file[1], '%Y-%m-%d %H:%M:%S')
             updated_image_file = image_file + (image_datetime,)
             updated_image_files_with_geo.append(updated_image_file)       
         # Update the original list
@@ -873,7 +924,13 @@ Option 'updateMediaInfo' is specified.
         # Process each media file without geo data to find closest image with geo data
         for media_file in all_files_without_geo:
             media_filepath = media_file[0]
-            media_time = datetime.strptime(media_file[1], '%Y-%m-%d %H-%M-%S')
+            media_creation_time = media_file[1]
+
+            try:
+                media_time = datetime.strptime(media_creation_time, '%Y-%m-%d %H:%M:%S')
+            except (ValueError, TypeError) as e:
+                logging.debug(f"Skipping {media_filepath} - invalid creation time format: {media_creation_time}")
+                continue
 
             # Already use SQL to filter out files without creation_time (SQL: creation_time IS NOT NULL)
             #if not media_creation_time:

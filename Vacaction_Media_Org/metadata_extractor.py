@@ -9,10 +9,13 @@ from datetime import datetime
 import pickle
 from pathlib import Path
 
+# Setup logger for this module
+logger = logging.getLogger('metadata_extractor')
+
 # Optional imports for media analysis
 try:
-    import cv2
-    import numpy as np
+    import cv2  # type: ignore
+    import numpy as np  # type: ignore
     CV2_AVAILABLE = True
 except ImportError:
     CV2_AVAILABLE = False
@@ -42,10 +45,10 @@ try:
         import pillow_heif
         pillow_heif.register_heif_opener()
         HEIF_AVAILABLE = True
-        logging.debug("HEIC support enabled via pillow-heif")
+        logger.debug("HEIC support enabled via pillow-heif")
     except ImportError:
         HEIF_AVAILABLE = False
-        logging.debug("pillow-heif not available, HEIC support may be limited")
+        logger.debug("pillow-heif not available, HEIC support may be limited")
         
 except ImportError:
     PIL_AVAILABLE = False
@@ -133,17 +136,17 @@ class MetadataExtractor:
             key = (city_name, country_name)
             if key in self.city_dict:
                 rc_city_zh = self.city_dict[key]
-                logging.debug(f"City translation found (exact): {city_name}, {country_name} -> {rc_city_zh}")
+                logger.debug(f"City translation found (exact): {city_name}, {country_name} -> {rc_city_zh}")
                 return rc_city_zh
         
         # Fallback: try to find any match for the city name (less accurate)
         # This handles cases where country might be None or not matching exactly
         for (stored_city, stored_country), stored_translation in self.city_dict.items():
             if stored_city == city_name:
-                logging.debug(f"City translation found (fallback): {city_name} -> {stored_translation} (from {stored_country})")
+                logger.debug(f"City translation found (fallback): {city_name} -> {stored_translation} (from {stored_country})")
                 return stored_translation
         
-        logging.debug(f"No city translation found for: {city_name}" + (f" in {country_name}" if country_name else ""))
+        logger.debug(f"No city translation found for: {city_name}" + (f" in {country_name}" if country_name else ""))
         return None
 
     def get_city_disambiguation_stats(self):
@@ -214,7 +217,7 @@ class MetadataExtractor:
                 
         except Exception as e:
             logging.error(f"Error analyzing media file {filepath}: {e}\n")
-            logging.debug(f"Analysis result (partial) for {filepath}: {analysis_result}")
+            logger.debug(f"Analysis result (partial) for {filepath}: {analysis_result}")
 
         return analysis_result
     
@@ -714,30 +717,69 @@ class MetadataExtractor:
         Longitude = metadata[0].get("GPSLongitude", "N/A") if "GPSLongitude" in metadata[0] else None
 
         CreateDate = None
-        #if "CreationDate" in metadata[0]:
-        #    # CreateDate format: 2023:10:05 14:30:00+08:00, we only want the date and time part
-        #    CreateDate = metadata[0].get("CreationDate", "N/A").split("+")[0]
-
-        #if "GPSDateTime" in metadata[0]:
-        #    # GPSDateTime format: 2023:10:05 14:30:00Z, replace the 'Z'
-        #    CreateDate = metadata[0].get("GPSDateTime", "N/A").replace("Z", "")
-
-        #if "DateTimeOriginal" in metadata[0]:
-        #    CreateDate = metadata[0].get("DateTimeOriginal", "N/A")
-
-        if "CreateDate" in metadata[0]:
-            raw_date = metadata[0].get("CreateDate", "N/A")
-            # Convert YYYY:MM:DD HH:MM:SS format to YYYY-MM-DD HH:MM:SS format
+        
+        # Priority-based date extraction (from most to least reliable)
+        # 1. DateTimeOriginal - Original capture time (most reliable)
+        if "DateTimeOriginal" in metadata[0]:
+            raw_date = metadata[0].get("DateTimeOriginal", "N/A")
             if raw_date and raw_date != "N/A":
+                # Convert YYYY:MM:DD HH:MM:SS format to YYYY-MM-DD HH:MM:SS format
                 CreateDate = raw_date.replace(":", "-", 2)  # Replace only first 2 colons
-            else:
-                CreateDate = raw_date
+                logger.debug(f"Using DateTimeOriginal as CreateDate: {CreateDate}")
+        
+        # 2. CreateDate - File creation time
+        elif "CreateDate" in metadata[0]:
+            raw_date = metadata[0].get("CreateDate", "N/A")
+            if raw_date and raw_date != "N/A":
+                # Convert YYYY:MM:DD HH:MM:SS format to YYYY-MM-DD HH:MM:SS format
+                CreateDate = raw_date.replace(":", "-", 2)  # Replace only first 2 colons
+                logger.debug(f"Using CreateDate as CreateDate: {CreateDate}")
+        
+        # 3. CreationDate - Alternative creation time
+        elif "CreationDate" in metadata[0]:
+            raw_date = metadata[0].get("CreationDate", "N/A")
+            if raw_date and raw_date != "N/A":
+                # CreationDate format: 2023:10:05 14:30:00+08:00, we only want the date and time part
+                CreateDate = raw_date.split("+")[0].replace(":", "-", 2)
+                logger.debug(f"Using CreationDate as CreateDate: {CreateDate}")
+        
+        # 4. GPSDateTime - GPS timestamp (when available)
+        elif "GPSDateTime" in metadata[0]:
+            raw_date = metadata[0].get("GPSDateTime", "N/A")
+            if raw_date and raw_date != "N/A":
+                # GPSDateTime format: 2023:10:05 14:30:00Z, replace the 'Z' and convert format
+                CreateDate = raw_date.replace("Z", "").replace(":", "-", 2)
+                logger.debug(f"Using GPSDateTime as CreateDate: {CreateDate}")
+        
+        # 5. FileCreateDate - File system creation (least reliable)
+        elif "FileCreateDate" in metadata[0]:
+            raw_date = metadata[0].get("FileCreateDate", "N/A")
+            if raw_date and raw_date != "N/A":
+                # Convert format and remove timezone info if present
+                CreateDate = raw_date.split("+")[0].split("-")[0].replace(":", "-", 2)
+                logger.debug(f"Using FileCreateDate as CreateDate: {CreateDate}")
+        
+        # If no date found, log all available date fields for debugging
+        if not CreateDate:
+            available_dates = {
+                field: metadata[0].get(field, 'N/A') 
+                for field in ['DateTimeOriginal', 'CreateDate', 'CreationDate', 'GPSDateTime', 'FileCreateDate', 'ModifyDate']
+                if field in metadata[0]
+            }
+            logger.debug(f"No usable creation date found for {filepath}. Available date fields: {available_dates}")
 
-        # if fileExt in ["mp4", "mov"]:
-        #if CreateDate is None or CreateDate == "N/A":
-        #    print(f"\nFile detected: {filepath} no CreateDate")
-        #    print(json.dumps(metadata[0], indent=3))
-        #    # input("Paused for debugging. Press Enter to continue...")
+        # Store individual date fields for debugging analysis
+        GPSDateTime = metadata[0].get('GPSDateTime', 'N/A') if 'GPSDateTime' in metadata[0] else None
+        DateTimeOriginal = metadata[0].get('DateTimeOriginal', 'N/A') if 'DateTimeOriginal' in metadata[0] else None
+        CreationDate = metadata[0].get('CreationDate', 'N/A') if 'CreationDate' in metadata[0] else None
+
+        # Log all date fields for analysis (priority-based extraction)
+        logger.debug(f"File: {filepath}\n"
+                    f"  Final CreateDate: {CreateDate}\n"
+                    f"  Available fields - DateTimeOriginal: {DateTimeOriginal}, "
+                    f"CreateDate: {metadata[0].get('CreateDate', 'N/A')}, "
+                    f"CreationDate: {CreationDate}, "
+                    f"GPSDateTime: {GPSDateTime}")
 
         dummy_exif_data = {
             "SourceFile": filepath,
