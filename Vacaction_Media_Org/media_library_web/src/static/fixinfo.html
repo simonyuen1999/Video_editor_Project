@@ -1,0 +1,1550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>FixInfo View - Vacation Media Organizer (v2.1)</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .nav-links {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.2);
+            transition: background 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .nav-links a.active {
+            background: rgba(255,255,255,0.4);
+            font-weight: bold;
+        }
+
+        .control-panel {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .day-selector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .day-input {
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            text-align: center;
+        }
+
+        .nav-button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.2s ease;
+        }
+
+        .nav-button:hover {
+            transform: translateY(-2px);
+        }
+
+        .fixinfo-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .control-group label {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .city-select, .modify-date, .modify-time {
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            min-width: 200px;
+        }
+
+        .modify-button {
+            padding: 10px 20px;
+            background: linear-gradient(135deg, #dc3545, #c82333);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: transform 0.2s ease;
+        }
+
+        .modify-button:hover {
+            transform: translateY(-2px);
+        }
+
+        .modify-button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .daily-pattern-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 1px solid #e9ecef;
+            flex-wrap: wrap;
+        }
+
+        .daily-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .pattern-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .filename-pattern-select {
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            min-width: 250px;
+            background: white;
+        }
+
+        .pattern-info {
+            color: #666;
+            font-style: italic;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .view-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .view-mode-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .view-mode-btn {
+            padding: 8px 16px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .view-mode-btn.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .selection-buttons {
+            display: flex;
+            gap: 6px;
+            margin-left: 20px;
+            flex-wrap: wrap;
+        }
+
+        .select-btn {
+            padding: 6px 10px;
+            border: 2px solid #28a745;
+            background: white;
+            color: #28a745;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.3s ease;
+            min-width: 120px;
+            text-align: center;
+        }
+
+        .select-btn:hover:not(:disabled) {
+            background: #28a745;
+            color: white;
+        }
+
+        .select-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            border-color: #ccc;
+            color: #ccc;
+        }
+
+        /* Different colors for different button types */
+        #select-all-btn {
+            border-color: #007bff;
+            color: #007bff;
+        }
+
+        #select-all-btn:hover:not(:disabled) {
+            background: #007bff;
+            color: white;
+        }
+
+        #unselect-all-btn {
+            border-color: #dc3545;
+            color: #dc3545;
+        }
+
+        #unselect-all-btn:hover:not(:disabled) {
+            background: #dc3545;
+            color: white;
+        }
+
+        #select-unknown-btn {
+            border-color: #fd7e14;
+            color: #fd7e14;
+        }
+
+        #select-unknown-btn:hover:not(:disabled) {
+            background: #fd7e14;
+            color: white;
+        }
+
+        #unselect-unknown-btn {
+            border-color: #6f42c1;
+            color: #6f42c1;
+        }
+
+        #unselect-unknown-btn:hover:not(:disabled) {
+            background: #6f42c1;
+            color: white;
+        }
+
+        /* Visual indicator for items with unknown location */
+        .media-item.unknown-location {
+            position: relative;
+        }
+
+        .media-item.unknown-location::before {
+            content: "📍";
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: #ff6b6b;
+            color: white;
+            border-radius: 12px;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            z-index: 10;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .media-item.unknown-location .media-info {
+            background: rgba(255, 107, 107, 0.05);
+        }
+
+        .thumbnail-size-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .size-slider {
+            width: 150px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .media-info-header {
+            background: white;
+            border-radius: 15px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .media-info-header h2 {
+            color: #333;
+            margin: 0 0 5px 0;
+        }
+
+        .media-count {
+            color: #dc3545;
+            font-weight: bold;
+        }
+
+        .status-text {
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Media Grid Styles */
+        .media-grid {
+            display: grid;
+            gap: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .media-grid.thumbnail {
+            grid-template-columns: repeat(auto-fill, minmax(var(--thumbnail-size, 200px), 1fr));
+        }
+
+        .media-grid.list {
+            grid-template-columns: 1fr;
+        }
+
+        .media-item {
+            border-radius: 10px;
+            overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            position: relative;
+        }
+
+        .media-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+
+        .media-item.thumbnail {
+            text-align: center;
+        }
+
+        .media-item.list {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            gap: 15px;
+        }
+
+        .media-checkbox {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 20px;
+            height: 20px;
+            z-index: 10;
+            cursor: pointer;
+        }
+
+        .media-thumbnail {
+            width: 100%;
+            height: var(--thumbnail-height, 150px);
+            object-fit: cover;
+            display: block;
+        }
+
+        /* List view specific thumbnail styling */
+        .media-item.list .media-thumbnail {
+            width: 120px;
+            height: auto;
+            max-height: 90px;
+            object-fit: contain;
+            border-radius: 8px;
+            background: #f0f0f0;
+            flex-shrink: 0;
+        }
+
+        .media-info {
+            padding: 15px;
+        }
+
+        /* List view specific info styling */
+        .media-item.list .media-info {
+            padding: 0;
+            flex: 1;
+        }
+
+        .media-title {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 14px;
+            word-break: break-word;
+        }
+
+        .media-meta {
+            color: #666;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .analysis-tags {
+            margin-top: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .analysis-tag {
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .activity-tag {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .scenery-tag {
+            background: #f3e5f5;
+            color: #7b1fa2;
+        }
+
+        .no-media {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .no-media h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        /* Confirmation Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background: white;
+            margin: 10% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .modal-header {
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .confirmation-details {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .confirmation-details p {
+            margin: 5px 0;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-primary {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Progress Modal */
+        .progress-modal {
+            display: none;
+            position: fixed;
+            z-index: 1001;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+        }
+
+        .progress-content {
+            background: white;
+            margin: 20% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #28a745, #20c997);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            .fixinfo-controls, .daily-pattern-container {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .daily-section, .pattern-section {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            
+            .control-group {
+                justify-content: space-between;
+            }
+            
+            .city-select, .modify-date, .filename-pattern-select, .modify-time {
+                min-width: auto;
+                flex: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>FixInfo View</h1>
+            <p>Modify media creation time, location, and GPS information</p>
+        </div>
+
+        <div class="nav-links">
+            <a href="index.html">🏠 Home</a>
+            <a href="city.html">🏙️ City View</a>
+            <a href="daily.html">📅 Daily View</a>
+            <a href="special.html">⭐ Special View</a>
+            <a href="fixinfo.html" class="active">🔧 FixInfo View</a>
+        </div>
+
+        <div class="control-panel">
+            <!-- Daily Selection and Filename Pattern Section -->
+            <div class="daily-pattern-container">
+                <div class="daily-section">
+                    <label>Date Navigation:</label>
+                    <button class="nav-button" onclick="navigateDay(-1)">◀ Previous</button>
+                    <input type="date" id="selected-date" class="day-input" onchange="loadMediaForSelectedDate()">
+                    <button class="nav-button" onclick="navigateDay(1)">Next ▶</button>
+                </div>
+                
+                <div class="pattern-section">
+                    <label for="filename-pattern-select">Filename Pattern:</label>
+                    <select id="filename-pattern-select" class="filename-pattern-select" onchange="onFilenamePatternChange()">
+                        <option value="">All files for selected date</option>
+                    </select>
+                    <div class="pattern-info" id="pattern-info">
+                        Select a filename pattern to filter files
+                    </div>
+                </div>
+            </div>
+
+            <!-- FixInfo Controls Section -->
+            <div class="fixinfo-controls">
+                <div class="control-group">
+                    <label for="country-select">Country:</label>
+                    <select id="country-select" class="city-select">
+                        <option value="">Select a country...</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="city-select">City:</label>
+                    <select id="city-select" class="city-select" disabled>
+                        <option value="">Select a country first...</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="modify-date">Modify Date:</label>
+                    <input type="date" id="modify-date" class="modify-date">
+                </div>
+                <div class="control-group">
+                    <label for="modify-time">Time:</label>
+                    <input type="time" id="modify-time" class="modify-date" value="12:00">
+                </div>
+                <button id="modify-button" class="modify-button" onclick="showModifyConfirmation()" disabled>
+                    Modify Selected Files
+                </button>
+            </div>
+
+            <!-- View Controls Section -->
+            <div class="view-controls">
+                <div class="view-mode-buttons">
+                    <button class="view-mode-btn active" data-mode="thumbnail" onclick="setViewMode('thumbnail')">🖼️ Thumbnails</button>
+                    <button class="view-mode-btn" data-mode="list" onclick="setViewMode('list')">📋 List</button>
+                </div>
+                <div class="selection-buttons">
+                    <button class="select-btn" id="select-all-btn" onclick="selectAllMedia()" disabled>☑️ Select All</button>
+                    <button class="select-btn" id="unselect-all-btn" onclick="unselectAllMedia()" disabled>✗ Unselect All</button>
+                    <button class="select-btn" id="select-unknown-btn" onclick="selectUnknownLocation()" disabled title="Select all items with missing city/country information">📍 Select Unknown Location</button>
+                    <button class="select-btn" id="unselect-unknown-btn" onclick="unselectUnknownLocation()" disabled>📍 Unselect Unknown Location</button>
+                </div>
+                <div class="thumbnail-size-control">
+                    <label for="thumbnail-size">Size:</label>
+                    <input type="range" id="thumbnail-size" class="size-slider" min="150" max="400" value="200" onchange="updateThumbnailSize()">
+                    <span id="size-display">200px</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="media-info-header">
+            <div>
+                <h2>Media for Selected Date</h2>
+                <div class="media-count" id="media-count">Loading...</div>
+            </div>
+            <div class="status-text" id="status-text">Select a date to view media</div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">
+            Loading media...
+        </div>
+
+        <div id="media-container"></div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Confirm Modifications</h2>
+                <p>You are about to modify the following files:</p>
+            </div>
+            <div class="confirmation-details" id="confirmation-details">
+                <!-- Details will be populated here -->
+            </div>
+            <div class="modal-buttons">
+                <button class="btn btn-secondary" onclick="closeConfirmationModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="executeModifications()">Confirm Modifications</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Progress Modal -->
+    <div id="progress-modal" class="progress-modal">
+        <div class="progress-content">
+            <h3>Processing Files...</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            <p id="progress-text">0 of 0 files processed</p>
+        </div>
+    </div>
+
+    <script>
+        let currentDate = '';
+        let currentViewMode = 'thumbnail';
+        let mediaData = [];
+        let selectedCityData = null;
+        let availableDateRange = { earliest: null, latest: null };
+        let allFilenamePatterns = [];
+        let currentFilenamePattern = '';
+
+        // Utility functions for preserving checkbox selections
+        function saveCurrentSelections() {
+            const selections = new Set();
+            document.querySelectorAll('.media-checkbox:checked').forEach(checkbox => {
+                selections.add(checkbox.dataset.mediaId);
+            });
+            return selections;
+        }
+
+        function restoreSelections(savedSelections) {
+            document.querySelectorAll('.media-checkbox').forEach(checkbox => {
+                if (savedSelections.has(checkbox.dataset.mediaId)) {
+                    checkbox.checked = true;
+                }
+            });
+            updateModifyButton();
+            updateSelectionButtons();
+        }
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Load countries for dropdown
+            loadCountries();
+            
+            // Load filename patterns
+            loadFilenamePatterns();
+            
+            // Get the earliest creation date and set as default
+            await loadInitialDate();
+            
+            // Add event listeners
+            document.getElementById('country-select').addEventListener('change', function() {
+                const selectedCountry = this.value;
+                loadCitiesByCountry(selectedCountry);
+                
+                // Clear city selection when country changes
+                document.getElementById('city-select').value = '';
+                updateModifyButton();
+            });
+            document.getElementById('city-select').addEventListener('change', updateModifyButton);
+            document.getElementById('modify-date').addEventListener('change', updateModifyButton);
+            document.getElementById('modify-time').addEventListener('change', updateModifyButton);
+        });
+
+        async function loadInitialDate() {
+            try {
+                console.log('Loading initial date...');
+                const response = await fetch('/api/media/date-range?' + Date.now());
+                console.log('Date range response:', response.status);
+                const dateRange = await response.json();
+                console.log('Date range:', dateRange);
+                
+                // Store the available date range
+                availableDateRange = dateRange;
+                
+                let initialDate;
+                if (dateRange.earliest) {
+                    // Parse the earliest date and format as YYYY-MM-DD
+                    // Handle different date formats from database
+                    let formatted = dateRange.earliest;
+                    // Convert "YYYY-MM-DD HH-MM-SS" to "YYYY-MM-DD HH:MM:SS" if needed
+                    if (formatted.match(/\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}/)) {
+                        formatted = formatted.replace(/ (\d{2})-(\d{2})-(\d{2})/, ' $1:$2:$3');
+                    }
+                    const earliestDate = new Date(formatted);
+                    initialDate = earliestDate.toISOString().split('T')[0];
+                } else {
+                    // Fallback to today if no data found
+                    initialDate = new Date().toISOString().split('T')[0];
+                }
+                
+                // Set the date inputs
+                document.getElementById('selected-date').value = initialDate;
+                document.getElementById('modify-date').value = initialDate;
+                
+                // Update status text with date range info
+                if (dateRange.earliest && dateRange.latest) {
+                    const earliestFormatted = new Date(dateRange.earliest.replace(/ (\d{2})-(\d{2})-(\d{2})/, ' $1:$2:$3')).toLocaleDateString();
+                    const latestFormatted = new Date(dateRange.latest.replace(/ (\d{2})-(\d{2})-(\d{2})/, ' $1:$2:$3')).toLocaleDateString();
+                    document.getElementById('status-text').textContent = `Media available from ${earliestFormatted} to ${latestFormatted}`;
+                } else {
+                    document.getElementById('status-text').textContent = `Starting from earliest media date: ${initialDate}`;
+                }
+                
+                // Load media for the initial date
+                loadMediaForSelectedDate();
+                
+            } catch (error) {
+                console.error('Error loading initial date:', error);
+                // Fallback to today
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('selected-date').value = today;
+                document.getElementById('modify-date').value = today;
+                document.getElementById('status-text').textContent = 'Using today\'s date (could not load media date range)';
+                loadMediaForSelectedDate();
+            }
+        }
+
+        // Load countries into dropdown
+        async function loadCountries() {
+            try {
+                const response = await fetch('/api/media/countries');
+                const countries = await response.json();
+                
+                const countrySelect = document.getElementById('country-select');
+                countrySelect.innerHTML = '<option value="">Select a country...</option>';
+                
+                countries.forEach(countryData => {
+                    const option = document.createElement('option');
+                    option.value = countryData.value;  // country_en
+                    option.textContent = countryData.display;  // "country_en | country_zh"
+                    countrySelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading countries:', error);
+            }
+        }
+
+        // Load cities by selected country (for FixInfo view)
+        async function loadCitiesByCountry(country) {
+            try {
+                const citySelect = document.getElementById('city-select');
+                
+                if (!country) {
+                    citySelect.innerHTML = '<option value="">Select a country first...</option>';
+                    citySelect.disabled = true;
+                    return;
+                }
+                
+                citySelect.disabled = false;
+                citySelect.innerHTML = '<option value="">Loading cities...</option>';
+                
+                const response = await fetch(`/api/media/cities-by-country?country=${encodeURIComponent(country)}`);
+                const cities = await response.json();
+                
+                citySelect.innerHTML = '<option value="">Select a city...</option>';
+                
+                // Remove duplicates and sort cities by display name
+                const uniqueCities = [];
+                const seen = new Set();
+                
+                cities.forEach(city => {
+                    // Use display name as the key for uniqueness
+                    const key = city.display;
+                    if (!seen.has(key)) {
+                        seen.add(key);
+                        uniqueCities.push(city);
+                    }
+                });
+                
+                // Sort by display name
+                uniqueCities.sort((a, b) => a.display.localeCompare(b.display));
+                
+                uniqueCities.forEach(city => {
+                    console.log('City data for FixInfo:', city); // Debug log
+                    const option = document.createElement('option');
+                    // FixInfo view stores the entire city object as JSON in the option value
+                    option.value = JSON.stringify(city);
+                    option.textContent = city.display;  // "city_en | city_zh" (no country since already selected)
+                    citySelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Error loading cities:', error);
+                const citySelect = document.getElementById('city-select');
+                citySelect.innerHTML = '<option value="">Error loading cities</option>';
+            }
+        }
+
+        async function loadFilenamePatterns() {
+            try {
+                console.log('Loading filename patterns...');
+                const response = await fetch('/api/media/filename-patterns?' + Date.now());
+                console.log('Filename patterns response:', response.status);
+                const patterns = await response.json();
+                console.log('Loaded patterns count:', patterns.length);
+                
+                allFilenamePatterns = patterns;
+                const select = document.getElementById('filename-pattern-select');
+                select.innerHTML = '<option value="">All files for selected date</option>';
+                
+                patterns.forEach(pattern => {
+                    const option = document.createElement('option');
+                    option.value = pattern;
+                    option.textContent = pattern;
+                    select.appendChild(option);
+                });
+                
+                // Update info text
+                document.getElementById('pattern-info').textContent = 
+                    `${patterns.length} unique filename patterns available`;
+                    
+            } catch (error) {
+                console.error('Error loading filename patterns:', error);
+                document.getElementById('pattern-info').textContent = 
+                    'Error loading filename patterns';
+            }
+        }
+
+        function onFilenamePatternChange() {
+            const select = document.getElementById('filename-pattern-select');
+            currentFilenamePattern = select.value;
+            
+            if (currentFilenamePattern) {
+                // Load media files for the selected pattern
+                loadMediaByFilenamePattern();
+                
+                // Update info text
+                document.getElementById('pattern-info').textContent = 
+                    `Showing files matching pattern: "${currentFilenamePattern}"`;
+            } else {
+                // Load media for current date if no pattern selected
+                loadMediaForSelectedDate();
+                
+                document.getElementById('pattern-info').textContent = 
+                    `${allFilenamePatterns.length} unique filename patterns available`;
+            }
+        }
+
+        async function loadMediaByFilenamePattern() {
+            if (!currentFilenamePattern) {
+                loadMediaForSelectedDate();
+                return;
+            }
+            
+            // Save current selections before loading new media
+            const savedSelections = saveCurrentSelections();
+            
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('media-container').innerHTML = '';
+
+                const response = await fetch(`/api/media/by-filename-pattern?pattern=${encodeURIComponent(currentFilenamePattern)}`);
+                const data = await response.json();
+                
+                mediaData = data;
+                document.getElementById('loading').style.display = 'none';
+                displayMedia(data, savedSelections);
+                
+                // Update info header
+                document.getElementById('media-count').textContent = `${data.length} files found`;
+                document.getElementById('status-text').textContent = 
+                    `Files matching pattern: "${currentFilenamePattern}"`;
+
+            } catch (error) {
+                console.error('Error loading media by filename pattern:', error);
+                document.getElementById('loading').style.display = 'none';
+                showError('Failed to load media files for the selected filename pattern.');
+            }
+        }
+
+        function navigateDay(direction) {
+            const dateInput = document.getElementById('selected-date');
+            const currentDateObj = new Date(dateInput.value);
+            currentDateObj.setDate(currentDateObj.getDate() + direction);
+            
+            const newDate = currentDateObj.toISOString().split('T')[0];
+            dateInput.value = newDate;
+            currentDate = newDate;
+            loadMediaForSelectedDate();
+        }
+
+        async function loadMediaForSelectedDate() {
+            const selectedDate = document.getElementById('selected-date').value;
+            if (!selectedDate) return;
+
+            currentDate = selectedDate;
+            
+            // Clear filename pattern selection when loading by date
+            currentFilenamePattern = '';
+            document.getElementById('filename-pattern-select').value = '';
+            document.getElementById('pattern-info').textContent = 
+                `${allFilenamePatterns.length} unique filename patterns available`;
+            
+            try {
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('media-container').innerHTML = '';
+
+                const dateFrom = selectedDate + ' 00:00:00';
+                const dateTo = selectedDate + ' 23:59:59';
+                
+                console.log(`Loading media for date: ${selectedDate}`);
+                const response = await fetch(`/api/media?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}&order=asc&_t=${Date.now()}`);
+                console.log('Media response status:', response.status);
+                let data = await response.json();
+                console.log('Media count for date:', data.length);
+                
+                // If no results found for specific date (likely due to null creation_time), 
+                // fall back to showing all media
+                if (data.length === 0) {
+                    console.log('No media found for selected date, loading all media as fallback');
+                    const fallbackResponse = await fetch(`/api/media?order=asc&_t=${Date.now()}`);
+                    data = await fallbackResponse.json();
+                    console.log('Fallback media count:', data.length);
+                }
+                
+                mediaData = data;
+                document.getElementById('loading').style.display = 'none';
+                displayMedia(data);
+                
+                // Update info header
+                const dateObj = new Date(selectedDate);
+                const formattedDate = dateObj.toLocaleDateString('en-US', { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                });
+                
+                const countText = data.length > 0 && data.length < 100 ? 
+                    `${data.length} files found for ${formattedDate}` : 
+                    `${data.length} total files (no date-specific media found, showing all)`;
+                
+                document.getElementById('media-count').textContent = countText;
+                document.getElementById('status-text').textContent = formattedDate;
+
+            } catch (error) {
+                console.error('Error loading media:', error);
+                document.getElementById('loading').style.display = 'none';
+                showError('Failed to load media for the selected date.');
+            }
+        }
+
+        function displayMedia(media, savedSelections = null) {
+            const container = document.getElementById('media-container');
+            
+            if (media.length === 0) {
+                container.innerHTML = `
+                    <div class="no-media">
+                        <h3>No Media Found</h3>
+                        <p>No media files found for the selected date.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            const mediaGrid = document.createElement('div');
+            mediaGrid.className = `media-grid ${currentViewMode}`;
+            
+            mediaGrid.innerHTML = media.map(mediaItem => {
+                const isVideo = mediaItem.file_extension && 
+                    ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(mediaItem.file_extension.toLowerCase());
+                
+                const displayTime = formatCreationTime(mediaItem.creation_time);
+                const location = mediaItem.city_zh && mediaItem.city_en ? 
+                    `${mediaItem.city_zh} | ${mediaItem.city_en}` : 
+                    (mediaItem.city_zh || mediaItem.city_en || 'Unknown location');
+
+                // Parse activities and scenery
+                const activities = parseJsonArray(mediaItem.activities);
+                const scenery = parseJsonArray(mediaItem.scenery);
+
+                // Check if item has location data
+                const hasLocation = mediaItem.city_en && mediaItem.city_en.trim() !== '' && 
+                                   mediaItem.country_en && mediaItem.country_en.trim() !== '';
+                
+                return `
+                    <div class="media-item ${currentViewMode} ${!hasLocation ? 'unknown-location' : ''}">
+                        <input type="checkbox" class="media-checkbox" data-media-id="${mediaItem.id}" onchange="updateModifyButton()">
+                        ${isVideo ? 
+                            `<video class="media-thumbnail" muted preload="none">
+                                <source src="/api/media/${mediaItem.id}/thumbnail" type="video/${mediaItem.file_extension?.substring(1) || 'mp4'}">
+                            </video>` :
+                            `<img class="media-thumbnail" src="/api/media/${mediaItem.id}/thumbnail" alt="${mediaItem.filename}" loading="lazy">`
+                        }
+                        <div class="media-info">
+                            <div class="media-title">${mediaItem.filename}</div>
+                            <div class="media-meta">
+                                📅 ${displayTime}<br>
+                                📍 ${location}
+                                ${mediaItem.talking_detected ? '<br>🗣️ Talking detected' : ''}
+                            </div>
+                            ${activities.length > 0 || scenery.length > 0 ? `
+                            <div class="analysis-tags">
+                                ${activities.map(activity => `<span class="analysis-tag activity-tag">${activity}</span>`).join('')}
+                                ${scenery.map(scene => `<span class="analysis-tag scenery-tag">${scene}</span>`).join('')}
+                            </div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = '';
+            container.appendChild(mediaGrid);
+            
+            // Restore selections if provided
+            if (savedSelections) {
+                restoreSelections(savedSelections);
+            } else {
+                updateModifyButton();
+                updateSelectionButtons();
+            }
+        }
+
+        function parseJsonArray(jsonString) {
+            try {
+                if (Array.isArray(jsonString)) return jsonString;
+                if (typeof jsonString === 'string' && jsonString) {
+                    return JSON.parse(jsonString).filter(item => 
+                        !item.toLowerCase().includes('people') && 
+                        !item.toLowerCase().includes('person')
+                    );
+                }
+            } catch (e) {
+                // If parsing fails, try splitting by comma
+                if (typeof jsonString === 'string') {
+                    return jsonString.split(',').map(s => s.trim()).filter(s => s);
+                }
+            }
+            return [];
+        }
+
+        function updateModifyButton() {
+            const checkedBoxes = document.querySelectorAll('.media-checkbox:checked');
+            const citySelect = document.getElementById('city-select');
+            const modifyDate = document.getElementById('modify-date').value;
+            const modifyTime = document.getElementById('modify-time').value;
+            const modifyButton = document.getElementById('modify-button');
+            
+            const hasSelectedFiles = checkedBoxes.length > 0;
+            const hasSelectedCity = citySelect.value !== '';
+            const hasModifyDate = modifyDate !== '';
+            const hasModifyTime = modifyTime !== '';
+            
+            modifyButton.disabled = !(hasSelectedFiles && hasSelectedCity && hasModifyDate && hasModifyTime);
+            
+            // Update selection button states
+            updateSelectionButtons();
+            
+            // Update button text
+            if (hasSelectedFiles) {
+                modifyButton.textContent = `Modify ${checkedBoxes.length} Selected File${checkedBoxes.length > 1 ? 's' : ''}`;
+            } else {
+                modifyButton.textContent = 'Modify Selected Files';
+            }
+        }
+
+        function formatTimeToAMPM(time24) {
+            // Convert 24-hour time (HH:MM) to 12-hour AM/PM format
+            const [hours, minutes] = time24.split(':');
+            const hour12 = parseInt(hours);
+            const ampm = hour12 >= 12 ? 'PM' : 'AM';
+            const displayHour = hour12 === 0 ? 12 : (hour12 > 12 ? hour12 - 12 : hour12);
+            return `${displayHour}:${minutes} ${ampm}`;
+        }
+
+        function showModifyConfirmation() {
+            const checkedBoxes = document.querySelectorAll('.media-checkbox:checked');
+            const citySelect = document.getElementById('city-select');
+            const modifyDate = document.getElementById('modify-date').value;
+            const modifyTime = document.getElementById('modify-time').value;
+            
+            if (checkedBoxes.length === 0 || !citySelect.value || !modifyDate || !modifyTime) return;
+            
+            // Parse selected city data
+            selectedCityData = JSON.parse(citySelect.value);
+            
+            // Format modify date and time (convert 24-hour to HH:MM:SS)
+            const modifyDateTime = modifyDate + ' ' + modifyTime + ':00';
+            
+            // Format time for display in AM/PM format
+            const displayTime = formatTimeToAMPM(modifyTime);
+            const displayDateTime = modifyDate + ' ' + displayTime;
+            
+            // Create confirmation details
+            const detailsHtml = `
+                <p><strong>Selected Files:</strong> ${checkedBoxes.length} file${checkedBoxes.length > 1 ? 's' : ''}</p>
+                <p><strong>New City:</strong> ${selectedCityData.city_en} | ${selectedCityData.city_zh}</p>
+                <p><strong>New Country:</strong> ${selectedCityData.country_en} | ${selectedCityData.country_zh}</p>
+                <p><strong>New Date & Time:</strong> ${displayDateTime}</p>
+                <p><strong>New GPS Coordinates:</strong> ${selectedCityData.latitude}, ${selectedCityData.longitude}</p>
+                <br>
+                <p><em>This will update both the database records and the EXIF data in the media files using exiftool.</em></p>
+            `;
+            
+            document.getElementById('confirmation-details').innerHTML = detailsHtml;
+            document.getElementById('confirmation-modal').style.display = 'block';
+        }
+
+        function closeConfirmationModal() {
+            document.getElementById('confirmation-modal').style.display = 'none';
+        }
+
+        async function executeModifications() {
+            closeConfirmationModal();
+            
+            const checkedBoxes = document.querySelectorAll('.media-checkbox:checked');
+            const modifyDate = document.getElementById('modify-date').value;
+            const modifyTime = document.getElementById('modify-time').value;
+            const modifyDateTime = modifyDate + ' ' + modifyTime + ':00';
+            
+            // Get media IDs
+            const mediaIds = Array.from(checkedBoxes).map(cb => parseInt(cb.dataset.mediaId));
+            
+            // Show progress modal
+            const progressModal = document.getElementById('progress-modal');
+            const progressFill = document.getElementById('progress-fill');
+            const progressText = document.getElementById('progress-text');
+            
+            progressModal.style.display = 'block';
+            progressText.textContent = `0 of ${mediaIds.length} files processed`;
+            
+            try {
+                const updatePayload = {
+                    media_ids: mediaIds,
+                    city_en: selectedCityData.city_en,
+                    city_zh: selectedCityData.city_zh,
+                    country_en: selectedCityData.country_en,
+                    country_zh: selectedCityData.country_zh,
+                    latitude: selectedCityData.latitude,
+                    longitude: selectedCityData.longitude,
+                    creation_time: modifyDateTime
+                };
+                console.log('Bulk update payload:', updatePayload); // Debug log
+                
+                const response = await fetch('/api/media/bulk-update', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(updatePayload)
+                });
+                
+                const result = await response.json();
+                
+                // Simulate progress (since we don't have real-time updates)
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += 20;
+                    if (progress >= 100) {
+                        progress = 100;
+                        clearInterval(interval);
+                        setTimeout(() => {
+                            progressModal.style.display = 'none';
+                            handleModificationResult(result);
+                        }, 500);
+                    }
+                    progressFill.style.width = progress + '%';
+                    progressText.textContent = `${Math.floor(progress / 100 * mediaIds.length)} of ${mediaIds.length} files processed`;
+                }, 200);
+                
+            } catch (error) {
+                console.error('Error updating media:', error);
+                progressModal.style.display = 'none';
+                alert('Error updating media files: ' + error.message);
+            }
+        }
+
+        function handleModificationResult(result) {
+            if (result.success) {
+                let message = `Successfully updated ${result.updated_count} file${result.updated_count > 1 ? 's' : ''}`;
+                if (result.failed_count > 0) {
+                    message += `\n${result.failed_count} file${result.failed_count > 1 ? 's' : ''} failed to update`;
+                }
+                alert(message);
+                
+                // Refresh the appropriate view while preserving selections
+                if (currentFilenamePattern) {
+                    // Reload media by filename pattern (already preserves selections)
+                    loadMediaByFilenamePattern();
+                } else {
+                    // Reload media by date with preserved selections
+                    const savedSelections = saveCurrentSelections();
+                    loadMediaForSelectedDate();
+                    // Restore selections after a brief delay to ensure DOM is updated
+                    setTimeout(() => {
+                        restoreSelections(savedSelections);
+                    }, 200);
+                }
+                
+                // Reset form
+                document.getElementById('city-select').value = '';
+                const currentSelectedDate = document.getElementById('selected-date').value;
+                document.getElementById('modify-date').value = currentSelectedDate;
+                document.getElementById('modify-time').value = '12:00'; // Reset to default 12:00 PM
+                updateModifyButton();
+                
+            } else {
+                alert('Error updating files: ' + result.error);
+            }
+        }
+
+        function selectAllMedia() {
+            const checkboxes = document.querySelectorAll('.media-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = true;
+            });
+            updateModifyButton();
+            updateSelectionButtons();
+        }
+
+        function selectUnknownLocation() {
+            const checkboxes = document.querySelectorAll('.media-checkbox');
+            checkboxes.forEach(checkbox => {
+                // Only select media items with unknown/missing location
+                const mediaId = checkbox.dataset.mediaId;
+                const mediaItem = mediaData.find(item => item.id == mediaId);
+                
+                if (mediaItem && (!mediaItem.city_en || mediaItem.city_en.trim() === '' || 
+                    !mediaItem.country_en || mediaItem.country_en.trim() === '')) {
+                    checkbox.checked = true;
+                }
+            });
+            updateModifyButton();
+            updateSelectionButtons();
+        }
+
+        function unselectUnknownLocation() {
+            const checkboxes = document.querySelectorAll('.media-checkbox');
+            checkboxes.forEach(checkbox => {
+                // Only unselect media items with unknown/missing location
+                const mediaId = checkbox.dataset.mediaId;
+                const mediaItem = mediaData.find(item => item.id == mediaId);
+                
+                if (mediaItem && (!mediaItem.city_en || mediaItem.city_en.trim() === '' || 
+                    !mediaItem.country_en || mediaItem.country_en.trim() === '')) {
+                    checkbox.checked = false;
+                }
+            });
+            updateModifyButton();
+            updateSelectionButtons();
+        }
+
+        function unselectAllMedia() {
+            const checkboxes = document.querySelectorAll('.media-checkbox');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = false;
+            });
+            updateModifyButton();
+            updateSelectionButtons();
+        }
+
+        function updateSelectionButtons() {
+            const checkboxes = document.querySelectorAll('.media-checkbox');
+            const checkedBoxes = document.querySelectorAll('.media-checkbox:checked');
+            
+            // Count items with unknown location (total and selected)
+            let unknownLocationTotal = 0;
+            let unknownLocationSelected = 0;
+            
+            checkboxes.forEach(checkbox => {
+                const mediaId = checkbox.dataset.mediaId;
+                const mediaItem = mediaData.find(item => item.id == mediaId);
+                
+                if (mediaItem && (!mediaItem.city_en || mediaItem.city_en.trim() === '' || 
+                    !mediaItem.country_en || mediaItem.country_en.trim() === '')) {
+                    unknownLocationTotal++;
+                    if (checkbox.checked) {
+                        unknownLocationSelected++;
+                    }
+                }
+            });
+            
+            const selectAllBtn = document.getElementById('select-all-btn');
+            const unselectAllBtn = document.getElementById('unselect-all-btn');
+            const selectUnknownBtn = document.getElementById('select-unknown-btn');
+            const unselectUnknownBtn = document.getElementById('unselect-unknown-btn');
+            
+            if (checkboxes.length === 0) {
+                // No media loaded, disable all buttons
+                selectAllBtn.disabled = true;
+                unselectAllBtn.disabled = true;
+                selectUnknownBtn.disabled = true;
+                unselectUnknownBtn.disabled = true;
+                
+                selectAllBtn.textContent = '☑️ Select All';
+                unselectAllBtn.textContent = '✗ Unselect All';
+                selectUnknownBtn.textContent = '📍 Select Unknown Location';
+                unselectUnknownBtn.textContent = '📍 Unselect Unknown Location';
+            } else {
+                // Update Select All button
+                if (checkedBoxes.length === checkboxes.length) {
+                    selectAllBtn.disabled = true;
+                    selectAllBtn.textContent = '☑️ All Selected';
+                } else {
+                    selectAllBtn.disabled = false;
+                    selectAllBtn.textContent = `☑️ Select All (${checkboxes.length - checkedBoxes.length} more)`;
+                }
+                
+                // Update Unselect All button
+                if (checkedBoxes.length === 0) {
+                    unselectAllBtn.disabled = true;
+                    unselectAllBtn.textContent = '✗ Unselect All';
+                } else {
+                    unselectAllBtn.disabled = false;
+                    unselectAllBtn.textContent = `✗ Unselect All (${checkedBoxes.length})`;
+                }
+                
+                // Update Select Unknown Location button
+                if (unknownLocationTotal === 0) {
+                    selectUnknownBtn.disabled = true;
+                    selectUnknownBtn.textContent = '📍 No Unknown Location';
+                } else if (unknownLocationSelected === unknownLocationTotal) {
+                    selectUnknownBtn.disabled = true;
+                    selectUnknownBtn.textContent = '📍 All Unknown Selected';
+                } else {
+                    selectUnknownBtn.disabled = false;
+                    const remaining = unknownLocationTotal - unknownLocationSelected;
+                    selectUnknownBtn.textContent = `📍 Select Unknown (${remaining} more)`;
+                }
+                
+                // Update Unselect Unknown Location button
+                if (unknownLocationSelected === 0) {
+                    unselectUnknownBtn.disabled = true;
+                    unselectUnknownBtn.textContent = '📍 Unselect Unknown Location';
+                } else {
+                    unselectUnknownBtn.disabled = false;
+                    unselectUnknownBtn.textContent = `📍 Unselect Unknown (${unknownLocationSelected})`;
+                }
+            }
+        }
+
+        function setViewMode(mode) {
+            currentViewMode = mode;
+            
+            // Update button states
+            document.querySelectorAll('.view-mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.getAttribute('data-mode') === mode) {
+                    btn.classList.add('active');
+                }
+            });
+
+            // Update thumbnail size control visibility
+            const sizeControl = document.querySelector('.thumbnail-size-control');
+            sizeControl.style.display = mode === 'thumbnail' ? 'flex' : 'none';
+
+            // Re-render media if we have data, preserving selections
+            if (mediaData.length > 0) {
+                const savedSelections = saveCurrentSelections();
+                displayMedia(mediaData, savedSelections);
+            }
+        }
+
+        function updateThumbnailSize() {
+            const size = document.getElementById('thumbnail-size').value;
+            document.getElementById('size-display').textContent = size + 'px';
+            
+            // Update CSS custom properties
+            document.documentElement.style.setProperty('--thumbnail-size', size + 'px');
+            document.documentElement.style.setProperty('--thumbnail-height', (size * 0.75) + 'px');
+            
+            // Update existing media grid
+            const mediaGrid = document.querySelector('.media-grid');
+            if (mediaGrid && currentViewMode === 'thumbnail') {
+                mediaGrid.style.gridTemplateColumns = `repeat(auto-fill, minmax(${size}px, 1fr))`;
+            }
+        }
+
+        function formatCreationTime(timeString) {
+            if (!timeString) return 'No time set';
+            
+            try {
+                const date = new Date(timeString);
+                return date.toLocaleString('en-US', {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return timeString;
+            }
+        }
+
+        function showError(message) {
+            const container = document.getElementById('media-container');
+            container.innerHTML = `
+                <div class="no-media">
+                    <h3>Error</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

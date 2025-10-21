@@ -382,8 +382,19 @@ def get_date_range():
         ).filter(
             Media.creation_time.isnot(None),
             Media.creation_time != '',
-            Media.creation_time != 'null'
+            Media.creation_time != 'null',
+            Media.creation_time != '0000-00-00 00:00:00',
+            ~Media.creation_time.like('0000-%')  # Exclude any dates starting with 0000
         ).first()
+        
+        # If no valid creation_time found, fall back to scanned_at
+        if not date_range.earliest or not date_range.latest:
+            date_range = db.session.query(
+                db.func.min(Media.scanned_at).label('earliest'),
+                db.func.max(Media.scanned_at).label('latest')
+            ).filter(
+                Media.scanned_at.isnot(None)
+            ).first()
         
         return jsonify({
             'earliest': date_range.earliest,
@@ -708,11 +719,22 @@ def get_cities_by_country():
             display_name = f"{city_en} | {city_zh}" if city_zh else city_en
             # Search value combines city and country for backend filtering
             search_value = f"{city_en}||{country}"
+            
+            # Get country_zh for the selected country
+            country_zh = db.session.query(Media.country_zh).filter(
+                Media.country_en == country,
+                Media.country_zh.isnot(None),
+                Media.country_zh != ''
+            ).first()
+            country_zh = country_zh[0] if country_zh else None
+            
             city_data = {
                 'value': search_value,
                 'display': display_name,
                 'city_en': city_en,
-                'country_en': country
+                'city_zh': city_zh,
+                'country_en': country,
+                'country_zh': country_zh
             }
             # Include coordinates if available (for "View on Map" functionality)
             if latitude is not None and longitude is not None:
