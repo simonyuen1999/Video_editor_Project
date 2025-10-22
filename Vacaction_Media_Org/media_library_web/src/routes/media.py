@@ -692,6 +692,38 @@ def get_countries():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@media_bp.route('/media/geo-countries', methods=['GET'])
+def get_geo_countries():
+    """Get all countries from geo_chinese_.list file (for FixInfo view)"""
+    try:
+        # Use the metadata_extractor to get countries from geo file
+        if not metadata_extractor or not metadata_extractor.geo_data:
+            return jsonify({'error': 'Geo data not available'}), 500
+        
+        country_set = set()
+        
+        # Extract unique countries from geo_data
+        # geo_data format: (lat, lon, city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone)
+        for geo_entry in metadata_extractor.geo_data:
+            (lat, lon, city_en, city_zh, region_en, region_zh, 
+             subregion_en, subregion_zh, country_code, country_en, country_zh, timezone) = geo_entry
+            
+            if country_en and country_en.strip():
+                country_set.add((country_en, country_zh if country_zh else country_en))
+        
+        # Convert to list and sort
+        country_list = []
+        for country_en, country_zh in sorted(country_set):
+            display_name = f"{country_en} | {country_zh}" if country_zh and country_zh != country_en else country_en
+            country_list.append({
+                'value': country_en,
+                'display': display_name
+            })
+        
+        return jsonify(country_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @media_bp.route('/media/cities-by-country', methods=['GET'])
 def get_cities_by_country():
     """Get cities filtered by country"""
@@ -741,6 +773,62 @@ def get_cities_by_country():
                 city_data['latitude'] = latitude
                 city_data['longitude'] = longitude
             city_list.append(city_data)
+        
+        return jsonify(city_list)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@media_bp.route('/media/geo-cities-by-country', methods=['GET'])
+def get_geo_cities_by_country():
+    """Get all cities from geo_chinese_.list file filtered by country (for FixInfo view)"""
+    try:
+        country = request.args.get('country')
+        if not country:
+            return jsonify({'error': 'Country parameter is required'}), 400
+        
+        # Use the metadata_extractor to get cities from geo file
+        if not metadata_extractor or not metadata_extractor.geo_data:
+            return jsonify({'error': 'Geo data not available'}), 500
+        
+        city_list = []
+        seen_cities = set()
+        
+        # Iterate through geo_data and filter by country
+        # geo_data format: (lat, lon, city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone)
+        for geo_entry in metadata_extractor.geo_data:
+            (lat, lon, city_en, city_zh, region_en, region_zh, 
+             subregion_en, subregion_zh, country_code, country_en_geo, country_zh, timezone) = geo_entry
+            
+            # Filter by country (match either country_en or country_zh)
+            if country_en_geo == country or country_zh == country:
+                # Create unique identifier to avoid duplicates
+                city_key = (city_en, city_zh)
+                if city_key not in seen_cities:
+                    seen_cities.add(city_key)
+                    
+                    # Format display name similar to existing format
+                    display_name = f"{city_en} | {city_zh}" if city_zh else city_en
+                    
+                    city_data = {
+                        'value': f"{city_en}||{country_en_geo}",  # Search value for consistency
+                        'display': display_name,
+                        'city_en': city_en,
+                        'city_zh': city_zh,
+                        'country_en': country_en_geo,
+                        'country_zh': country_zh,
+                        'latitude': lat,
+                        'longitude': lon,
+                        'region_en': region_en,
+                        'region_zh': region_zh,
+                        'subregion_en': subregion_en,
+                        'subregion_zh': subregion_zh,
+                        'country_code': country_code,
+                        'timezone': timezone
+                    }
+                    city_list.append(city_data)
+        
+        # Sort by city_en for consistent ordering
+        city_list.sort(key=lambda x: x['city_en'])
         
         return jsonify(city_list)
     except Exception as e:

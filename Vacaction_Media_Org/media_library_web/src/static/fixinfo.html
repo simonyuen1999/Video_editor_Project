@@ -225,6 +225,28 @@
             color: white;
         }
 
+        .filter-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .filter-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+            color: #555;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .filter-checkbox input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
         .selection-buttons {
             display: flex;
             gap: 6px;
@@ -705,6 +727,12 @@
                     <button class="view-mode-btn active" data-mode="thumbnail" onclick="setViewMode('thumbnail')">🖼️ Thumbnails</button>
                     <button class="view-mode-btn" data-mode="list" onclick="setViewMode('list')">📋 List</button>
                 </div>
+                <div class="filter-controls">
+                    <label class="filter-checkbox">
+                        <input type="checkbox" id="unknown-filter" onchange="onUnknownFilterChange()">
+                        📍 Show Unknown Location Only
+                    </label>
+                </div>
                 <div class="selection-buttons">
                     <button class="select-btn" id="select-all-btn" onclick="selectAllMedia()" disabled>☑️ Select All</button>
                     <button class="select-btn" id="unselect-all-btn" onclick="unselectAllMedia()" disabled>✗ Unselect All</button>
@@ -872,7 +900,7 @@
         // Load countries into dropdown
         async function loadCountries() {
             try {
-                const response = await fetch('/api/media/countries');
+                const response = await fetch(`/api/media/countries?t=${Date.now()}`);
                 const countries = await response.json();
                 
                 const countrySelect = document.getElementById('country-select');
@@ -903,7 +931,8 @@
                 citySelect.disabled = false;
                 citySelect.innerHTML = '<option value="">Loading cities...</option>';
                 
-                const response = await fetch(`/api/media/cities-by-country?country=${encodeURIComponent(country)}`);
+                // Use new endpoint that loads from geo_chinese_.list file
+                const response = await fetch(`/api/media/geo-cities-by-country?country=${encodeURIComponent(country)}&t=${Date.now()}`);
                 const cities = await response.json();
                 
                 citySelect.innerHTML = '<option value="">Select a city...</option>';
@@ -1347,6 +1376,14 @@
                 document.getElementById('modify-time').value = '12:00'; // Reset to default 12:00 PM
                 updateModifyButton();
                 
+                // Uncheck the unknown location filter and refresh the view
+                const unknownCheckbox = document.getElementById('unknown-filter');
+                if (unknownCheckbox && unknownCheckbox.checked) {
+                    unknownCheckbox.checked = false;
+                    // Trigger the filter change to refresh the display
+                    onUnknownFilterChange();
+                }
+                
             } else {
                 alert('Error updating files: ' + result.error);
             }
@@ -1400,6 +1437,27 @@
             });
             updateModifyButton();
             updateSelectionButtons();
+        }
+
+        function onUnknownFilterChange() {
+            // Clear all selections before applying filter
+            unselectAllMedia();
+            
+            // Get checkbox state
+            const unknownCheckbox = document.getElementById('unknown-filter');
+            const showUnknownOnly = unknownCheckbox.checked;
+            
+            // Apply filter to current media data
+            let filteredMedia = mediaData;
+            if (showUnknownOnly) {
+                filteredMedia = mediaData.filter(item => 
+                    !item.city_en || item.city_en.trim() === '' || 
+                    !item.country_en || item.country_en.trim() === ''
+                );
+            }
+            
+            // Re-display media with filter applied
+            displayMedia(filteredMedia);
         }
 
         function updateSelectionButtons() {
