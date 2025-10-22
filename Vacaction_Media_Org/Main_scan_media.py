@@ -109,8 +109,39 @@ class MediaOrganizerDB:
                     scanned_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            
+            # Create geo table for storing all geographical data from geo_chinese_.list
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS geo_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    city_en TEXT NOT NULL,
+                    city_zh TEXT NOT NULL,
+                    region_en TEXT,
+                    region_zh TEXT,
+                    subregion_en TEXT,
+                    subregion_zh TEXT,
+                    country_code TEXT NOT NULL,
+                    country_en TEXT NOT NULL,
+                    country_zh TEXT NOT NULL,
+                    timezone TEXT,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(city_en, country_en, latitude, longitude)
+                )
+            ''')
+            
+            # Create index for faster geo lookups
+            self.cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_geo_coords ON geo_data (latitude, longitude)
+            ''')
+            
+            self.cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_geo_city_country ON geo_data (city_en, country_en)
+            ''')
+            
             self.conn.commit()
-            logging.debug("Media files table ensured to exist with geo fields.")
+            logging.debug("Media files and geo tables ensured to exist with geo fields.")
         except sqlite3.Error as e:
             # If media_files table exists, skip creation, no need to exit
             logging.error(f"Warning creating table: {e}")
@@ -460,6 +491,144 @@ class MediaOrganizerDB:
             logging.error(f"Unexpected error generating thumbnail for {filepath}: {e}")
             return None
 
+    def populate_geo_table(self, geo_list_path='geo_chinese_.list'):
+        """
+        Populate the geo_data table with data from geo_chinese_.list file.
+        
+        Args:
+            geo_list_path: Path to the geo list CSV file
+            
+        Returns:
+            tuple: (total_records, inserted_records, skipped_records, error_records)
+        """
+        if not os.path.exists(geo_list_path):
+            logging.error(f"Geo list file not found: {geo_list_path}")
+            return (0, 0, 0, 1)
+        
+        total_records = 0
+        inserted_records = 0
+        skipped_records = 0
+        error_records = 0
+        
+        logging.info(f"Populating geo table from: {geo_list_path}")
+        
+        try:
+            with open(geo_list_path, 'r', encoding='utf-8') as f:
+                # Skip header line
+                header = next(f)
+                logging.debug(f"Header: {header.strip()}")
+                
+                for line_num, line in enumerate(f, start=2):
+                    total_records += 1
+                    
+                    try:
+                        # Parse CSV line: City_en,City_zn,Region_en,Region_zn,Subregion_en,Subregion_zn,CountryCode,Country_en,Country_zn,TimeZone,Latitude,Longitude
+                        parts = line.strip().split(',')
+                        if len(parts) != 12:
+                            logging.warning(f"Line {line_num}: Invalid format, expected 12 fields, got {len(parts)}")
+                            error_records += 1
+                            continue
+                        
+                        city_en = parts[0].strip()
+                        city_zh = parts[1].strip()
+                        region_en = parts[2].strip()
+                        region_zh = parts[3].strip()
+                        subregion_en = parts[4].strip()
+                        subregion_zh = parts[5].strip()
+                        country_code = parts[6].strip()
+                        country_en = parts[7].strip()
+                        country_zh = parts[8].strip()
+                        timezone = parts[9].strip()
+                        
+                        try:
+                            latitude = float(parts[10].strip())
+                            longitude = float(parts[11].strip())
+                        except ValueError as ve:
+                            logging.error(f"Line {line_num}: Invalid coordinates - {ve}")
+                            error_records += 1
+                            continue
+                        
+                        # Insert into geo table
+                        try:
+                            self.cursor.execute('''
+                                INSERT OR IGNORE INTO geo_data (
+                                    city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh,
+                                    country_code, country_en, country_zh, timezone, latitude, longitude
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            ''', (
+                                city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh,
+                                country_code, country_en, country_zh, timezone, latitude, longitude
+                            ))
+                            
+                            if self.cursor.rowcount > 0:
+                                inserted_records += 1
+                            else:
+                                skipped_records += 1
+                                logging.debug(f"Skipped duplicate: {city_en}, {country_en} at {latitude}, {longitude}")
+                                
+                        except sqlite3.Error as db_error:
+                            logging.error(f"Line {line_num}: Database error - {db_error}")
+                            error_records += 1
+                            
+                    except Exception as parse_error:
+                        logging.error(f"Line {line_num}: Parse error - {parse_error}")
+                        error_records += 1
+                        
+                    # Commit every 1000 records for better performance
+                    if total_records % 1000 == 0:
+                        self.conn.commit()
+                        logging.debug(f"Processed {total_records} records...")
+                
+                # Final commit
+                self.conn.commit()
+                
+        except Exception as file_error:
+            logging.error(f"Error reading geo list file: {file_error}")
+            error_records += 1
+            
+        logging.info(f"Geo table population complete:")
+        logging.info(f"  Total records processed: {total_records}")
+        logging.info(f"  Records inserted: {inserted_records}")
+        logging.info(f"  Records skipped (duplicates): {skipped_records}")
+        logging.info(f"  Records with errors: {error_records}")
+        
+        return (total_records, inserted_records, skipped_records, error_records)
+
+    def get_geo_table_count(self):
+        """Get the count of records in geo_data table."""
+        try:
+            self.cursor.execute('SELECT COUNT(*) FROM geo_data')
+            count = self.cursor.fetchone()[0]
+            return count
+        except sqlite3.Error as e:
+            logging.error(f"Error getting geo table count: {e}")
+            return 0
+
+    def clear_geo_table(self):
+        """Clear all data from geo_data table."""
+        try:
+            self.cursor.execute('DELETE FROM geo_data')
+            self.conn.commit()
+            logging.info("Geo table cleared successfully")
+            return True
+        except sqlite3.Error as e:
+            logging.error(f"Error clearing geo table: {e}")
+            return False
+
+    def get_geo_data_sample(self, limit=10):
+        """Get a sample of records from geo_data table for verification."""
+        try:
+            self.cursor.execute('''
+                SELECT city_en, city_zh, country_en, country_zh, latitude, longitude 
+                FROM geo_data 
+                ORDER BY city_en 
+                LIMIT ?
+            ''', (limit,))
+            return self.cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"Error getting geo data sample: {e}")
+            return []
+
     def close(self):
         if self.conn:
             self.conn.close()
@@ -520,6 +689,7 @@ Usage Note: Consider the parameter execution order for optimal performance.
   --syncFSnDB or -f          : Sync file system changes with the database. Default: False.
   --updateCity or -u         : Update city translation in the database. Default: False.
   --shareGeoInfo or -s       : Share (Update DB) geo info to the no geo media files at the end. Default: False.
+  --populateGeoTable or -g   : Populate geo table with data from geo_chinese_.list file. Default: False.
   --updateMediaInfo or -m    : Update media analysis info (activities and scenery) in database. Default: False.
 
   The following parameters can be used together with the above options:
@@ -558,7 +728,7 @@ Usage Note: Consider the parameter execution order for optimal performance.
     )
     parser.add_argument(
         '--updateCity', '-u', default=False, action='store_true',
-        help=f"Use '{default_zh_geo_list_file}' to update city_zh translation in the database. default: False"
+        help=f"Use geo table in DB to update city_zh translation in the database. default: False"
     )
     parser.add_argument(
         '--shareGeoInfo', '-s', default=False, action='store_true',
@@ -574,6 +744,10 @@ Usage Note: Consider the parameter execution order for optimal performance.
         help='Path to the geo.list file for enhanced geolocation (default: geo_chinese_.list).'
     )
     parser.add_argument(
+        '--populateGeoTable', '-g', default=False, action='store_true',
+        help='Populate geo table with data from geo_chinese_.list file. default: False'
+    )
+    parser.add_argument(
         '--updateMediaInfo', '-m', default=False, action='store_true',
         help='Update media analysis info (activities and scenery) in the database. default: False'
     )
@@ -581,6 +755,10 @@ Usage Note: Consider the parameter execution order for optimal performance.
 
     args = parser.parse_args()
 
+    print("\n\n\n\n=== Media Metadata Extraction and Organization Tool ===\n")
+
+    # The geo_chinese_.list file should be read-in for geo table population and city translation
+    # Therefore, this file path only for user specified different geo list file and load into DB accordingly.
     if args.geo_list != 'geo_chinese_.list':
         default_zh_geo_list_file = args.geo_list
 
@@ -615,8 +793,22 @@ Usage Note: Consider the parameter execution order for optimal performance.
         args.jump2update = False
         logging.info("Sync FS and DB enabled, disabling jump2update option (jump to DB Geo update section).")
 
+    # If the user specified --populateGeoTable, handle geo table population
+    if args.populateGeoTable:
+        print("""
+Option 'populateGeoTable' is specified.
+    The program will populate the geo_data table with data from the geo_chinese_.list file.
+    This will load all geographical location data into the database for faster lookups.
+    After this process, the program will exit.
+""")
+        # ask for user confirmation to proceed
+        proceed = input("Proceed with populating geo table? (y/n): ")
+        if proceed.lower() != 'y':
+            print("User aborted the operation.")
+            sys.exit(0)
+
     # If the user specified --updateMediaInfo, disable jump2update to ensure DB is ready for analysis update.
-    if args.updateMediaInfo:
+    elif args.updateMediaInfo:
         print("""
 Option 'updateMediaInfo' is specified.
     The program will only update media analysis info in the DB.
@@ -645,14 +837,18 @@ Option 'updateMediaInfo' is specified.
             print("     WARNING: File system changes will not be synced with the database!")
         print(f"  5. Update city translations: {args.updateCity}")
         if args.updateCity:
-            print(f"     WARNING: Use '{default_zh_geo_list_file}' file to update city_zh (Chinese name only) in the database.")
+            print(f"     WARNING: Use geo table in DB to update city_zh (Chinese name only) in the database.")
             print( "              Search city_en entry and translate city_zh column accordingly.")
         print(f"  6. Share geo info to no-geo media files: {args.shareGeoInfo}")
         if args.shareGeoInfo:
             print("     WARNING: Geo info will be shared to media files without geo data!")
             print("              This may overwrite existing geo data in those files in DB.")
             print(f"              Use proximity search: '{args.time_diff}' minutes (see below).")
-        print(f"  7. Update media analysis info: {args.updateMediaInfo}")
+        print(f"  7. Populate geo table: {args.populateGeoTable}")
+        if args.populateGeoTable:
+            print("     WARNING: Geo table will be populated with data from geo_chinese_.list file!")
+            print("              This will load all geographical data for faster lookups.")
+        print(f"  8. Update media analysis info: {args.updateMediaInfo}")
         if args.updateMediaInfo:
             print("     WARNING: Media analysis (activities and scenery) will be updated!")
             print("              This process analyzes all media files and may take significant time.")
@@ -666,11 +862,77 @@ Option 'updateMediaInfo' is specified.
             # logging.info("User aborted the operation.")
             sys.exit(0)
 
-    # If user specified --deldb, delete the existing database file inside MetaOrganizerDB class.
-    db = MediaOrganizerDB(rescan=args.deldb)
-    extractor = MetadataExtractor(geo_list_path=args.geo_list)
+# ==================================================================================
 
+    # Main processing starts here
     target_directory = args.directory
+
+    # If user specified --deldb, delete the existing database file inside MediaOrganizerDB class.
+    db = MediaOrganizerDB(rescan=args.deldb)
+
+    if args.deldb:
+        logging.info("Database deleted as per user request. Starting fresh scan.")
+        args.populateGeoTable = True  # Need to populate geo table if DB is deleted.
+    
+    # ==================================================================================
+    # Populate geo table if requested
+    if args.populateGeoTable:
+        logging.info("Starting geo table population process...")
+        
+        # Check current geo table status
+        current_count = db.get_geo_table_count()
+        logging.info(f"Current geo table contains {current_count} records")
+        
+        if current_count > 0:
+            print(f"Geo table already contains {current_count} records.")
+            overwrite = input("Do you want to clear existing data and repopulate? (y/n): ")
+            if overwrite.lower() == 'y':
+                if db.clear_geo_table():
+                    logging.info("Existing geo data cleared")
+                else:
+                    logging.error("Failed to clear geo table")
+                    sys.exit(1)
+            else:
+                print("Geo table population cancelled.")
+                sys.exit(0)
+        
+        # Populate the geo table
+        total, inserted, skipped, errors = db.populate_geo_table(args.geo_list)
+        
+        # Show summary
+        logging.info("=" * 80)
+        logging.info("GEO TABLE POPULATION SUMMARY")
+        logging.info("=" * 80)
+        logging.info(f"Geo list file: {args.geo_list}")
+        logging.info(f"Total records processed: {total}")
+        logging.info(f"Records successfully inserted: {inserted}")
+        logging.info(f"Records skipped (duplicates): {skipped}")
+        logging.info(f"Records with errors: {errors}")
+        
+        # Show sample data
+        sample_data = db.get_geo_data_sample(10)
+        if sample_data:
+            logging.info("\nSample geo data (first 10 records):")
+            for i, (city_en, city_zh, country_en, country_zh, lat, lon) in enumerate(sample_data, 1):
+                logging.info(f"  {i:2d}. {city_en} ({city_zh}) in {country_en} ({country_zh}) at {lat}, {lon}")
+        
+        final_count = db.get_geo_table_count()
+        logging.info(f"\nFinal geo table count: {final_count} records")
+        logging.info("=" * 80)
+        
+        print(f"\nGeo Table Population Complete!")
+        print(f"✓ Processed {total} records from {args.geo_list}")
+        print(f"✓ Inserted {inserted} new geo locations")
+        print(f"✓ Final database contains {final_count} geo records")
+        if errors > 0:
+            print(f"⚠ {errors} records had errors during processing")
+        
+        db.close()
+        sys.exit(0)
+
+
+    # Initialize metadata extractor with database path (geo data loaded from DB instead of file)
+    extractor = MetadataExtractor(db_path=db.db_path)
     
     # Clean up existing thumbnails if requested
     if args.cleanup_thumbnails:
@@ -725,6 +987,7 @@ Option 'updateMediaInfo' is specified.
             # Check if media analysis info already exists
             # Only skip if the file has meaningful analysis data
             # Note: people_count and talking_detected checks are disabled since these features are disabled
+            # Files with 'NotFound' values are considered as having meaningful analysis data from the previous run.
             has_meaningful_analysis = (
                 (activities is not None and activities.strip() != '') or 
                 (scenery is not None and scenery.strip() != '')
@@ -748,7 +1011,17 @@ Option 'updateMediaInfo' is specified.
                 analysis_result = extractor._analysis_mediafile(filepath)
                 
                 # Convert activities list to string for database storage
-                activities_str = ','.join(analysis_result.get('activities', []))
+                activities_list = analysis_result.get('activities', [])
+                activities_str = ','.join(activities_list)
+                
+                # Enhanced logic: assign 'NotFound' if activities is empty
+                if not activities_list or not activities_str.strip():
+                    activities_str = 'NotFound'
+                
+                # Enhanced logic: assign 'NotFound' if scenery is empty
+                scenery = analysis_result.get('scenery', '')
+                if not scenery or not scenery.strip():
+                    scenery = 'NotFound'
                 
                 # Update database with analysis results
                 # Note: people_count and talking_detected are disabled (set to 0/False) 
@@ -756,7 +1029,7 @@ Option 'updateMediaInfo' is specified.
                 semantic_data = {
                     'people_count': 0,  # Disabled: always set to 0
                     'activities': activities_str,
-                    'scenery': analysis_result.get('scenery', ''),
+                    'scenery': scenery,
                     'talking_detected': 0  # Disabled: always set to False (0)
                 }
                 
@@ -767,7 +1040,7 @@ Option 'updateMediaInfo' is specified.
                 logging.info(f"> Updated analysis for {os.path.basename(filepath)}: "
                            # f"people=0 (disabled), "
                            f"activities={activities_str}, "
-                           f"scenery={analysis_result.get('scenery', '')}")
+                           f"scenery={scenery}")
                            # f"talking=False (disabled)")
                 
             except Exception as e:

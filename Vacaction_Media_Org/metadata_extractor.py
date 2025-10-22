@@ -5,6 +5,7 @@ import os
 import subprocess
 import json
 import logging
+import sqlite3
 from datetime import datetime
 import pickle
 from pathlib import Path
@@ -56,48 +57,131 @@ except ImportError:
     logging.warning("PIL/Pillow not available. Image processing will be limited.")
 
 class MetadataExtractor:
-    def __init__(self, geo_list_path='geo_chinese_.list'):
-
+    def __init__(self, db_path='media_organizer.db'):
+        """
+        Initialize MetadataExtractor with geo data from database.
+        
+        Args:
+            db_path: Path to the SQLite database containing geo_data table
+        """
         self.city_dict: dict[str, str] = {}
+        self.geo_data = []
+        self.db_path = db_path
+        
+        # Load geo data from database geo_data table
+        self._load_geo_data_from_db()
+        
+        # ORIGINAL FILE-BASED GEO DATA LOADING (commented out for future reference)
+        # The following code was used to load geo data from geo_chinese_.list file
+        # Search for "FILE_BASED_GEO_LOADING_DISABLED" to restore this functionality
+        #
+        # self.geo_list_path = geo_list_path
+        # if not os.path.exists(self.geo_list_path):
+        #     logging.warning(f"File {self.geo_list_path} not found. Geolocation enhancement will be disabled.")
+        #     self.geo_list_path = None
+        # else:
+        #     # Read and parse geo.list comma separator CSV file and store in memory as a list of tuples
+        #     # This is the first line of the CSV file:
+        #     #   City_en,City_zn,Region_en,Region_zn,Subregion_en,Subregion_zn,CountryCode,Country_en,Country_zn,TimeZone,Latitude,Longitude
+        #     self.geo_data = []
+        #     with open(self.geo_list_path, 'r', encoding='utf-8') as f:
+        #         # Skip header line
+        #         next(f)
+        #         for line in f:
+        #             # Each line is comma-separated values and values are
+        #             #  0:City_en,1:City_zn,2:Region_en,3:Region_zn,4:Subregion_en,5:Subregion_zn,6:CountryCode,7:Country_en,8:Country_zn,9:TimeZone,10:Latitude,11:Longitude
+        #             # logging.info(f"Parsing line in geo.list: {line.strip()}")
+        #             parts = line.strip().split(',')
+        #             try:
+        #                 city_en = parts[0]
+        #                 city_zn = parts[1]
+        #                 region_en = parts[2]
+        #                 region_zn = parts[3]
+        #                 subregion_en = parts[4]
+        #                 subregion_zn = parts[5]
+        #                 country_code = parts[6]
+        #                 country_en = parts[7]
+        #                 country_zn = parts[8]
+        #                 timezone = parts[9]
+        #                 lat = float(parts[10])
+        #                 lon = float(parts[11])
+        #                 # Save city translation mapping with country for unique identification
+        #                 # Key format: (city_en, country_en) -> city_zh
+        #                 self.city_dict[(city_en, country_en)] = city_zn
+        #                 self.geo_data.append((lat, lon, city_en, city_zn, region_en, region_zn, subregion_en, subregion_zn, country_code, country_en, country_zn, timezone))
+        #             except ValueError:
+        #                 logging.error(f"Error parsing line in geo.list: {line}")
+        #                 continue
+        #     logging.info(f"Loaded {len(self.geo_data)} entries from {self.geo_list_path}")
+        #     logging.info(f"City translation dictionary contains {len(self.city_dict)} unique (city, country) pairs")
+        #     
+        #     # Debug: Show some statistics about potential duplicates
+        #     city_counts = {}
+        #     for (city, country) in self.city_dict.keys():
+        #         if city in city_counts:
+        #             city_counts[city] += 1
+        #         else:
+        #             city_counts[city] = 1
+        #     
+        #     duplicates = {city: count for city, count in city_counts.items() if count > 1}
+        #     if duplicates:
+        #         logging.info(f"Found {len(duplicates)} city names that appear in multiple countries:")
+        #         for city, count in sorted(duplicates.items())[:10]:  # Show first 10
+        #             countries = [country for (c, country) in self.city_dict.keys() if c == city]
+        #             logging.info(f"  {city}: {count} countries ({', '.join(countries[:3])}{'...' if len(countries) > 3 else ''})")
+        #     else:
+        #         logging.info("No duplicate city names found across different countries")
 
-        self.geo_list_path = geo_list_path
-        if not os.path.exists(self.geo_list_path):
-            logging.warning(f"File {self.geo_list_path} not found. Geolocation enhancement will be disabled.")
-            self.geo_list_path = None
-        else:
-            # Read and parse geo.list comma separator CSV file and store in memory as a list of tuples
-            # This is the first line of the CSV file:
-            #   City_en,City_zn,Region_en,Region_zn,Subregion_en,Subregion_zn,CountryCode,Country_en,Country_zn,TimeZone,Latitude,Longitude
-            self.geo_data = []
-            with open(self.geo_list_path, 'r', encoding='utf-8') as f:
-                # Skip header line
-                next(f)
-                for line in f:
-                    # Each line is comma-separated values and values are
-                    #  0:City_en,1:City_zn,2:Region_en,3:Region_zn,4:Subregion_en,5:Subregion_zn,6:CountryCode,7:Country_en,8:Country_zn,9:TimeZone,10:Latitude,11:Longitude
-                    # logging.info(f"Parsing line in geo.list: {line.strip()}")
-                    parts = line.strip().split(',')
-                    try:
-                        city_en = parts[0]
-                        city_zn = parts[1]
-                        region_en = parts[2]
-                        region_zn = parts[3]
-                        subregion_en = parts[4]
-                        subregion_zn = parts[5]
-                        country_code = parts[6]
-                        country_en = parts[7]
-                        country_zn = parts[8]
-                        timezone = parts[9]
-                        lat = float(parts[10])
-                        lon = float(parts[11])
-                        # Save city translation mapping with country for unique identification
-                        # Key format: (city_en, country_en) -> city_zh
-                        self.city_dict[(city_en, country_en)] = city_zn
-                        self.geo_data.append((lat, lon, city_en, city_zn, region_en, region_zn, subregion_en, subregion_zn, country_code, country_en, country_zn, timezone))
-                    except ValueError:
-                        logging.error(f"Error parsing line in geo.list: {line}")
-                        continue
-            logging.info(f"Loaded {len(self.geo_data)} entries from {self.geo_list_path}")
+    def _load_geo_data_from_db(self):
+        """
+        Load geo data from database geo_data table instead of from file.
+        This method replaces the file-based geo data loading for better performance.
+        """
+        try:
+            if not os.path.exists(self.db_path):
+                logging.warning(f"Database {self.db_path} not found. Geolocation enhancement will be disabled.")
+                return
+            
+            # Connect to database and load geo data
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Check if geo_data table exists
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='geo_data'
+            """)
+            
+            if not cursor.fetchone():
+                logging.warning("geo_data table not found in database. Geolocation enhancement will be disabled.")
+                logging.info("Run 'python Main_scan_media.py --populateGeoTable -g' to populate geo data first.")
+                conn.close()
+                return
+            
+            # Load all geo data from database
+            cursor.execute("""
+                SELECT latitude, longitude, city_en, city_zh, region_en, region_zh, 
+                       subregion_en, subregion_zh, country_code, country_en, country_zh, timezone
+                FROM geo_data
+                ORDER BY city_en, country_en
+            """)
+            
+            rows = cursor.fetchall()
+            
+            # Process loaded data into the same format as file-based loading
+            for row in rows:
+                lat, lon, city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone = row
+                
+                # Save city translation mapping with country for unique identification
+                # Key format: (city_en, country_en) -> city_zh
+                self.city_dict[(city_en, country_en)] = city_zh
+                
+                # Store geo data in same format as original: (lat, lon, city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone)
+                self.geo_data.append((lat, lon, city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone))
+            
+            conn.close()
+            
+            logging.info(f"Loaded {len(self.geo_data)} entries from database geo_data table")
             logging.info(f"City translation dictionary contains {len(self.city_dict)} unique (city, country) pairs")
             
             # Debug: Show some statistics about potential duplicates
@@ -116,6 +200,13 @@ class MetadataExtractor:
                     logging.info(f"  {city}: {count} countries ({', '.join(countries[:3])}{'...' if len(countries) > 3 else ''})")
             else:
                 logging.info("No duplicate city names found across different countries")
+                
+        except sqlite3.Error as e:
+            logging.error(f"Database error while loading geo data: {e}")
+            logging.warning("Geolocation enhancement will be disabled.")
+        except Exception as e:
+            logging.error(f"Unexpected error while loading geo data: {e}")
+            logging.warning("Geolocation enhancement will be disabled.")
 
     def _get_city_translation(self, city_name: str, country_name: str = None) -> str:
         """
@@ -841,7 +932,7 @@ class MetadataExtractor:
         return R * c
 
     def get_geo_from_coordinates(self, latitude, longitude):
-        if not self.geo_list_path:
+        if not self.geo_data:
             return None
         try:
             # Use ExifTool to reverse-geocode using the geo.list file
