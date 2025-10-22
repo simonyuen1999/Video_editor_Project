@@ -295,10 +295,15 @@ class MetadataExtractor:
                 video_result = self._analyze_video_frames(filepath)
                 result.update(video_result)
             
-            # Analyze audio for talking detection
-            if LIBROSA_AVAILABLE:
-                audio_result = self._analyze_audio(filepath)
-                result['talking_detected'] = audio_result.get('talking_detected', False)
+            # PERFORMANCE ENHANCEMENT: Audio analysis disabled for performance reasons
+            # Talking detection is not needed and consumes significant processing time
+            # Search for "AUDIO_ANALYSIS_DISABLED" to re-enable audio processing
+            # if LIBROSA_AVAILABLE:
+            #     audio_result = self._analyze_audio(filepath)
+            #     result['talking_detected'] = audio_result.get('talking_detected', False)
+            
+            # Set talking_detected to False since audio analysis is disabled
+            result['talking_detected'] = False  # AUDIO_ANALYSIS_DISABLED
                 
         except Exception as e:
             logging.error(f"Error analyzing video {filepath}: {e}\n")
@@ -366,27 +371,34 @@ class MetadataExtractor:
     
     def _detect_people_in_frame(self, frame):
         """Detect people in a single frame using Haar Cascades."""
-        try:
-            # Convert to grayscale for face detection
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            
-            # Use Haar Cascade for face detection (proxy for people)
-            face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-            
-            # Also try upper body detection
-            body_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_upperbody.xml')
-            bodies = body_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(50, 50))
-            
-            # Take the maximum of face or body detection
-            people_count = max(len(faces), len(bodies))
-            
-            logging.debug(f"Detected {len(faces)} faces and {len(bodies)} bodies, count: {people_count}")
-            return people_count
-            
-        except Exception as e:
-            logging.error(f"Error detecting people in frame: {e}\n")
-            return 0
+        
+        # PERFORMANCE ENHANCEMENT: People detection disabled for performance and accuracy reasons
+        # Return 0 immediately to skip processing. Search for "PEOPLE_DETECTION_DISABLED" to re-enable.
+        # TODO: Re-enable when more accurate people detection algorithm is available
+        return 0  # PEOPLE_DETECTION_DISABLED
+        
+        # Original people detection code (commented out for performance):
+        # try:
+        #     # Convert to grayscale for face detection
+        #     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        #     
+        #     # Use Haar Cascade for face detection (proxy for people)
+        #     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        #     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        #     
+        #     # Also try upper body detection
+        #     body_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_upperbody.xml')
+        #     bodies = body_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(50, 50))
+        #     
+        #     # Take the maximum of face or body detection
+        #     people_count = max(len(faces), len(bodies))
+        #     
+        #     logging.debug(f"Detected {len(faces)} faces and {len(bodies)} bodies, count: {people_count}")
+        #     return people_count
+        #     
+        # except Exception as e:
+        #     logging.error(f"Error detecting people in frame: {e}\n")
+        #     return 0
     
     def _analyze_scene(self, frame):
         """Analyze scene content to determine scenery type."""
@@ -646,39 +658,46 @@ class MetadataExtractor:
     
     def _detect_voice_activity(self, audio, sample_rate):
         """Detect voice activity in audio signal."""
-        try:
-            # Compute spectral features
-            spectral_centroids = librosa.feature.spectral_centroid(y=audio, sr=sample_rate)[0]
-            spectral_rolloff = librosa.feature.spectral_rolloff(y=audio, sr=sample_rate)[0]
-            zero_crossing_rate = librosa.feature.zero_crossing_rate(audio)[0]
-            
-            # Compute MFCC features (useful for voice detection)
-            mfccs = librosa.feature.mfcc(y=audio, sr=sample_rate, n_mfcc=13)
-            
-            # Voice activity detection heuristics
-            # Voice typically has:
-            # - Moderate spectral centroid (300-3000 Hz)
-            # - Regular patterns in MFCCs
-            # - Moderate zero crossing rate
-            
-            avg_centroid = np.mean(spectral_centroids)
-            avg_zcr = np.mean(zero_crossing_rate)
-            mfcc_variance = np.var(mfccs, axis=1)
-            
-            # Heuristic thresholds for voice detection
-            voice_detected = (
-                300 < avg_centroid < 3000 and  # Typical voice frequency range
-                0.01 < avg_zcr < 0.3 and       # Moderate zero crossing rate
-                np.mean(mfcc_variance) > 50    # Sufficient MFCC variance
-            )
-            
-            logging.debug(f"Voice detection - Centroid: {avg_centroid:.2f}, ZCR: {avg_zcr:.4f}, Voice: {voice_detected}")
-            
-            return voice_detected
-            
-        except Exception as e:
-            logging.error(f"Error detecting voice activity: {e}")
-            return False
+        
+        # PERFORMANCE ENHANCEMENT: Talking detection disabled for performance and accuracy reasons
+        # Return False immediately to skip processing. Search for "TALKING_DETECTION_DISABLED" to re-enable.
+        # TODO: Re-enable when more accurate voice activity detection algorithm is available
+        return False  # TALKING_DETECTION_DISABLED
+        
+        # Original voice activity detection code (commented out for performance):
+        # try:
+        #     # Compute spectral features
+        #     spectral_centroids = librosa.feature.spectral_centroid(y=audio, sr=sample_rate)[0]
+        #     spectral_rolloff = librosa.feature.spectral_rolloff(y=audio, sr=sample_rate)[0]
+        #     zero_crossing_rate = librosa.feature.zero_crossing_rate(audio)[0]
+        #     
+        #     # Compute MFCC features (useful for voice detection)
+        #     mfccs = librosa.feature.mfcc(y=audio, sr=sample_rate, n_mfcc=13)
+        #     
+        #     # Voice activity detection heuristics
+        #     # Voice typically has:
+        #     # - Moderate spectral centroid (300-3000 Hz)
+        #     # - Regular patterns in MFCCs
+        #     # - Moderate zero crossing rate
+        #     
+        #     avg_centroid = np.mean(spectral_centroids)
+        #     avg_zcr = np.mean(zero_crossing_rate)
+        #     mfcc_variance = np.var(mfccs, axis=1)
+        #     
+        #     # Heuristic thresholds for voice detection
+        #     voice_detected = (
+        #         300 < avg_centroid < 3000 and  # Typical voice frequency range
+        #         0.01 < avg_zcr < 0.3 and       # Moderate zero crossing rate
+        #         np.mean(mfcc_variance) > 50    # Sufficient MFCC variance
+        #     )
+        #     
+        #     logging.debug(f"Voice detection - Centroid: {avg_centroid:.2f}, ZCR: {avg_zcr:.4f}, Voice: {voice_detected}")
+        #     
+        #     return voice_detected
+        #     
+        # except Exception as e:
+        #     logging.error(f"Error detecting voice activity: {e}")
+        #     return False
     
     def _aggregate_scenery_descriptions(self, descriptions):
         """Aggregate multiple scenery descriptions into a single description."""

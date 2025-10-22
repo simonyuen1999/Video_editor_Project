@@ -520,7 +520,7 @@ Usage Note: Consider the parameter execution order for optimal performance.
   --syncFSnDB or -f          : Sync file system changes with the database. Default: False.
   --updateCity or -u         : Update city translation in the database. Default: False.
   --shareGeoInfo or -s       : Share (Update DB) geo info to the no geo media files at the end. Default: False.
-  --updateMediaInfo or -m    : Update media analysis info (people count, activities, scenery, talking) in database. Default: False.
+  --updateMediaInfo or -m    : Update media analysis info (activities and scenery) in database. Default: False.
 
   The following parameters can be used together with the above options:
   --debug-level : Set the logging debug level.
@@ -575,7 +575,7 @@ Usage Note: Consider the parameter execution order for optimal performance.
     )
     parser.add_argument(
         '--updateMediaInfo', '-m', default=False, action='store_true',
-        help='Update media analysis info (people count, activities, scenery, talking) in the database. default: False'
+        help='Update media analysis info (activities and scenery) in the database. default: False'
     )
     # The geo_chinese_.list file for enhanced geolocation with Chinese name translations
 
@@ -620,7 +620,7 @@ Usage Note: Consider the parameter execution order for optimal performance.
         print("""
 Option 'updateMediaInfo' is specified.
     The program will only update media analysis info in the DB.
-    This includes updating people count, activities, scenery, and talking information.
+    This includes updating activities and scenery information.
     After this process, the program will exit.    
 """)
         # ask for user confirmation to proceed
@@ -654,7 +654,7 @@ Option 'updateMediaInfo' is specified.
             print(f"              Use proximity search: '{args.time_diff}' minutes (see below).")
         print(f"  7. Update media analysis info: {args.updateMediaInfo}")
         if args.updateMediaInfo:
-            print("     WARNING: Media analysis (people, activities, scenery, talking) will be updated!")
+            print("     WARNING: Media analysis (activities and scenery) will be updated!")
             print("              This process analyzes all media files and may take significant time.")
         print(f"\n  I. Time difference for proximity search: '{args.time_diff}' minutes")
         print(f"  II. Geo list path: '{args.geo_list}'    User can specify different geolocation file.")
@@ -724,18 +724,17 @@ Option 'updateMediaInfo' is specified.
             
             # Check if media analysis info already exists
             # Only skip if the file has meaningful analysis data
+            # Note: people_count and talking_detected checks are disabled since these features are disabled
             has_meaningful_analysis = (
-                (people_count is not None and people_count > 0) or 
                 (activities is not None and activities.strip() != '') or 
-                (scenery is not None and scenery.strip() != '') or 
-                (talking_detected is not None and talking_detected != 0)
+                (scenery is not None and scenery.strip() != '')
             )
             
             # Debug: Log the condition evaluation
-            logging.debug(f"Analysis check - people: {people_count is not None and people_count > 0}, "
+            logging.debug(f"Analysis check - people: disabled, "
                          f"activities: {activities is not None and (activities.strip() != '' if activities else False)}, "
                          f"scenery: {scenery is not None and (scenery.strip() != '' if scenery else False)}, "
-                         f"talking: {talking_detected is not None and talking_detected != 0}, "
+                         f"talking: disabled, "
                          f"has_meaningful_analysis: {has_meaningful_analysis}")
             
             if has_meaningful_analysis:
@@ -743,7 +742,7 @@ Option 'updateMediaInfo' is specified.
                 stats['files_skipped'] += 1
                 continue
             
-            # Perform media analysis
+            # Perform media analysis (people counting and talking detection disabled)
             try:
                 logging.info(f"> Analyzing media file: {os.path.basename(filepath)}")
                 analysis_result = extractor._analysis_mediafile(filepath)
@@ -752,11 +751,13 @@ Option 'updateMediaInfo' is specified.
                 activities_str = ','.join(analysis_result.get('activities', []))
                 
                 # Update database with analysis results
+                # Note: people_count and talking_detected are disabled (set to 0/False) 
+                # but database columns are kept for future use
                 semantic_data = {
-                    'people_count': analysis_result.get('people_count', 0),
+                    'people_count': 0,  # Disabled: always set to 0
                     'activities': activities_str,
                     'scenery': analysis_result.get('scenery', ''),
-                    'talking_detected': 1 if analysis_result.get('talking_detected', False) else 0
+                    'talking_detected': 0  # Disabled: always set to False (0)
                 }
                 
                 db.update_media_file_semantic(filepath, semantic_data)
@@ -764,10 +765,10 @@ Option 'updateMediaInfo' is specified.
                 
                 # Log the analysis results
                 logging.info(f"> Updated analysis for {os.path.basename(filepath)}: "
-                           f"people={analysis_result.get('people_count', 0)}, "
+                           # f"people=0 (disabled), "
                            f"activities={activities_str}, "
-                           f"scenery={analysis_result.get('scenery', '')}, "
-                           f"talking={analysis_result.get('talking_detected', False)}")
+                           f"scenery={analysis_result.get('scenery', '')}")
+                           # f"talking=False (disabled)")
                 
             except Exception as e:
                 logging.error(f"Error analyzing media file {filepath}: {e}")
