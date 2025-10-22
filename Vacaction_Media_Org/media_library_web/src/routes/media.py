@@ -1031,6 +1031,7 @@ def bulk_update_media():
         latitude = data.get('latitude')
         longitude = data.get('longitude')
         creation_time = data.get('creation_time')
+        force_update_time = data.get('force_update_time', False)
         
         if not media_ids:
             return jsonify({'error': 'media_ids is required'}), 400
@@ -1066,8 +1067,16 @@ def bulk_update_media():
                     media.latitude = latitude
                 if longitude is not None:
                     media.longitude = longitude
+                
+                # Conditional creation_time update logic
                 if creation_time is not None:
-                    media.creation_time = creation_time
+                    if force_update_time:
+                        # Force update: overwrite all selected files' creation_time
+                        media.creation_time = creation_time
+                    else:
+                        # Conditional update: only update if file doesn't have creation_time
+                        if not media.creation_time or media.creation_time.strip() == '':
+                            media.creation_time = creation_time
                 
                 # Update file metadata using exiftool if any GPS or date info provided
                 if latitude is not None and longitude is not None and creation_time is not None:

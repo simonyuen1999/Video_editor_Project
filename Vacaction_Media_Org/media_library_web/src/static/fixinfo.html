@@ -134,6 +134,43 @@
             min-width: 200px;
         }
 
+        .city-selection-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toggle-city-btn {
+            padding: 6px 12px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+        }
+
+        .toggle-city-btn:hover:not(:disabled) {
+            background: #218838;
+            transform: scale(1.05);
+        }
+
+        .toggle-city-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .toggle-city-btn.show-media-cities {
+            background: #007bff;
+        }
+
+        .toggle-city-btn.show-media-cities:hover:not(:disabled) {
+            background: #0056b3;
+        }
+
         .modify-button {
             padding: 10px 20px;
             background: linear-gradient(135deg, #dc3545, #c82333);
@@ -153,6 +190,74 @@
             background: #6c757d;
             cursor: not-allowed;
             transform: none;
+        }
+
+        /* Checkbox styling */
+        .checkbox-group {
+            margin: 15px 0;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e1e5e9;
+        }
+
+        .checkbox-group label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            margin-bottom: 5px;
+        }
+
+        .update-time-checkbox {
+            margin-right: 8px;
+            transform: scale(1.1);
+        }
+
+        .checkbox-label {
+            font-weight: 500;
+            color: #495057;
+        }
+
+        .checkbox-help {
+            color: #6c757d;
+            font-size: 0.85em;
+            line-height: 1.4;
+            margin-left: 24px;
+        }
+
+        /* Media Modal Styles */
+        .modal-media {
+            max-width: 100%;
+            max-height: 50vh;
+            object-fit: contain;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .modal-body {
+            max-height: 70vh;
+            overflow: auto;
+            padding: 20px;
+        }
+
+        .modal-body h3 {
+            color: #333;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 5px;
+            margin-top: 20px;
+            margin-bottom: 15px;
+        }
+
+        .modal-body p {
+            margin: 8px 0;
+            padding: 4px 0;
+            line-height: 1.5;
+        }
+
+        .modal-body strong {
+            color: #555;
+            font-weight: 600;
         }
 
         .daily-pattern-container {
@@ -437,25 +542,55 @@
         .media-checkbox {
             position: absolute;
             top: 10px;
-            left: 10px;
+            right: 10px;
             width: 20px;
             height: 20px;
-            z-index: 10;
+            z-index: 20; /* Higher than clickable thumbnail */
             cursor: pointer;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 3px;
+            border: 2px solid #ddd;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .media-checkbox:hover {
+            background: rgba(255, 255, 255, 1);
+            border-color: #667eea;
+            transform: scale(1.1);
+        }
+
+        .media-checkbox:checked {
+            background: #667eea;
+            border-color: #667eea;
         }
 
         .media-thumbnail {
             width: 100%;
-            height: var(--thumbnail-height, 150px);
+            height: var(--thumbnail-height, 225px);  /* Increased by 50%: 150px * 1.5 = 225px */
             object-fit: cover;
             display: block;
         }
 
+        .media-thumbnail.clickable {
+            cursor: pointer;
+            transition: transform 0.2s ease, opacity 0.2s ease;
+            border-radius: 8px;
+            position: relative;
+            z-index: 5;
+        }
+
+        .media-thumbnail.clickable:hover {
+            transform: scale(1.02);
+            opacity: 0.9;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 15;
+        }
+
         /* List view specific thumbnail styling */
         .media-item.list .media-thumbnail {
-            width: 120px;
+            width: 180px;      /* Increased by 50%: 120px * 1.5 = 180px */
             height: auto;
-            max-height: 90px;
+            max-height: 135px;  /* Increased by 50%: 90px * 1.5 = 135px */
             object-fit: contain;
             border-radius: 8px;
             background: #f0f0f0;
@@ -548,12 +683,34 @@
         }
 
         .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             margin-bottom: 20px;
         }
 
         .modal-header h2 {
             color: #333;
-            margin-bottom: 10px;
+            margin: 0;
+        }
+
+        .close {
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            color: #aaa;
+            background: none;
+            border: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close:hover {
+            color: #000;
         }
 
         .confirmation-details {
@@ -704,9 +861,14 @@
                 </div>
                 <div class="control-group">
                     <label for="city-select">City:</label>
-                    <select id="city-select" class="city-select" disabled>
-                        <option value="">Select a country first...</option>
-                    </select>
+                    <div class="city-selection-container">
+                        <select id="city-select" class="city-select" disabled>
+                            <option value="">Select a country first...</option>
+                        </select>
+                        <button id="toggle-city-mode" class="toggle-city-btn" disabled onclick="toggleCityMode()" title="Show all cities from geo database">
+                            🌍 Show All Cities
+                        </button>
+                    </div>
                 </div>
                 <div class="control-group">
                     <label for="modify-date">Modify Date:</label>
@@ -715,6 +877,16 @@
                 <div class="control-group">
                     <label for="modify-time">Time:</label>
                     <input type="time" id="modify-time" class="modify-date" value="12:00">
+                </div>
+                <div class="control-group checkbox-group">
+                    <label>
+                        <input type="checkbox" id="force-update-time" class="update-time-checkbox">
+                        <span class="checkbox-label">🕒 Force Update Creation Time</span>
+                    </label>
+                    <small class="checkbox-help">
+                        When unchecked: Only update files without creation_time<br>
+                        When checked: Overwrite all selected files' creation_time
+                    </small>
                 </div>
                 <button id="modify-button" class="modify-button" onclick="showModifyConfirmation()" disabled>
                     Modify Selected Files
@@ -790,12 +962,28 @@
         </div>
     </div>
 
+    <!-- Media Info Modal -->
+    <div id="media-modal" class="modal" onclick="closeMediaModal(event)">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title">Media Details</h2>
+                <span class="close" onclick="closeMediaModal()">&times;</span>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- Media content and details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
     <script>
         let currentDate = '';
         let currentViewMode = 'thumbnail';
         let mediaData = [];
         let selectedCityData = null;
         let availableDateRange = { earliest: null, latest: null };
+        let showAllCities = false; // Track city display mode: false = media cities only, true = all cities from geo
+        let allGeoCities = []; // Cache all cities from geo database
+        let mediaCities = []; // Cache cities from media files
         let allFilenamePatterns = [];
         let currentFilenamePattern = '';
 
@@ -832,6 +1020,18 @@
             // Add event listeners
             document.getElementById('country-select').addEventListener('change', function() {
                 const selectedCountry = this.value;
+                
+                // Clear city caches when country changes
+                allGeoCities = [];
+                mediaCities = [];
+                showAllCities = false; // Reset to media cities only
+                
+                // Reset toggle button
+                const toggleBtn = document.getElementById('toggle-city-mode');
+                toggleBtn.textContent = '🌍 Show All Cities';
+                toggleBtn.className = 'toggle-city-btn';
+                toggleBtn.title = 'Show all cities from geo database';
+                
                 loadCitiesByCountry(selectedCountry);
                 
                 // Clear city selection when country changes
@@ -917,25 +1117,78 @@
             }
         }
 
+        // Toggle between showing media cities only vs all cities from geo database
+        async function toggleCityMode() {
+            const toggleBtn = document.getElementById('toggle-city-mode');
+            const countrySelect = document.getElementById('country-select');
+            const selectedCountry = countrySelect.value;
+            
+            if (!selectedCountry) return;
+            
+            showAllCities = !showAllCities;
+            
+            // Update button text and style
+            if (showAllCities) {
+                toggleBtn.textContent = '📁 Show Media Cities Only';
+                toggleBtn.className = 'toggle-city-btn show-media-cities';
+                toggleBtn.title = 'Show only cities that exist in media files';
+            } else {
+                toggleBtn.textContent = '🌍 Show All Cities';
+                toggleBtn.className = 'toggle-city-btn';
+                toggleBtn.title = 'Show all cities from geo database';
+            }
+            
+            // Reload cities with new mode
+            await loadCitiesByCountry(selectedCountry);
+        }
+
         // Load cities by selected country (for FixInfo view)
         async function loadCitiesByCountry(country) {
             try {
                 const citySelect = document.getElementById('city-select');
+                const toggleBtn = document.getElementById('toggle-city-mode');
                 
                 if (!country) {
                     citySelect.innerHTML = '<option value="">Select a country first...</option>';
                     citySelect.disabled = true;
+                    toggleBtn.disabled = true;
                     return;
                 }
                 
                 citySelect.disabled = false;
+                toggleBtn.disabled = false;
                 citySelect.innerHTML = '<option value="">Loading cities...</option>';
                 
-                // Use new endpoint that loads from geo_chinese_.list file
-                const response = await fetch(`/api/media/geo-cities-by-country?country=${encodeURIComponent(country)}&t=${Date.now()}`);
-                const cities = await response.json();
+                let cities = [];
+                
+                if (showAllCities) {
+                    // Load all cities from geo database
+                    if (allGeoCities.length === 0 || allGeoCities.country !== country) {
+                        console.log('Loading all cities from geo database for country:', country);
+                        const response = await fetch(`/api/media/geo-cities-by-country?country=${encodeURIComponent(country)}&t=${Date.now()}`);
+                        allGeoCities = await response.json();
+                        allGeoCities.country = country; // Mark which country this cache is for
+                    }
+                    cities = allGeoCities;
+                } else {
+                    // Load only cities that exist in media files
+                    if (mediaCities.length === 0 || mediaCities.country !== country) {
+                        console.log('Loading media cities only for country:', country);
+                        const response = await fetch(`/api/media/cities-by-country?country=${encodeURIComponent(country)}&t=${Date.now()}`);
+                        mediaCities = await response.json();
+                        mediaCities.country = country; // Mark which country this cache is for
+                    }
+                    cities = mediaCities;
+                }
                 
                 citySelect.innerHTML = '<option value="">Select a city...</option>';
+                
+                // Add info about current mode
+                const modeInfo = showAllCities ? 
+                    `(Showing all ${cities.length} cities from geo database)` : 
+                    `(Showing ${cities.length} cities from media files)`;
+                
+                console.log(`Loading cities for ${country}: ${modeInfo}`);
                 
                 // Remove duplicates and sort cities by display name
                 const uniqueCities = [];
@@ -954,17 +1207,33 @@
                 uniqueCities.sort((a, b) => a.display.localeCompare(b.display));
                 
                 uniqueCities.forEach(city => {
-                    console.log('City data for FixInfo:', city); // Debug log
                     const option = document.createElement('option');
                     // FixInfo view stores the entire city object as JSON in the option value
                     option.value = JSON.stringify(city);
                     option.textContent = city.display;  // "city_en | city_zh" (no country since already selected)
                     citySelect.appendChild(option);
                 });
+                
+                // Update toggle button text based on results
+                updateToggleButtonText(cities.length);
+                
             } catch (error) {
                 console.error('Error loading cities:', error);
                 const citySelect = document.getElementById('city-select');
                 citySelect.innerHTML = '<option value="">Error loading cities</option>';
+            }
+        }
+        
+        // Update toggle button text to show available counts
+        function updateToggleButtonText(currentCount) {
+            const toggleBtn = document.getElementById('toggle-city-mode');
+            
+            if (showAllCities) {
+                const mediaCount = mediaCities.length || 0;
+                toggleBtn.textContent = `📁 Show Media Cities Only (${mediaCount})`;
+            } else {
+                const geoCount = allGeoCities.length || 0;
+                toggleBtn.textContent = `🌍 Show All Cities (${geoCount})`;
             }
         }
 
@@ -1157,12 +1426,12 @@
                 
                 return `
                     <div class="media-item ${currentViewMode} ${!hasLocation ? 'unknown-location' : ''}">
-                        <input type="checkbox" class="media-checkbox" data-media-id="${mediaItem.id}" onchange="updateModifyButton()">
+                        <input type="checkbox" class="media-checkbox" data-media-id="${mediaItem.id}" onchange="updateModifyButton()" onclick="event.stopPropagation()">
                         ${isVideo ? 
-                            `<video class="media-thumbnail" muted preload="none">
+                            `<video class="media-thumbnail clickable" muted preload="none" data-media-id="${mediaItem.id}" data-filename="${mediaItem.filename}" data-is-video="true" title="Click to play video">
                                 <source src="/api/media/${mediaItem.id}/thumbnail" type="video/${mediaItem.file_extension?.substring(1) || 'mp4'}">
                             </video>` :
-                            `<img class="media-thumbnail" src="/api/media/${mediaItem.id}/thumbnail" alt="${mediaItem.filename}" loading="lazy">`
+                            `<img class="media-thumbnail clickable" src="/api/media/${mediaItem.id}/thumbnail" alt="${mediaItem.filename}" loading="lazy" data-media-id="${mediaItem.id}" data-filename="${mediaItem.filename}" data-is-video="false" title="Click to view image">`
                         }
                         <div class="media-info">
                             <div class="media-title">${mediaItem.filename}</div>
@@ -1183,6 +1452,9 @@
 
             container.innerHTML = '';
             container.appendChild(mediaGrid);
+            
+            // Add click event delegation for thumbnails
+            setupThumbnailClickHandlers(mediaGrid);
             
             // Restore selections if provided
             if (savedSelections) {
@@ -1263,12 +1535,19 @@
             const displayTime = formatTimeToAMPM(modifyTime);
             const displayDateTime = modifyDate + ' ' + displayTime;
             
+            // Get force update time checkbox state for confirmation
+            const forceUpdateTime = document.getElementById('force-update-time').checked;
+            const timeUpdateMode = forceUpdateTime ? 
+                '🕒 Force update ALL files\' creation time' : 
+                '🕒 Only update files without creation time';
+            
             // Create confirmation details
             const detailsHtml = `
                 <p><strong>Selected Files:</strong> ${checkedBoxes.length} file${checkedBoxes.length > 1 ? 's' : ''}</p>
                 <p><strong>New City:</strong> ${selectedCityData.city_en} | ${selectedCityData.city_zh}</p>
                 <p><strong>New Country:</strong> ${selectedCityData.country_en} | ${selectedCityData.country_zh}</p>
                 <p><strong>New Date & Time:</strong> ${displayDateTime}</p>
+                <p><strong>Creation Time Update:</strong> ${timeUpdateMode}</p>
                 <p><strong>New GPS Coordinates:</strong> ${selectedCityData.latitude}, ${selectedCityData.longitude}</p>
                 <br>
                 <p><em>This will update both the database records and the EXIF data in the media files using exiftool.</em></p>
@@ -1302,6 +1581,9 @@
             progressText.textContent = `0 of ${mediaIds.length} files processed`;
             
             try {
+                // Get the force update time checkbox state
+                const forceUpdateTime = document.getElementById('force-update-time').checked;
+                
                 const updatePayload = {
                     media_ids: mediaIds,
                     city_en: selectedCityData.city_en,
@@ -1310,7 +1592,8 @@
                     country_zh: selectedCityData.country_zh,
                     latitude: selectedCityData.latitude,
                     longitude: selectedCityData.longitude,
-                    creation_time: modifyDateTime
+                    creation_time: modifyDateTime,
+                    force_update_time: forceUpdateTime
                 };
                 console.log('Bulk update payload:', updatePayload); // Debug log
                 
@@ -1551,6 +1834,13 @@
                 }
             });
 
+            // Uncheck the unknown location filter when switching view modes
+            const unknownFilter = document.getElementById('unknown-filter');
+            if (unknownFilter && unknownFilter.checked) {
+                unknownFilter.checked = false;
+                onUnknownFilterChange(); // Trigger the filter change to refresh the display
+            }
+
             // Update thumbnail size control visibility
             const sizeControl = document.querySelector('.thumbnail-size-control');
             sizeControl.style.display = mode === 'thumbnail' ? 'flex' : 'none';
@@ -1603,6 +1893,174 @@
                 </div>
             `;
         }
+
+        // Setup event delegation for thumbnail clicks
+        function setupThumbnailClickHandlers(mediaGrid) {
+            mediaGrid.addEventListener('click', function(event) {
+                const clickedElement = event.target;
+                
+                // Don't open modal if clicking on checkbox or its area
+                if (clickedElement.classList.contains('media-checkbox') || 
+                    clickedElement.type === 'checkbox' ||
+                    clickedElement.closest('.media-checkbox')) {
+                    console.log('Checkbox clicked, not opening modal');
+                    return; // Let the checkbox handle its own click
+                }
+                
+                // Also check if click is in the checkbox area (top-right 40x40 pixels)
+                const mediaItem = clickedElement.closest('.media-item');
+                if (mediaItem) {
+                    const rect = mediaItem.getBoundingClientRect();
+                    const x = event.clientX - rect.left;
+                    const y = event.clientY - rect.top;
+                    
+                    // If click is in top-right corner (checkbox area), ignore it
+                    if (x > rect.width - 40 && y < 40) {
+                        console.log('Click in checkbox area, ignoring');
+                        return;
+                    }
+                }
+                
+                // Check if clicked element is a clickable thumbnail
+                if (clickedElement.classList.contains('clickable')) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    
+                    const mediaId = clickedElement.getAttribute('data-media-id');
+                    
+                    console.log('Thumbnail clicked via delegation:', mediaId);
+                    openMediaModal(mediaId);
+                }
+            });
+        }
+
+
+
+        // Open media modal with detailed information
+        async function openMediaModal(mediaId) {
+            try {
+                const response = await fetch(`/api/media/${mediaId}`);
+                const media = await response.json();
+                
+                const modal = document.getElementById('media-modal');
+                const title = document.getElementById('modal-title');
+                const body = document.getElementById('modal-body');
+                
+                title.textContent = `${media.city_zh || 'Unknown Location'} - ${media.filename || 'Unknown File'}`;
+                
+                const isVideo = media.file_extension && 
+                    ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
+                
+                const displayTime = formatCreationTime(media.creation_time);
+                
+                // Parse activities and scenery arrays if they exist
+                let activities = [];
+                let scenery = [];
+                
+                try {
+                    if (media.activities && typeof media.activities === 'string') {
+                        activities = JSON.parse(media.activities);
+                    } else if (Array.isArray(media.activities)) {
+                        activities = media.activities;
+                    }
+                } catch (e) {
+                    activities = [];
+                }
+                
+                try {
+                    if (media.scenery && typeof media.scenery === 'string') {
+                        scenery = JSON.parse(media.scenery);
+                    } else if (Array.isArray(media.scenery)) {
+                        scenery = media.scenery;
+                    }
+                } catch (e) {
+                    scenery = [];
+                }
+                
+                body.innerHTML = `
+                    ${isVideo ? 
+                        `<video class="modal-media" controls src="/api/media/${media.id}/file"></video>` :
+                        `<img class="modal-media" src="/api/media/${media.id}/file" alt="Media">`
+                    }
+                    <div>
+                        <h3>Details</h3>
+                        <p><strong>Filename:</strong> ${media.filename || 'N/A'}</p>
+                        <p><strong>Creation Time:</strong> ${displayTime}</p>
+                        <p><strong>Location:</strong> ${media.city_zh || 'N/A'} | ${media.city_en || 'N/A'}, ${media.country_zh || 'N/A'} | ${media.country_en || 'N/A'}</p>
+                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> ${media.latitude}, ${media.longitude}</p>` : ''}
+                        <p><strong>Talking Detected:</strong> ${media.talking_detected ? 'Yes' : 'No'}</p>
+                        ${activities.length > 0 ? `<p><strong>Activities:</strong> ${activities.join(', ')}</p>` : ''}
+                        ${scenery.length > 0 ? `<p><strong>Scenery:</strong> ${scenery.join(', ')}</p>` : ''}
+                        <p><strong>File Path:</strong> ${media.filepath || 'N/A'}</p>
+                        <p><strong>File Size:</strong> ${media.size ? (media.size / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</p>
+                        <button style="margin-top: 10px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;" onclick="openFileInSystem(${media.id})">
+                            📱 Open with System App
+                        </button>
+                    </div>
+                `;
+                
+                modal.style.display = 'block';
+            } catch (error) {
+                console.error('Error loading media details:', error);
+                showError('Failed to load media details.');
+            }
+        }
+
+        // Open file in system default application
+        async function openFileInSystem(mediaId) {
+            try {
+                const response = await fetch(`/api/media/${mediaId}/open`, {
+                    method: 'POST'
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    console.log('File opened successfully:', result.message);
+                } else {
+                    console.error('Error opening file:', result.error);
+                    alert('Error opening file: ' + result.error);
+                }
+            } catch (error) {
+                console.error('Error opening file:', error);
+                alert('Error opening file: ' + error.message);
+            }
+        }
+
+        function closeMediaModal(event) {
+            // Close if clicking outside modal content or on close button
+            if (event && event.target.classList.contains('modal-content')) {
+                return; // Don't close if clicking inside modal content
+            }
+            
+            const modal = document.getElementById('media-modal');
+            const body = document.getElementById('modal-body');
+            
+            // Hide modal
+            modal.style.display = 'none';
+            
+            // Clean up video if present
+            const video = body.querySelector('video');
+            if (video) {
+                video.pause();
+                video.src = '';
+            }
+        }
+
+        // Close modal with Escape key
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Escape') {
+                const modal = document.getElementById('media-modal');
+                if (modal.style.display === 'block') {
+                    closeMediaModal();
+                }
+            }
+        });
+
+        // Test function for debugging (call from console: testModal())
+        window.testModal = function() {
+            console.log('Testing modal...');
+            openMediaModal(1);
+        };
     </script>
 </body>
 </html>
