@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Geographic Translation Editor
-A GUI tool for editing Chinese translations in geo_chinese_bkup.list file
 """
 
 import tkinter as tk
@@ -16,6 +15,7 @@ import time
 import webbrowser
 import argparse
 import sys
+import sqlite3
 from typing import List, Dict, Optional
 
 # Try to import requests, fall back to urllib if not available
@@ -27,12 +27,14 @@ except ImportError:
     HAS_REQUESTS = False
 
 class GeoTranslationEditor:
-    def __init__(self, root, city_csv_file="HK_City_en_translated.csv"):
+    def __init__(self, root, db_path="media_organizer.db"):
         self.root = root
-        self.root.title("Geographic Translation Editor")
+        self.root.title("Geographic Translation Editor - Database Mode")
         
-        # Store the city CSV file path
-        self.city_csv_file = city_csv_file
+        # Store the database path and initialize translation CSV file path
+        self.city_csv_file = None
+        self.list_file = None  # Add variable to track selected list file
+        self.db_path = db_path
         
         # Set initial window size
         initial_width = 1200
@@ -48,6 +50,10 @@ class GeoTranslationEditor:
         # Center the window on screen
         self.center_window(initial_width, initial_height)
         
+        # Database connection
+        self.conn = None
+        self.init_database()
+        
         # Data storage
         self.data: List[Dict] = []
         self.filtered_data: List[Dict] = []
@@ -59,9 +65,8 @@ class GeoTranslationEditor:
         # UI components that need to be controlled
         self.edit_all_button = None
         
-        # Load additional city translations from HK CSV file
+        # Initialize additional city translations (loaded when CSV is selected)
         self.additional_translations = {}
-        self.load_city_translations()
         
         self.setup_ui()
         
@@ -77,9 +82,192 @@ class GeoTranslationEditor:
         
         # Set the window position
         self.root.geometry(f"{width}x{height}+{x}+{y}")
+    
+    def init_database(self):
+        """Initialize database connection and ensure geo_data table exists"""
+        try:
+            self.conn = sqlite3.connect(self.db_path)
+            self.conn.row_factory = sqlite3.Row  # Enable column name access
+            
+            # Ensure geo_data table exists
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS geo_data (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    city_en TEXT NOT NULL,
+                    city_zh TEXT NOT NULL,
+                    region_en TEXT,
+                    region_zh TEXT,
+                    subregion_en TEXT,
+                    subregion_zh TEXT,
+                    country_code TEXT NOT NULL,
+                    country_en TEXT NOT NULL,
+                    country_zh TEXT NOT NULL,
+                    timezone TEXT,
+                    latitude REAL NOT NULL,
+                    longitude REAL NOT NULL,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(city_en, country_en, latitude, longitude)
+                )
+            ''')
+            
+            # Create indexes for faster lookups
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_geo_coords ON geo_data (latitude, longitude)
+            ''')
+            
+            cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_geo_city_country ON geo_data (city_en, country_en)
+            ''')
+            
+            self.conn.commit()
+            print(f"✅ Database initialized: {self.db_path}")
+            
+        except sqlite3.Error as e:
+            print(f"❌ Database error: {e}")
+            messagebox.showerror("Database Error", f"Failed to initialize database: {e}")
+    
+    def load_geo_list_to_database(self, file_path):
+        """Load data from selected geographic list file into the database"""
+        try:
+            cursor = self.conn.cursor()
+            
+            # Data should already be cleared by repopulate method
+            
+            # Load data from CSV file
+            total_records = 0
+            inserted_records = 0
+            skipped_records = 0
+            error_records = 0
+            
+            print(f"Loading geo data from: {file_path}")
+            
+            with open(file_path, 'r', encoding='utf-8') as f:
+                # Skip header line
+                header = next(f)
+                print(f"Header: {header.strip()}")
+                
+                for line_num, line in enumerate(f, start=2):
+                    total_records += 1
+                    
+                    try:
+                        # Parse CSV line
+                        parts = line.strip().split(',')
+                        if len(parts) != 12:
+                            print(f"Line {line_num}: Invalid format, expected 12 fields, got {len(parts)}")
+                            error_records += 1
+                            continue
+                        
+                        city_en = parts[0].strip()
+                        city_zh = parts[1].strip()
+                        region_en = parts[2].strip()
+                        region_zh = parts[3].strip()
+                        subregion_en = parts[4].strip()
+                        subregion_zh = parts[5].strip()
+                        country_code = parts[6].strip()
+                        country_en = parts[7].strip()
+                        country_zh = parts[8].strip()
+                        timezone = parts[9].strip()
+                        
+                        try:
+                            latitude = float(parts[10].strip())
+                            longitude = float(parts[11].strip())
+                        except ValueError as ve:
+                            print(f"Line {line_num}: Invalid coordinates - {ve}")
+                            error_records += 1
+                            continue
+                        
+                        # Insert into geo table
+                        cursor.execute('''
+                            INSERT OR IGNORE INTO geo_data (
+                                city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh,
+                                country_code, country_en, country_zh, timezone, latitude, longitude
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ''', (
+                            city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh,
+                            country_code, country_en, country_zh, timezone, latitude, longitude
+                        ))
+                        
+                        if cursor.rowcount > 0:
+                            inserted_records += 1
+                        else:
+                            skipped_records += 1
+                            
+                    except Exception as parse_error:
+                        print(f"Line {line_num}: Parse error - {parse_error}")
+                        error_records += 1
+                        
+                    # Commit every 1000 records
+                    if total_records % 1000 == 0:
+                        self.conn.commit()
+                        print(f"Processed {total_records} records...")
+                
+                # Final commit
+                self.conn.commit()
+                
+            print(f"Database loading complete:")
+            print(f"  Total records processed: {total_records}")
+            print(f"  Records inserted: {inserted_records}")
+            print(f"  Records skipped (duplicates): {skipped_records}")
+            print(f"  Records with errors: {error_records}")
+            
+            return True
+            
+        except Exception as e:
+            print(f"Error loading CSV to database: {e}")
+            messagebox.showerror("Load Error", f"Failed to load data: {e}")
+            return False
+    
+    def update_city_translation_in_db(self, city_en, country_en, new_city_zh, new_country_zh=None):
+        """Update city Chinese translation directly in database"""
+        try:
+            cursor = self.conn.cursor()
+            
+            if new_country_zh is not None:
+                # Update both city_zh and country_zh
+                cursor.execute('''
+                    UPDATE geo_data 
+                    SET city_zh = ?, country_zh = ? 
+                    WHERE city_en = ? AND country_en = ?
+                ''', (new_city_zh, new_country_zh, city_en, country_en))
+                
+                updated_count = cursor.rowcount
+                self.conn.commit()
+                
+                if updated_count > 0:
+                    print(f"✅ Updated {updated_count} records: {city_en} ({country_en}) -> {new_city_zh} ({new_country_zh})")
+                    return True
+                else:
+                    print(f"⚠️  No records found to update: {city_en} in {country_en}")
+                    return False
+            else:
+                # Update only city_zh
+                cursor.execute('''
+                    UPDATE geo_data 
+                    SET city_zh = ? 
+                    WHERE city_en = ? AND country_en = ?
+                ''', (new_city_zh, city_en, country_en))
+                
+                updated_count = cursor.rowcount
+                self.conn.commit()
+                
+                if updated_count > 0:
+                    print(f"✅ Updated {updated_count} records: {city_en} ({country_en}) -> {new_city_zh}")
+                    return True
+                else:
+                    print(f"⚠️  No records found to update: {city_en} in {country_en}")
+                    return False
+                
+        except sqlite3.Error as e:
+            print(f"❌ Database error updating translation: {e}")
+            return False
         
     def load_city_translations(self):
         """Load additional city translations from specified CSV file"""
+        if not self.city_csv_file:
+            print("⚠️  No translation CSV file selected")
+            return
+            
         city_translation_file_path = self.city_csv_file
         
         try:
@@ -88,6 +276,9 @@ class GeoTranslationEditor:
                 return
 
             print(f"📖 Loading City translations from {city_translation_file_path}")
+            
+            # Clear previous translations
+            self.additional_translations.clear()
 
             with open(city_translation_file_path, 'r', encoding='utf-8') as file:
                 csv_reader = csv.DictReader(file)
@@ -707,21 +898,39 @@ class GeoTranslationEditor:
         self.root.columnconfigure(0, weight=1)
         self.root.rowconfigure(0, weight=1)
         main_frame.columnconfigure(1, weight=1)
-        main_frame.rowconfigure(2, weight=1)
+        main_frame.rowconfigure(3, weight=1)
         
-        # File selection section
-        file_frame = ttk.LabelFrame(main_frame, text="File Selection", padding="5")
-        file_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
-        file_frame.columnconfigure(1, weight=1)
+        # Database loading section
+        db_frame = ttk.LabelFrame(main_frame, text="Database Operations", padding="5")
+        db_frame.grid(row=0, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        db_frame.columnconfigure(1, weight=1)
         
-        ttk.Button(file_frame, text="Load CSV File", command=self.load_csv_file).grid(row=0, column=0, padx=(0, 10))
+        ttk.Button(db_frame, text="Load City info from Database", command=self.load_csv_data).grid(row=0, column=0, padx=(0, 10))
+
+        ttk.Button(db_frame, text="Repopulate DB from List", command=self.repopulate_database_with_selected_list).grid(row=0, column=1, padx=(10, 0))
+
+        ttk.Button(db_frame, text="Select List File for DB repopulation", command=self.select_list_file).grid(row=1, column=0, padx=(0, 10), pady=(5, 0))
+
+        self.list_file_var = tk.StringVar()
+        self.list_file_var.set("No list file selected. Example: geo_chinese.list")
+        self.list_status_label = ttk.Label(db_frame, textvariable=self.list_file_var, foreground="gray")
+        self.list_status_label.grid(row=1, column=1, sticky=(tk.W, tk.E), padx=(10, 0), pady=(5, 0))
         
-        self.file_path_var = tk.StringVar()
-        ttk.Entry(file_frame, textvariable=self.file_path_var, state="readonly").grid(row=0, column=1, sticky=(tk.W, tk.E))
+        # Translation CSV file section
+        csv_frame = ttk.LabelFrame(main_frame, text="Translation Helper CSV", padding="5")
+        csv_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        csv_frame.columnconfigure(1, weight=1)
+        
+        ttk.Button(csv_frame, text="Select City Translation CSV File", command=self.select_translation_csv).grid(row=0, column=0, padx=(0, 10))
+        
+        self.csv_file_var = tk.StringVar()
+        self.csv_file_var.set("No translation CSV loaded, Example: HK_City_en_translated.csv (CSV format: City_en, City_zh)")
+        self.csv_status_label = ttk.Label(csv_frame, textvariable=self.csv_file_var, foreground="gray")
+        self.csv_status_label.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(10, 0))
         
         # Filter section
         filter_frame = ttk.LabelFrame(main_frame, text="Filters", padding="5")
-        filter_frame.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        filter_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
         filter_frame.columnconfigure(1, weight=1)
         
         ttk.Label(filter_frame, text="Country (English):").grid(row=0, column=0, padx=(0, 10))
@@ -735,7 +944,7 @@ class GeoTranslationEditor:
         
         # Data table section
         table_frame = ttk.LabelFrame(main_frame, text="Geographic Data", padding="5")
-        table_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
+        table_frame.grid(row=3, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
         table_frame.columnconfigure(0, weight=1)
         table_frame.rowconfigure(0, weight=1)
         
@@ -769,26 +978,19 @@ class GeoTranslationEditor:
         
         # Control buttons section
         control_frame = ttk.Frame(main_frame)
-        control_frame.grid(row=3, column=0, columnspan=2, pady=(0, 10))
-        
-        ttk.Button(control_frame, text="Edit Selected", command=self.edit_selected_item).pack(side=tk.LEFT, padx=(0, 10))
-        self.edit_all_button = ttk.Button(control_frame, text="📝 Edit All", command=self.edit_all_cities, state="disabled")
+        control_frame.grid(row=4, column=0, columnspan=2, pady=(0, 10))
+
+        ttk.Button(control_frame, text="Edit Selected City (selected on double-click)", command=self.edit_selected_item).pack(side=tk.LEFT, padx=(0, 10))
+        self.edit_all_button = ttk.Button(control_frame, text="📝 Edit ALL with CSV File", command=self.edit_all_cities, state="disabled")
         self.edit_all_button.pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(control_frame, text="Save Changes", command=self.save_changes).pack(side=tk.LEFT, padx=(0, 10))
-        ttk.Button(control_frame, text="Export CSV", command=self.export_csv).pack(side=tk.LEFT)
+        ttk.Button(control_frame, text="💾 Database Info", command=self.save_changes).pack(side=tk.LEFT, padx=(0, 10))
+        ttk.Button(control_frame, text="Export current view (city_en, city_zh, country_en, country_zh) to CSV", command=self.export_csv).pack(side=tk.LEFT)
         
         # Status bar
         self.status_var = tk.StringVar()
-        self.status_var.set("Ready - Please load a CSV file")
+        self.status_var.set("Ready - Click 'Reload from Database' to start")
         status_bar = ttk.Label(main_frame, textvariable=self.status_var, relief=tk.SUNKEN)
-        status_bar.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E))
-        
-        # Auto-load the backup file if it exists
-        backup_file = "/Users/syuen/Video_editor_Project/Vacaction_Media_Org/geo_chinese_bkup.list"
-        if os.path.exists(backup_file):
-            self.csv_file_path = backup_file
-            self.file_path_var.set(backup_file)
-            self.load_csv_data()
+        status_bar.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E))
     
     def load_csv_file(self):
         """Load CSV file through file dialog"""
@@ -800,48 +1002,208 @@ class GeoTranslationEditor:
         
         if file_path:
             self.csv_file_path = file_path
-            self.file_path_var.set(file_path)
             self.load_csv_data()
     
     def load_csv_data(self):
-        """Load data from CSV file"""
+        """Load data from database geo_data table"""
+        print("ℹ️  Reloading geographic data from database...")
         try:
             self.data.clear()
             
-            with open(self.csv_file_path, 'r', encoding='utf-8') as file:
-                # Read first line to detect delimiter and headers
-                first_line = file.readline().strip()
-                
-                # Reset file position
-                file.seek(0)
-                
-                # Try different delimiters
-                delimiter = ',' if ',' in first_line else '\t'
-                
-                reader = csv.DictReader(file, delimiter=delimiter)
-                
-                for row in reader:
-                    # Map various possible column names to standardized names
-                    city_en = row.get('City_en', row.get('city_en', row.get('City', '')))
-                    city_zh = row.get('City_zn', row.get('city_zh', row.get('City_zh', '')))
-                    country_en = row.get('Country_en', row.get('country_en', row.get('Country', '')))
-                    country_zh = row.get('Country_zn', row.get('country_zh', row.get('Country_zh', '')))
+            cursor = self.conn.cursor()
+            cursor.execute('''
+                SELECT city_en, city_zh, country_en, country_zh, 
+                       region_en, region_zh, latitude, longitude
+                FROM geo_data 
+                ORDER BY country_en, city_en
+            ''')
+            
+            rows = cursor.fetchall()
+            
+            for row in rows:
+                # Create the data structure with original_row for compatibility
+                # Use try/except for optional columns since sqlite3.Row doesn't have get() method
+                try:
+                    region_en = row['region_en'] if row['region_en'] else ''
+                except (IndexError, KeyError):
+                    region_en = ''
                     
-                    self.data.append({
-                        'city_en': city_en.strip(),
-                        'city_zh': city_zh.strip(),
-                        'country_en': country_en.strip(),
-                        'country_zh': country_zh.strip(),
-                        'original_row': row  # Keep original data for saving
-                    })
+                try:
+                    region_zh = row['region_zh'] if row['region_zh'] else ''
+                except (IndexError, KeyError):
+                    region_zh = ''
+                    
+                try:
+                    latitude = float(row['latitude']) if row['latitude'] else 0.0
+                except (IndexError, KeyError, ValueError):
+                    latitude = 0.0
+                    
+                try:
+                    longitude = float(row['longitude']) if row['longitude'] else 0.0
+                except (IndexError, KeyError, ValueError):
+                    longitude = 0.0
+                
+                data_item = {
+                    'city_en': row['city_en'],
+                    'city_zh': row['city_zh'],
+                    'country_en': row['country_en'],
+                    'country_zh': row['country_zh'],
+                    'region_en': region_en,
+                    'region_zh': region_zh,
+                    'latitude': latitude,
+                    'longitude': longitude,
+                }
+                
+                # Add original_row structure for edit dialog compatibility
+                data_item['original_row'] = {
+                    'City_en': row['city_en'],
+                    'City_zn': row['city_zh'],
+                    'Country_en': row['country_en'],
+                    'Country_zn': row['country_zh'],
+                    'Region_en': region_en,
+                    'Region_zn': region_zh,
+                    'Latitude': latitude,
+                    'Longitude': longitude,
+                }
+                
+                self.data.append(data_item)
             
             self.populate_country_filter()
             self.apply_filter()
-            self.status_var.set(f"Loaded {len(self.data)} records from {os.path.basename(self.csv_file_path)}")
+            self.status_var.set(f"Loaded {len(self.data)} records from database")
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load CSV file:\n{str(e)}")
-            self.status_var.set("Error loading file")
+            messagebox.showerror("Error", f"Error loading data from database: {e}")
+            self.status_var.set(f"Error loading data: {e}")
+    
+    def select_translation_csv(self):
+        """Select CSV file for translation assistance"""
+        file_path = filedialog.askopenfilename(
+            title="Select Translation CSV File",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            initialdir="/Users/syuen/Video_editor_Project/Vacaction_Media_Org/"
+        )
+        
+        if file_path:
+            # Validate CSV file format
+            if self.validate_translation_csv(file_path):
+                self.city_csv_file = file_path
+                self.load_city_translations()
+                filename = os.path.basename(file_path)
+                self.csv_file_var.set(f"Loaded: {filename} ({len(self.additional_translations)} translations)")
+                self.csv_status_label.config(foreground="green")
+            else:
+                self.csv_file_var.set("Invalid CSV format - must have City_en, City_zh columns")
+                self.csv_status_label.config(foreground="red")
+    
+    def validate_translation_csv(self, file_path):
+        """Validate that CSV file has the required City_en, City_zh columns"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                csv_reader = csv.DictReader(file)
+                headers = csv_reader.fieldnames
+                
+                if not headers:
+                    return False
+                
+                # Handle BOM issue in first header
+                if headers[0].startswith('\ufeff'):
+                    headers[0] = headers[0].replace('\ufeff', '')
+                
+                # Check for required headers
+                has_city_en = 'City_en' in headers
+                has_city_zh = 'City_zh' in headers
+                
+                return has_city_en and has_city_zh
+                
+        except Exception as e:
+            print(f"Error validating CSV: {e}")
+            return False
+    
+    def count_cities_in_list_file(self, file_path):
+        """Count the number of cities in a geographic list file"""
+        try:
+            city_count = 0
+            with open(file_path, 'r', encoding='utf-8') as f:
+                # Skip header line
+                next(f)
+                
+                for line in f:
+                    line = line.strip()
+                    if line:  # Skip empty lines
+                        city_count += 1
+                        
+            return city_count
+            
+        except Exception as e:
+            print(f"Error counting cities in list file: {e}")
+            return 0
+    
+    def select_list_file(self):
+        """Select list file for database repopulation"""
+        file_path = filedialog.askopenfilename(
+            title="Select List File for DB repopulation",
+            filetypes=[("List files", "*.list"), ("CSV files", "*.csv"), ("All files", "*.*")],
+            initialdir="/Users/syuen/Video_editor_Project/Vacaction_Media_Org/"
+        )
+        
+        if file_path:
+            # Validate list file format
+            if self.validate_geo_list_format(file_path):
+                self.list_file = file_path
+                filename = os.path.basename(file_path)
+                city_count = self.count_cities_in_list_file(file_path)
+                self.list_file_var.set(f"Loaded: {filename} ({city_count} Cities)")
+                self.list_status_label.config(foreground="green")
+                print(f"✅ List file validated and selected: {filename} ({city_count} cities)")
+            else:
+                self.list_file_var.set("Invalid list format - check data scheme")
+                self.list_status_label.config(foreground="red")
+                print(f"❌ Invalid list file format: {os.path.basename(file_path)}")
+    
+    def repopulate_database_with_selected_list(self):
+        """Repopulate database with data from previously selected list file"""
+        if not self.list_file:
+            messagebox.showwarning("No List File", "Please select a list file first using 'Select List File for DB repopulation' button.")
+            return
+            
+        if not os.path.exists(self.list_file):
+            messagebox.showerror("File Not Found", f"Selected list file not found: {os.path.basename(self.list_file)}")
+            return
+        
+        result = messagebox.askyesno(
+            "Repopulate Confirmation", 
+            f"This will clear all existing geographic data and repopulate from:\n{os.path.basename(self.list_file)}\n\nContinue?"
+        )
+        
+        if result:
+            try:
+                cursor = self.conn.cursor()
+                cursor.execute('DELETE FROM geo_data')
+                self.conn.commit()
+                
+                if self.load_geo_list_to_database(self.list_file):
+                    self.load_csv_data()  # Refresh the displayed data
+                    messagebox.showinfo("Success", "Database repopulated successfully!")
+                    
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to repopulate database: {e}")
+    
+
+    def validate_geo_list_format(self, file_path):
+        """Validate that the geographic list file has the correct format"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                header = next(f).strip()
+                expected_fields = ['City_en', 'City_zn', 'Region_en', 'Region_zn', 'Subregion_en', 'Subregion_zn', 
+                                 'CountryCode', 'Country_en', 'Country_zn', 'TimeZone', 'Latitude', 'Longitude']
+                
+                header_fields = [field.strip() for field in header.split(',')]
+                return header_fields == expected_fields
+                
+        except Exception as e:
+            print(f"Error validating geographic list format: {e}")
+            return False
     
     def populate_country_filter(self):
         """Populate the country filter combobox"""
@@ -959,17 +1321,26 @@ class GeoTranslationEditor:
                     suggested_translation = self.get_fallback_translation(city_en, country_en)
                     
                     if suggested_translation and suggested_translation != current_city_zh:
-                        # Update the translation in both data and filtered_data
-                        data_item['city_zh'] = suggested_translation
+                        # Update database directly
+                        success = self.update_city_translation_in_db(
+                            city_en, 
+                            country_en, 
+                            suggested_translation, 
+                            data_item.get('country_zh', '')
+                        )
                         
-                        # Also find and update in main data list
-                        for main_item in self.data:
-                            if (main_item.get('city_en') == city_en and 
-                                main_item.get('country_en') == country_en):
-                                main_item['city_zh'] = suggested_translation
-                                break
-                        
-                        updated_count += 1
+                        if success:
+                            # Update the translation in both data and filtered_data
+                            data_item['city_zh'] = suggested_translation
+                            
+                            # Also find and update in main data list
+                            for main_item in self.data:
+                                if (main_item.get('city_en') == city_en and 
+                                    main_item.get('country_en') == country_en):
+                                    main_item['city_zh'] = suggested_translation
+                                    break
+                            
+                            updated_count += 1
             
             # Close progress dialog
             progress_dialog.destroy()
@@ -981,10 +1352,9 @@ class GeoTranslationEditor:
                 messagebox.showinfo(
                     "Edit All Complete",
                     f"Successfully updated {updated_count} out of {processed_count} cities.\n\n"
-                    f"Changes have been made in memory.\n"
-                    f"Click 'Save Changes' to save to file."
+                    f"All changes have been automatically saved to the database."
                 )
-                self.status_var.set(f"Updated {updated_count} cities - Changes not saved")
+                self.status_var.set(f"✅ Updated {updated_count} cities - Auto-saved to database")
             else:
                 messagebox.showinfo(
                     "No Updates Needed",
@@ -1259,49 +1629,59 @@ class GeoTranslationEditor:
             new_city_zh = city_zh_var.get().strip()
             new_country_zh = country_zh_var.get().strip()
             
-            changed = False
+            city_changed = new_city_zh != data_item['city_zh']
+            country_changed = new_country_zh != data_item['country_zh']
             
-            if new_city_zh != data_item['city_zh']:
-                # Update normalized data
-                data_item['city_zh'] = new_city_zh
+            if city_changed or country_changed:
+                # Update database directly - single call for both fields
+                final_city_zh = new_city_zh if city_changed else data_item['city_zh']
+                final_country_zh = new_country_zh if country_changed else data_item['country_zh']
                 
-                # Update original row data - find the correct field name
-                city_zh_field = None
-                for field in ['City_zn', 'city_zh', 'City_zh']:
-                    if field in data_item['original_row']:
-                        city_zh_field = field
-                        break
-                if city_zh_field:
-                    data_item['original_row'][city_zh_field] = new_city_zh
+                success = self.update_city_translation_in_db(
+                    data_item['city_en'], 
+                    data_item['country_en'], 
+                    final_city_zh, 
+                    final_country_zh
+                )
                 
-                changed = True
-            
-            if new_country_zh != data_item['country_zh']:
-                # Update normalized data
-                data_item['country_zh'] = new_country_zh
-                
-                # Update original row data - find the correct field name
-                country_zh_field = None
-                for field in ['Country_zn', 'country_zh', 'Country_zh']:
-                    if field in data_item['original_row']:
-                        country_zh_field = field
-                        break
-                if country_zh_field:
-                    data_item['original_row'][country_zh_field] = new_country_zh
-                
-                changed = True
-            
-            if changed:
-                # Update tree view
-                self.tree.item(tree_item_id, values=(
-                    data_item['city_en'],
-                    data_item['city_zh'],
-                    data_item['country_en'],
-                    data_item['country_zh']
-                ))
-                
-                self.modified = True
-                self.status_var.set("Changes made - remember to save")
+                if success:
+                    # Update normalized data
+                    if city_changed:
+                        data_item['city_zh'] = new_city_zh
+                        
+                        # Update original row data - find the correct field name
+                        city_zh_field = None
+                        for field in ['City_zn', 'city_zh', 'City_zh']:
+                            if field in data_item['original_row']:
+                                city_zh_field = field
+                                break
+                        if city_zh_field:
+                            data_item['original_row'][city_zh_field] = new_city_zh
+                    
+                    if country_changed:
+                        data_item['country_zh'] = new_country_zh
+                        
+                        # Update original row data - find the correct field name
+                        country_zh_field = None
+                        for field in ['Country_zn', 'country_zh', 'Country_zh']:
+                            if field in data_item['original_row']:
+                                country_zh_field = field
+                                break
+                        if country_zh_field:
+                            data_item['original_row'][country_zh_field] = new_country_zh
+                    
+                    # Update tree view
+                    self.tree.item(tree_item_id, values=(
+                        data_item['city_en'],
+                        data_item['city_zh'],
+                        data_item['country_en'],
+                        data_item['country_zh']
+                    ))
+                    
+                    self.status_var.set("✅ Changes saved to database")
+                else:
+                    messagebox.showerror("Database Error", "Failed to update translation in database")
+                    return
                 
             dialog.destroy()
         
@@ -1316,59 +1696,11 @@ class GeoTranslationEditor:
         dialog.bind('<Escape>', lambda e: cancel_changes())
     
     def save_changes(self):
-        """Save changes back to the original CSV file"""
-        if not self.modified:
-            messagebox.showinfo("No Changes", "No changes to save.")
-            return
-        
-        if not self.csv_file_path:
-            messagebox.showerror("No File", "No file loaded to save changes to.")
-            return
-        
-        try:
-            # Create backup
-            backup_path = self.csv_file_path + '.backup'
-            if os.path.exists(self.csv_file_path):
-                import shutil
-                shutil.copy2(self.csv_file_path, backup_path)
-            
-            # Write updated data
-            with open(self.csv_file_path, 'w', encoding='utf-8', newline='') as file:
-                if self.data:
-                    fieldnames = list(self.data[0]['original_row'].keys())
-                    writer = csv.DictWriter(file, fieldnames=fieldnames)
-                    writer.writeheader()
-                    
-                    for item in self.data:
-                        # Update original_row with current data before writing
-                        updated_row = item['original_row'].copy()
-                        
-                        # Update city Chinese name - try different possible field names
-                        city_zh_field = None
-                        for field in ['City_zn', 'city_zh', 'City_zh']:
-                            if field in updated_row:
-                                city_zh_field = field
-                                break
-                        if city_zh_field:
-                            updated_row[city_zh_field] = item['city_zh']
-                        
-                        # Update country Chinese name - try different possible field names
-                        country_zh_field = None
-                        for field in ['Country_zn', 'country_zh', 'Country_zh']:
-                            if field in updated_row:
-                                country_zh_field = field
-                                break
-                        if country_zh_field:
-                            updated_row[country_zh_field] = item['country_zh']
-                        
-                        writer.writerow(updated_row)
-            
-            self.modified = False
-            messagebox.showinfo("Success", f"Changes saved successfully!\nBackup created: {backup_path}")
-            self.status_var.set("All changes saved")
-            
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save changes:\n{str(e)}")
+        """Database mode - changes are automatically saved"""
+        messagebox.showinfo("Database Mode", 
+                           "All changes are automatically saved to the database.\n"
+                           "No manual save is required.")
+        self.status_var.set("✅ All changes auto-saved to database")
     
     def export_csv(self):
         """Export filtered data to a new CSV file"""
@@ -1404,61 +1736,32 @@ class GeoTranslationEditor:
 def main():
     # Parse command-line arguments
     parser = argparse.ArgumentParser(
-        description="Geographic Translation Editor - A GUI tool for editing Chinese translations",
+        description="Geographic City name Translation (city_en to city_zh) Editor - Database Version",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
   python Tk_geo_translation_editor.py
-  python Tk_geo_translation_editor.py --city-csv custom_translations.csv
-  python Tk_geo_translation_editor.py --city-csv /path/to/my_cities.csv
+  python Tk_geo_translation_editor.py --db-path /path/to/database.db
 
-  Default editing file on startup (if exists):
-    backup_file = "/Users/syuen/Video_editor_Project/Vacaction_Media_Org/geo_chinese_bkup.list"
-    self.csv_file_path = backup_file
+  This tool now works directly with the SQLite database geo_data table.
+  All changes are automatically saved to the database.
+  Translation CSV files can be selected through the GUI.
 
-  # The original 'geo_chinese_bkup.list' CSV file is generated by 'exiftool -listgeo' command.
-  # Then, we rename the City, Region, and Country columns to _en, and add _zh for the Chinese translations Columns.
-
-  # However, the initial _zh columns translation have many missing entries, which *** this Tk tool helps to fix City_zh.***
-
-  # In this program, the fallback city translations CSV file (default: HK_City_en_translated.csv)
-  # is used for auto-translation suggestions.
-
-  # The main media analysis program 'scan_main.py' will use 'geo_chinese_.list' (Note: not geo_chinese_bkup.list file)
-  # for automatic geotagging of videos/photos.   After edit, please copy the edited file to 'geo_chinese_.list'.
-
-  # The scan_main.py use ExifTool to extract create_time, and geo info from the media files.
-  # If Latitude and Longitude are found from the media file, it will use reverse geocoding to get the
-  # City and Country (both _en and _zh names) data from 'geo_chinese_.list'.
-  # scan_main.py will save the info into Database (SQLite) for future use.
-  # scan_main.py also generate thumbnails for the media files, and save them into the file system for fast retrieval later.
-
-  # --------------------------------------------------------------
-  # If no geo info is found from the media file, scan_main.py will use (by re-run scan_main.py program) the
-  # nearest create_time (default to 1 hour apart) from other media files (data from Database) which has geo info.
-  # This way, we can fill in missing City, Region, Country, and geo info for that media files without GPS data, 
-  # save these into Database for future use.
-  #
-  # The time gap (in seconds) can be adjusted in scan_main.py by changing the value of 'time_gap_seconds' variable.
-  # However, this method (by nearest create_time) may generate incorrect geo info, some media files may be mis-tagged in database.
-  # --------------------------------------------------------------
-
-  # China has 2130+ cities from ExifTool geo list, Chinese_City_translations.csv only has about 367 entries.
-  # This tool helps to fill in the missing Chinese translations for City_zh column.
+  Default database path: media_organizer.db
           """
     )
     
     parser.add_argument(
-        '--city-csv',
-        default='HK_City_en_translated.csv',
-        help='Path to the CSV file containing additional city translations (default: HK_City_en_translated.csv)'
+        '--db-path',
+        default='media_organizer.db',
+        help='Path to the SQLite database file (default: media_organizer.db)'
     )
     
     args = parser.parse_args()
     
     # Create and run the GUI application
     root = tk.Tk()
-    app = GeoTranslationEditor(root, city_csv_file=args.city_csv)
+    app = GeoTranslationEditor(root, db_path=args.db_path)
     root.mainloop()
 
 if __name__ == "__main__":

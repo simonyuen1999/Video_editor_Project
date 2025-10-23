@@ -33,7 +33,7 @@ def setup_logging(debug=False):
         format=log_format,
         handlers=[
             logging.StreamHandler(),  # Console output
-            logging.FileHandler('media_organizer.log', mode='a')  # File output
+            logging.FileHandler('Main_media_organizer.log', mode='a')  # File output
         ],
         force=True  # Force reconfiguration
     )
@@ -55,6 +55,7 @@ logging.basicConfig(level=logging.INFO, format=
     '%(asctime)s - %(levelname)s - %(message)s')
 
 class MediaOrganizerDB:
+    # Use the media_organizer.db SQLite database in the current directory
     def __init__(self, rescan=False, db_path='media_organizer.db'):
         self.db_path = db_path
         self.conn = None
