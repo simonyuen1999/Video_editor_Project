@@ -54,6 +54,54 @@ def setup_logging(debug=False):
 logging.basicConfig(level=logging.INFO, format=
     '%(asctime)s - %(levelname)s - %(message)s')
 
+def parse_datetime_flexible(datetime_str):
+    """
+    Parse datetime string supporting multiple formats:
+    - Old format: YYYY-MM-DD HH:MM:SS
+    - Old timezone format: YYYY-MM-DD hh:mm:ss±##.##
+    - New ISO 8601 format: YYYY-MM-DDThh:mm:ss[.###]±HH:MM
+    
+    Returns datetime object (timezone-naive for consistency in calculations)
+    """
+    if not datetime_str:
+        return None
+        
+    try:
+        # Handle ISO 8601 format first (new format from metadata extractor)
+        if 'T' in datetime_str:
+            # ISO 8601: YYYY-MM-DDThh:mm:ss[.###]±HH:MM
+            # Remove timezone for consistent calculations
+            if '+' in datetime_str:
+                datetime_part = datetime_str.split('+')[0]
+            elif datetime_str.count('-') > 2:  # Has timezone
+                datetime_part = datetime_str.rsplit('-', 1)[0]
+            else:
+                datetime_part = datetime_str
+            
+            # Try with subseconds first, then without
+            try:
+                return datetime.strptime(datetime_part, '%Y-%m-%dT%H:%M:%S.%f')
+            except ValueError:
+                return datetime.strptime(datetime_part, '%Y-%m-%dT%H:%M:%S')
+        
+        # Handle old timezone format: YYYY-MM-DD hh:mm:ss±##.##
+        elif ('+' in datetime_str or datetime_str.count('-') >= 3):
+            # Split on the last '+' or '-' to separate time from timezone
+            if '+' in datetime_str:
+                time_part = datetime_str.rsplit('+', 1)[0]
+            else:
+                time_part = datetime_str.rsplit('-', 1)[0]
+            return datetime.strptime(time_part, '%Y-%m-%d %H:%M:%S')
+        
+        # Handle old format: YYYY-MM-DD HH:MM:SS
+        else:
+            return datetime.strptime(datetime_str, '%Y-%m-%d %H:%M:%S')
+            
+    except (ValueError, TypeError) as e:
+        logging.debug(f"Error parsing datetime '{datetime_str}': {e}")
+        return None
+
+# -------------------------------------------------------------------------------
 class MediaOrganizerDB:
     # Use the media_organizer.db SQLite database in the current directory
     def __init__(self, rescan=False, db_path='media_organizer.db'):
@@ -61,6 +109,7 @@ class MediaOrganizerDB:
         self.conn = None
         self.cursor = None
         self.rescan = rescan
+        self.add_media_file_count = 0
 
         if self.rescan and os.path.exists(self.db_path):
             logging.info(f"Rescan requested. Deleting existing database: {self.db_path}")
@@ -111,7 +160,7 @@ class MediaOrganizerDB:
                 )
             ''')
             
-            # Create geo table for storing all geographical data from geo_chinese_.list
+            # Create geo table for storing all geographical data from geo_chinese.list
             self.cursor.execute('''
                 CREATE TABLE IF NOT EXISTS geo_data (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -141,61 +190,130 @@ class MediaOrganizerDB:
                 CREATE INDEX IF NOT EXISTS idx_geo_city_country ON geo_data (city_en, country_en)
             ''')
             
+            # Create config table for storing application configuration
+            self.cursor.execute('''
+                CREATE TABLE IF NOT EXISTS config (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key TEXT UNIQUE NOT NULL,
+                    value TEXT NOT NULL,
+                    description TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            
+            # Create index for faster config lookups
+            self.cursor.execute('''
+                CREATE INDEX IF NOT EXISTS idx_config_key ON config (key)
+            ''')
+            
             self.conn.commit()
-            logging.debug("Media files and geo tables ensured to exist with geo fields.")
+            logging.debug("Media files, geo, and config tables ensured to exist with geo fields.")
         except sqlite3.Error as e:
             # If media_files table exists, skip creation, no need to exit
             logging.error(f"Warning creating table: {e}")
             # sys.exit(1)
 
-    def file_exists(self, filepath):
+    def get_relative_path(self, absolute_path, base_directory):
+        """Convert absolute path to relative path from base directory."""
+        try:
+            # Ensure both paths are absolute
+            absolute_path = os.path.abspath(absolute_path)
+            base_directory = os.path.abspath(base_directory)
+            
+            # Get relative path
+            relative_path = os.path.relpath(absolute_path, base_directory)
+            
+            # If the file is not under base_directory, return the original path
+            if relative_path.startswith('..'):
+                logging.warning(f"File {absolute_path} is not under base directory {base_directory}")
+                return absolute_path
+                
+            return relative_path
+        except Exception as e:
+            logging.error(f"Error converting path to relative: {e}")
+            return absolute_path
+
+    def get_absolute_path(self, relative_path, base_directory):
+        """Convert relative path to absolute path using base directory."""
+        try:
+            # If the path is already absolute, return it
+            if os.path.isabs(relative_path):
+                return relative_path
+            
+            # Combine base directory with relative path
+            absolute_path = os.path.join(base_directory, relative_path)
+            return os.path.normpath(absolute_path)
+        except Exception as e:
+            logging.error(f"Error converting relative path to absolute: {e}")
+            return relative_path
+
+    def file_exists(self, filepath, base_directory=None):
+        """Check if file exists in database using relative path."""
+        if base_directory:
+            # Convert absolute path to relative for database lookup
+            relative_path = self.get_relative_path(filepath, base_directory)
+        else:
+            relative_path = filepath
+            
         self.cursor.execute(
-            'SELECT 1 FROM media_files WHERE filepath = ?', (filepath,))
+            'SELECT 1 FROM media_files WHERE filepath = ?', (relative_path,))
         return self.cursor.fetchone() is not None
 
-    def add_media_file(self, metadata):
+    def add_media_file(self, metadata, base_directory=None):
         # logging.info(f"Adding media file to DB: {metadata.get('filepath')}, {metadata.get('creation_time')}")
         try:
+            # Convert absolute path to relative path if base_directory is provided
+            original_filepath = metadata.get('filepath')
+            if base_directory and original_filepath:
+                relative_filepath = self.get_relative_path(original_filepath, base_directory)
+                metadata_to_store = metadata.copy()
+                metadata_to_store['filepath'] = relative_filepath
+            else:
+                metadata_to_store = metadata
+                relative_filepath = original_filepath
+
             self.cursor.execute('''
                 INSERT INTO media_files (
                     filepath, filename, file_extension, file_type, size, creation_time, latitude, longitude,
                     city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
-                metadata.get('filepath'),
-                metadata.get('filename'),
-                metadata.get('file_extension'),
-                metadata.get('file_type'),
-                metadata.get('size'),
-                metadata.get('creation_time'),
-                metadata.get('latitude'),
-                metadata.get('longitude'),
-                metadata.get('city_en'),
-                metadata.get('city_zh'),
-                metadata.get('region_en'),
-                metadata.get('region_zh'),
-                metadata.get('subregion_en'),
-                metadata.get('subregion_zh'),
-                metadata.get('country_code'),
-                metadata.get('country_en'),
-                metadata.get('country_zh'),
-                metadata.get('timezone'),
+                metadata_to_store.get('filepath'),
+                metadata_to_store.get('filename'),
+                metadata_to_store.get('file_extension'),
+                metadata_to_store.get('file_type'),
+                metadata_to_store.get('size'),
+                metadata_to_store.get('creation_time'),
+                metadata_to_store.get('latitude'),
+                metadata_to_store.get('longitude'),
+                metadata_to_store.get('city_en'),
+                metadata_to_store.get('city_zh'),
+                metadata_to_store.get('region_en'),
+                metadata_to_store.get('region_zh'),
+                metadata_to_store.get('subregion_en'),
+                metadata_to_store.get('subregion_zh'),
+                metadata_to_store.get('country_code'),
+                metadata_to_store.get('country_en'),
+                metadata_to_store.get('country_zh'),
+                metadata_to_store.get('timezone'),
             ))
             self.conn.commit()
-            logging.debug(f"Added media file: {metadata.get('filepath')}, {metadata.get('creation_time')}")
+            self.add_media_file_count += 1
+            logging.info(f"Added media file ({self.add_media_file_count}): {relative_filepath}, {metadata.get('creation_time')}")
             
             # Generate thumbnail after successfully adding to database
-            filepath = metadata.get('filepath')
-            if filepath and os.path.exists(filepath):
+            # Use original absolute path for file operations
+            if original_filepath and os.path.exists(original_filepath):
                 # Check if thumbnail already exists before generating
-                file_dir = os.path.dirname(filepath)
-                file_name = os.path.basename(filepath)
+                file_dir = os.path.dirname(original_filepath)
+                file_name = os.path.basename(original_filepath)
                 name_without_ext = os.path.splitext(file_name)[0]
                 thumbnail_path = os.path.join(file_dir, f"{name_without_ext}_thumb.jpg")
                 
                 if not os.path.exists(thumbnail_path):
                     # Only generate thumbnail if it doesn't exist
-                    generated_thumbnail_path = self.generate_thumbnail(filepath)
+                    generated_thumbnail_path = self.generate_thumbnail(original_filepath)
                     if generated_thumbnail_path:
                         logging.info(f"Generated new thumbnail: {generated_thumbnail_path}")
                 else:
@@ -206,16 +324,22 @@ class MediaOrganizerDB:
         except sqlite3.Error as e:
             logging.error(f"Error adding media file to DB: {e}")
 
-    def update_city_translation(self, filepath, extractor):
+    def update_city_translation(self, filepath, extractor, base_directory=None):
         try:
-            #logging.info(f"City translation from DB {filepath}")
+            # Convert to relative path for database operations
+            if base_directory:
+                relative_filepath = self.get_relative_path(filepath, base_directory)
+            else:
+                relative_filepath = filepath
+                
+            #logging.info(f"City translation from DB {relative_filepath}")
             city_en = None
             city_zh = None
             meta_city_zh = None
             self.cursor.execute('''
                 SELECT filepath, city_en, city_zh, country_en FROM media_files
                 WHERE filepath = ?
-            ''', (filepath,))
+            ''', (relative_filepath,))
             result = self.cursor.fetchone()
             if result:
                 city_en = result[1]
@@ -235,9 +359,9 @@ class MediaOrganizerDB:
                     UPDATE media_files
                     SET city_zh = ?
                     WHERE filepath = ?
-                ''', (meta_city_zh, filepath))
+                ''', (meta_city_zh, relative_filepath))
                 self.conn.commit()
-                logging.info(f"Updated DB file {filepath}:\n > city_en: {city_en}, city_zh: {city_zh} -> meta_city_zh: {meta_city_zh}")
+                logging.info(f"Updated DB file {relative_filepath}:\n > city_en: {city_en}, city_zh: {city_zh} -> meta_city_zh: {meta_city_zh}")
             #else:
             #    logging.info(f"   No update required for city translation: city_en: {city_en}, city_zh: {city_zh}, meta_city_zh: {meta_city_zh}\n")
 
@@ -246,8 +370,14 @@ class MediaOrganizerDB:
             self.conn.rollback()
             logging.debug(f"Rolled back changes for {filepath}")
 
-    def update_media_file_geo(self, filepath, geo_data):
+    def update_media_file_geo(self, filepath, geo_data, base_directory=None):
         try:
+            # Convert to relative path for database operations
+            if base_directory:
+                relative_filepath = self.get_relative_path(filepath, base_directory)
+            else:
+                relative_filepath = filepath
+                
             self.cursor.execute('''
                 UPDATE media_files
                 SET city_en = ?, city_zh = ?, region_en = ?, region_zh = ?, subregion_en = ?, subregion_zh = ?,
@@ -264,17 +394,23 @@ class MediaOrganizerDB:
                 geo_data.get('country_en'),
                 geo_data.get('country_zh'),
                 geo_data.get('timezone'),
-                filepath
+                relative_filepath
             ))
             self.conn.commit()
-            logging.debug(f"Updated geo data for {filepath}")
+            logging.debug(f"Updated geo data for {relative_filepath}")
         except sqlite3.Error as e:
-            logging.error(f"Error updating geo data for {filepath}: {e}")
+            logging.error(f"Error updating geo data for {relative_filepath}: {e}")
             self.conn.rollback()
-            logging.debug(f"Rolled back changes for {filepath}")
+            logging.debug(f"Rolled back changes for {relative_filepath}")
 
-    def update_media_file_semantic(self, filepath, semantic_data):
+    def update_media_file_semantic(self, filepath, semantic_data, base_directory=None):
         try:
+            # Convert to relative path for database operations
+            if base_directory:
+                relative_filepath = self.get_relative_path(filepath, base_directory)
+            else:
+                relative_filepath = filepath
+                
             self.cursor.execute('''
                 UPDATE media_files
                 SET people_count = ?, activities = ?, scenery = ?, talking_detected = ?
@@ -284,14 +420,14 @@ class MediaOrganizerDB:
                 semantic_data.get('activities', ''),
                 semantic_data.get('scenery', ''),
                 semantic_data.get('talking_detected', 0),
-                filepath
+                relative_filepath
             ))
             self.conn.commit()
-            logging.debug(f"Updated semantic data for {filepath}")
+            logging.debug(f"Updated semantic data for {relative_filepath}")
         except sqlite3.Error as e:
-            logging.error(f"Error updating semantic data for {filepath}: {e}")
+            logging.error(f"Error updating semantic data for {relative_filepath}: {e}")
             self.conn.rollback()
-            logging.debug(f"Rolled back changes for {filepath}")
+            logging.debug(f"Rolled back changes for {relative_filepath}")
 
     def get_files_with_geo(self):
         self.cursor.execute(
@@ -492,9 +628,9 @@ class MediaOrganizerDB:
             logging.error(f"Unexpected error generating thumbnail for {filepath}: {e}")
             return None
 
-    def populate_geo_table(self, geo_list_path='geo_chinese_.list'):
+    def populate_geo_table(self, geo_list_path='geo_chinese.list'):
         """
-        Populate the geo_data table with data from geo_chinese_.list file.
+        Populate the geo_data table with data from geo_chinese.list file.
         
         Args:
             geo_list_path: Path to the geo list CSV file
@@ -630,6 +766,53 @@ class MediaOrganizerDB:
             logging.error(f"Error getting geo data sample: {e}")
             return []
 
+    def get_config(self, key):
+        """Get a configuration value by key."""
+        try:
+            self.cursor.execute('SELECT value FROM config WHERE key = ?', (key,))
+            result = self.cursor.fetchone()
+            return result[0] if result else None
+        except sqlite3.Error as e:
+            logging.error(f"Error getting config value for key '{key}': {e}")
+            return None
+
+    def set_config(self, key, value, description=None):
+        """Set a configuration value. Updates if key exists, inserts if new."""
+        try:
+            # Check if key already exists
+            existing_value = self.get_config(key)
+            
+            if existing_value is not None:
+                # Update existing configuration
+                self.cursor.execute('''
+                    UPDATE config 
+                    SET value = ?, description = COALESCE(?, description), updated_at = CURRENT_TIMESTAMP
+                    WHERE key = ?
+                ''', (value, description, key))
+                logging.debug(f"Updated config: {key} = {value}")
+            else:
+                # Insert new configuration
+                self.cursor.execute('''
+                    INSERT INTO config (key, value, description) 
+                    VALUES (?, ?, ?)
+                ''', (key, value, description))
+                logging.debug(f"Inserted new config: {key} = {value}")
+            
+            self.conn.commit()
+            return True
+        except sqlite3.Error as e:
+            logging.error(f"Error setting config value for key '{key}': {e}")
+            return False
+
+    def get_all_config(self):
+        """Get all configuration key-value pairs."""
+        try:
+            self.cursor.execute('SELECT key, value, description FROM config ORDER BY key')
+            return self.cursor.fetchall()
+        except sqlite3.Error as e:
+            logging.error(f"Error getting all config values: {e}")
+            return []
+
     def close(self):
         if self.conn:
             self.conn.close()
@@ -673,10 +856,11 @@ def cleanup_thumbnails(path):
     logging.info(f"Cleaned up {thumbnail_count} thumbnail files")
     return thumbnail_count
 
+# =====================================================================================
 def main():
     default_directory = '/Volumes/Extreme SSD 1/Media'
 
-    default_zh_geo_list_file = 'geo_chinese_.list'
+    default_zh_geo_list_file = 'geo_chinese.list'
 
     parser = argparse.ArgumentParser(
         description="Organize vacation media files, extract metadata, and store in SQLite.",
@@ -690,21 +874,21 @@ Usage Note: Consider the parameter execution order for optimal performance.
   --syncFSnDB or -f          : Sync file system changes with the database. Default: False.
   --updateCity or -u         : Update city translation in the database. Default: False.
   --shareGeoInfo or -s       : Share (Update DB) geo info to the no geo media files at the end. Default: False.
-  --populateGeoTable or -g   : Populate geo table with data from geo_chinese_.list file. Default: False.
+  --populateGeoTable or -g   : Populate geo table with data from geo_chinese.list file. Default: False.
   --updateMediaInfo or -m    : Update media analysis info (activities and scenery) in database. Default: False.
 
   The following parameters can be used together with the above options:
   --debug-level : Set the logging debug level.
   --deldb or -d : Delete database and start the re-scan process.
   --time-diff : Time difference in min for proximity search (default is 60 minutes = 1 hour).
-  --geo-list : Specific path to the 'geo.list' file for enhanced geolocation (default: geo_chinese_.list).
+  --geo-list : Specific path to the 'geo.list' file for enhanced geolocation (default: geo_chinese.list).
 
-  Finally, specify the target directory to scan (required). If not provided, you will be prompted to enter one.
+  Target Directory Configuration:
+  The program stores the base directory as a permanent configuration in the database.
+  - On first run, you will be prompted to enter the base directory path.
+  - Once configured, the base directory cannot be changed during normal operation.
+  - Use --deldb to reset the configuration and reconfigure the base directory.
 """
-    )
-    parser.add_argument(
-        'directory', type=str, nargs='?', default=None,
-        help='The target directory to scan (required).'
     )
     parser.add_argument(
         '--debug-level', type=str, default='INFO',
@@ -741,39 +925,27 @@ Usage Note: Consider the parameter execution order for optimal performance.
         help='Time difference in min for proximity search (default: 60 minutes = 1 hour) 2h=120, 3h=180, 4h=240.'
     )
     parser.add_argument(
-        '--geo-list', type=str, default='geo_chinese_.list',
-        help='Path to the geo.list file for enhanced geolocation (default: geo_chinese_.list).'
+        '--geo-list', type=str, default='geo_chinese.list',
+        help='Path to the geo.list file for enhanced geolocation (default: geo_chinese.list).'
     )
     parser.add_argument(
         '--populateGeoTable', '-g', default=False, action='store_true',
-        help='Populate geo table with data from geo_chinese_.list file. default: False'
+        help='Populate geo table with data from geo_chinese.list file. default: False'
     )
     parser.add_argument(
         '--updateMediaInfo', '-m', default=False, action='store_true',
         help='Update media analysis info (activities and scenery) in the database. default: False'
     )
-    # The geo_chinese_.list file for enhanced geolocation with Chinese name translations
+    # The geo_chinese.list file for enhanced geolocation with Chinese name translations
 
     args = parser.parse_args()
 
     print("\n\n\n\n=== Media Metadata Extraction and Organization Tool ===\n")
 
-    # The geo_chinese_.list file should be read-in for geo table population and city translation
+    # The geo_chinese.list file should be read-in for geo table population and city translation
     # Therefore, this file path only for user specified different geo list file and load into DB accordingly.
-    if args.geo_list != 'geo_chinese_.list':
+    if args.geo_list != 'geo_chinese.list':
         default_zh_geo_list_file = args.geo_list
-
-    # Prompt for directory if not provided
-    if args.directory is None:
-        print(f"\nNo scan directory specified. Default directory suggestion: {default_directory}")
-        user_input = input("Please enter the directory path to scan (or press Enter to use default): ").strip()
-        
-        if user_input:
-            args.directory = user_input
-        else:
-            args.directory = default_directory
-        
-        print(f"Using directory: {args.directory}")
 
     time_diff_seconds = args.time_diff * 60  # convert minutes to seconds
 
@@ -798,7 +970,7 @@ Usage Note: Consider the parameter execution order for optimal performance.
     if args.populateGeoTable:
         print("""
 Option 'populateGeoTable' is specified.
-    The program will populate the geo_data table with data from the geo_chinese_.list file.
+    The program will populate the geo_data table with data from the geo_chinese.list file.
     This will load all geographical location data into the database for faster lookups.
     After this process, the program will exit.
 """)
@@ -847,7 +1019,7 @@ Option 'updateMediaInfo' is specified.
             print(f"              Use proximity search: '{args.time_diff}' minutes (see below).")
         print(f"  7. Populate geo table: {args.populateGeoTable}")
         if args.populateGeoTable:
-            print("     WARNING: Geo table will be populated with data from geo_chinese_.list file!")
+            print("     WARNING: Geo table will be populated with data from geo_chinese.list file!")
             print("              This will load all geographical data for faster lookups.")
         print(f"  8. Update media analysis info: {args.updateMediaInfo}")
         if args.updateMediaInfo:
@@ -855,7 +1027,7 @@ Option 'updateMediaInfo' is specified.
             print("              This process analyzes all media files and may take significant time.")
         print(f"\n  I. Time difference for proximity search: '{args.time_diff}' minutes")
         print(f"  II. Geo list path: '{args.geo_list}'    User can specify different geolocation file.")
-        print(f"  III. Target directory: '{args.directory}'    The directory to scan for media files.\n")
+        print(f"  III. Target directory: Will be determined from database configuration.\n")
         # ask for user confirmation to proceed
         proceed = input("Proceed with these settings? (y/n): ")
         if proceed.lower() != 'y':
@@ -866,8 +1038,6 @@ Option 'updateMediaInfo' is specified.
 # ==================================================================================
 
     # Main processing starts here
-    target_directory = args.directory
-
     # If user specified --deldb, delete the existing database file inside MediaOrganizerDB class.
     db = MediaOrganizerDB(rescan=args.deldb)
 
@@ -875,6 +1045,87 @@ Option 'updateMediaInfo' is specified.
         logging.info("Database deleted as per user request. Starting fresh scan.")
         args.populateGeoTable = True  # Need to populate geo table if DB is deleted.
     
+    # Handle base directory configuration
+    base_directory = None
+    
+    # Try to get base directory from config first
+    base_directory = db.get_config('base_directory')
+    logging.info(f"Retrieved base_directory from config: {base_directory}")
+    
+    if base_directory:
+        # Validate the configured directory
+        if not os.path.exists(base_directory):
+            print(f"ERROR: Configured base directory does not exist: {base_directory}")
+            print("The configured directory appears to have been moved or deleted.")
+            print("Please use --deldb to reset the configuration and reconfigure the base directory.")
+            sys.exit(1)
+
+        if not os.path.isdir(base_directory):
+            print(f"ERROR: Configured base directory is not a directory: {base_directory}")
+            print("The configured path is no longer a valid directory.")
+            print("Please use --deldb to reset the configuration and reconfigure the base directory.")
+            sys.exit(1)
+        
+        print(f"Using configured base directory: {base_directory}")
+    else:
+        # No base directory configured, prompt user (first-time setup only)
+        print("\n" + "="*80)
+        print("FIRST-TIME SETUP: BASE DIRECTORY CONFIGURATION")
+        print("="*80)
+        print("This is your first time running the program.")
+        print("You need to configure the base directory for media file scanning.")
+        print(f"Default directory suggestion: {default_directory}")
+        print("\nIMPORTANT: Once configured, the base directory cannot be changed during normal operation.")
+        print("           Use --deldb option to reset the configuration if needed.")
+        print("="*80)
+        
+        while True:
+            user_input = input("\nPlease enter the base directory path to scan (or press Enter to use default): ").strip()
+            
+            if user_input:
+                base_directory = user_input
+            else:
+                base_directory = default_directory
+            
+            # Validate the entered directory
+            if not os.path.exists(base_directory):
+                print(f"ERROR: Directory does not exist: {base_directory}")
+                print("Please enter a valid directory path.")
+                continue
+            if not os.path.isdir(base_directory):
+                print(f"ERROR: Path is not a directory: {base_directory}")
+                print("Please enter a valid directory path.")
+                continue
+            
+            base_directory = os.path.abspath(base_directory)
+            
+            # Confirm with user before saving permanently
+            print(f"\nYou entered: {base_directory}")
+            print("This will be saved as your permanent base directory configuration.")
+            confirm = input("Confirm and save this configuration? (y/n): ").strip().lower()
+            
+            if confirm == 'y':
+                success = db.set_config('base_directory', base_directory, 'Base directory for media file scanning (permanent)')
+                if success:
+                    print("✓ Base directory saved to configuration successfully.")
+                    print("  This configuration is now permanent and cannot be changed during normal operation.")
+                    print("  Use --deldb option if you need to reconfigure in the future.")
+                    break
+                else:
+                    print("ERROR: Failed to save configuration. Please try again.")
+                    continue
+            else:
+                print("Configuration not saved.")
+                retry = input("Do you want to try again? (y/n): ").strip().lower()
+                if retry != 'y':
+                    print("Base directory configuration is required to run the program.")
+                    sys.exit(1)
+    
+    # Set target_directory to the resolved base_directory
+    target_directory = base_directory
+    
+    logging.info(f"Using base directory: {target_directory}")
+
     # ==================================================================================
     # Populate geo table if requested
     if args.populateGeoTable:
@@ -963,7 +1214,10 @@ Option 'updateMediaInfo' is specified.
             'files_error': 0
         }
         
-        for i, (filepath, people_count, activities, scenery, talking_detected) in enumerate(db_media_files, 1):
+        for i, (relative_filepath, people_count, activities, scenery, talking_detected) in enumerate(db_media_files, 1):
+            # Convert relative path to absolute path for file operations
+            filepath = db.get_absolute_path(relative_filepath, target_directory)
+            
             logging.debug(f"Processing {i}/{len(db_media_files)}: {os.path.basename(filepath)}")
             
             # Debug: Log the actual database values
@@ -972,16 +1226,16 @@ Option 'updateMediaInfo' is specified.
                          f"scenery: '{scenery}' (type: {type(scenery)}), "
                          f"talking_detected: {talking_detected} (type: {type(talking_detected)})")
             
-            # Check if physical file exists
+            # Check if physical file exists using absolute path
             if not os.path.exists(filepath):
-                logging.info(f"File no longer exists, deleting DB entry: {filepath}")
+                logging.info(f"File no longer exists, deleting DB entry: {relative_filepath}")
                 try:
-                    db.cursor.execute('DELETE FROM media_files WHERE filepath = ?', (filepath,))
+                    db.cursor.execute('DELETE FROM media_files WHERE filepath = ?', (relative_filepath,))
                     db.conn.commit()
                     stats['files_deleted'] += 1
-                    logging.info(f"Deleted DB entry for missing file: {filepath}")
+                    logging.info(f"Deleted DB entry for missing file: {relative_filepath}")
                 except Exception as e:
-                    logging.error(f"Error deleting DB entry for {filepath}: {e}")
+                    logging.error(f"Error deleting DB entry for {relative_filepath}: {e}")
                     stats['files_error'] += 1
                 continue
             
@@ -1034,7 +1288,7 @@ Option 'updateMediaInfo' is specified.
                     'talking_detected': 0  # Disabled: always set to False (0)
                 }
                 
-                db.update_media_file_semantic(filepath, semantic_data)
+                db.update_media_file_semantic(filepath, semantic_data, base_directory=target_directory)
                 stats['files_updated'] += 1
                 
                 # Log the analysis results
@@ -1080,7 +1334,7 @@ Option 'updateMediaInfo' is specified.
             #if os.path.basename(filepath).startswith('.') or extension not in [".jpg", ".jpeg", ".png", ".heic", ".mp4", ".mov"]:
             #    continue
             
-            if db.file_exists(filepath):
+            if db.file_exists(filepath, base_directory=target_directory):
                 logging.debug(f"Skipping already scanned and existing file: {filepath}")
                 continue
 
@@ -1095,10 +1349,16 @@ Option 'updateMediaInfo' is specified.
                         metadata.update(geo_data)
 
                 #if 'creation_time' not in metadata or metadata['creation_time'] is None or metadata['creation_time'] == 'N/A':
-                #    logging.warning(f"Metadata for {filepath}: ****** Missing creation_time")
+                #    logging.error(f"Missing creation_time, target_directory: {target_directory}, file {filepath}:\n{metadata}")
                 #    input("Paused for debugging. Press Enter to continue...")
 
-                db.add_media_file(metadata)
+                # Encounter run time error, debug what is db object here.
+                #logging.error(f"Database object state: {db}")
+                #logging.error(f"Database connection state: {db.conn}")
+                #logging.error(f"Database cursor state: {db.cursor}")
+                #logging.error(f"Database file path: {db.db_path}")
+
+                db.add_media_file(metadata, base_directory=target_directory)
             else:
                 logging.warning(f"Could not extract metadata for: {filepath}")
     else:
@@ -1131,21 +1391,28 @@ Option 'updateMediaInfo' is specified.
         logging.info(f"Sync FS and DB: Generated {thumbnail_count} new thumbnails")
         
         db.cursor.execute('SELECT filepath FROM media_files')
-        db_files_set = set(row[0] for row in db.cursor.fetchall())
+        db_relative_paths = set(row[0] for row in db.cursor.fetchall())
+        
+        # Convert relative paths from database to absolute paths for comparison
+        db_absolute_paths = set(db.get_absolute_path(rel_path, target_directory) for rel_path in db_relative_paths)
+        
+        # Convert current files to relative paths for database operations
+        current_relative_paths = set(db.get_relative_path(abs_path, target_directory) for abs_path in current_files_set)
 
-        # Files to remove from DB
-        files_to_remove = db_files_set - current_files_set
-        for filepath in files_to_remove:
+        # Files to remove from DB (relative paths in DB that don't correspond to existing files)
+        relative_files_to_remove = db_relative_paths - current_relative_paths
+        for relative_filepath in relative_files_to_remove:
             try:
-                db.cursor.execute('DELETE FROM media_files WHERE filepath = ?', (filepath,))
-                logging.info(f"Sync FS and DB: Removed from DB (file no longer exists): {filepath}")
+                db.cursor.execute('DELETE FROM media_files WHERE filepath = ?', (relative_filepath,))
+                absolute_filepath = db.get_absolute_path(relative_filepath, target_directory)
+                logging.info(f"Sync FS and DB: Removed from DB (file no longer exists): {absolute_filepath}")
             except sqlite3.Error as e:
-                logging.error(f"Sync FS and DB: Error removing {filepath} from DB: {e}")
+                logging.error(f"Sync FS and DB: Error removing {relative_filepath} from DB: {e}")
         db.conn.commit()
 
         # This section is repeated here to ensure new files are added above.
-        # Files to add to DB (new files)
-        files_to_add = current_files_set - db_files_set
+        # Files to add to DB (new files) - use absolute paths for processing
+        files_to_add = current_files_set - db_absolute_paths
         for filepath in files_to_add:
             # No need to check again for hidden files and non-media files here since already checked in scanning.
             #extension = os.path.splitext(filepath)[1].lower()
@@ -1163,7 +1430,7 @@ Option 'updateMediaInfo' is specified.
                         metadata.update(geo_data)
 
                 # This file is new and not in DB, so no need to check for existing.
-                db.add_media_file(metadata)
+                db.add_media_file(metadata, base_directory=target_directory)
             else:
                 logging.warning(f"Sync FS and DB: Could not extract metadata for new file: {filepath}")
     else:
@@ -1174,7 +1441,10 @@ Option 'updateMediaInfo' is specified.
     if args.updateCity:
         image_files_with_geo = db.get_files_with_geo()
         for image_file in image_files_with_geo:
-            db.update_city_translation(image_file[0], extractor)
+            # image_file[0] now contains relative path from database
+            # Convert to absolute path for the method call
+            absolute_filepath = db.get_absolute_path(image_file[0], target_directory)
+            db.update_city_translation(absolute_filepath, extractor, base_directory=target_directory)
         logging.info("City translation updated for all relevant image files.")
     else:
         logging.info("Skipping city translation update as per user request.")
@@ -1216,8 +1486,15 @@ Option 'updateMediaInfo' is specified.
         # Pre-calculate image_time for all image files for efficiency
         updated_image_files_with_geo = []
         for image_file in image_files_with_geo:
-            # convert image_file[1] (creation_time in YYYY-MM-DD HH:MM:SS format) to datetime object  
-            image_datetime = datetime.strptime(image_file[1], '%Y-%m-%d %H:%M:%S')
+            # convert image_file[1] (creation_time) to datetime object  
+            # Support multiple datetime formats including new ISO 8601
+            creation_time_str = image_file[1]
+            
+            image_datetime = parse_datetime_flexible(creation_time_str)
+            if image_datetime is None:
+                logging.debug(f"Skipping image {image_file[0]} - invalid creation time format: {creation_time_str}")
+                continue
+                
             updated_image_file = image_file + (image_datetime,)
             updated_image_files_with_geo.append(updated_image_file)       
         # Update the original list
@@ -1228,9 +1505,8 @@ Option 'updateMediaInfo' is specified.
             media_filepath = media_file[0]
             media_creation_time = media_file[1]
 
-            try:
-                media_time = datetime.strptime(media_creation_time, '%Y-%m-%d %H:%M:%S')
-            except (ValueError, TypeError) as e:
+            media_time = parse_datetime_flexible(media_creation_time)
+            if media_time is None:
                 logging.debug(f"Skipping {media_filepath} - invalid creation time format: {media_creation_time}")
                 continue
 

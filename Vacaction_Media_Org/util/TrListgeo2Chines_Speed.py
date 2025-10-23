@@ -9,7 +9,7 @@ def translate_location_fields(file_path='geo.list'):
     translator = Translator()
 
     # Open a new CSV file to write the translated results, and write the header line
-    outf = open("geo_chinese_.list", "w", encoding="utf-8")
+    outf = open("geo_chinese.list", "w", encoding="utf-8")
     outf.write("City_en,City_zn,Region_en,Region_zn,Subregion_en,Subregion_zn,CountryCode,Country_en,Country_zn,TimeZone,Latitude,Longitude\n")
 
     geo_data = []

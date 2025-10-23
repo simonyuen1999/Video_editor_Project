@@ -1,11 +1,13 @@
 from flask import Blueprint, jsonify, request, send_file, Response
-from src.models.media import Media, db
+from src.models.media import Media, Config, db, convert_iso8601_to_local_display
 import json
 import os
 import subprocess
 import platform
 import mimetypes
 import sys
+from datetime import datetime
+import re
 
 # Add the parent directory to the path to import metadata_extractor
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))))
@@ -26,6 +28,61 @@ if os.path.exists(db_path):
         metadata_extractor = None
 else:
     print(f"⚠️  Warning: Database not found at {db_path}")
+
+def get_absolute_file_path(relative_path):
+    """
+    Convert relative path from database to absolute path using base_directory configuration.
+    If relative_path is already absolute, return it as-is.
+    """
+    if os.path.isabs(relative_path):
+        # If path is already absolute, return it
+        return relative_path
+    
+    # Get base directory from config
+    base_directory = Config.get_base_directory()
+    if not base_directory:
+        # Fallback: if no base directory configured, assume relative_path is correct
+        print(f"⚠️  Warning: No base_directory configured, using relative path as-is: {relative_path}")
+        return relative_path
+    
+    # Combine base directory with relative path
+    absolute_path = os.path.join(base_directory, relative_path)
+    return os.path.normpath(absolute_path)
+
+def convert_date_filter_to_iso8601(date_str):
+    """
+    Convert date filter input to ISO 8601 format for database comparison.
+    
+    Args:
+        date_str: Date string in various formats (YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, etc.)
+        
+    Returns:
+        String that can be compared with ISO 8601 datetime strings in database
+    """
+    if not date_str:
+        return None
+        
+    try:
+        # If already in ISO 8601 format, return as-is
+        if 'T' in date_str:
+            return date_str
+            
+        # Handle YYYY-MM-DD format
+        if len(date_str) == 10 and date_str.count('-') == 2:
+            # For date range filtering, add time component
+            # Start of day: YYYY-MM-DD -> YYYY-MM-DDT00:00:00
+            return f"{date_str}T00:00:00"
+            
+        # Handle YYYY-MM-DD HH:MM:SS format
+        if len(date_str) == 19 and date_str.count('-') == 2 and date_str.count(':') == 2:
+            # Convert to ISO 8601: YYYY-MM-DD HH:MM:SS -> YYYY-MM-DDTHH:MM:SS
+            return date_str.replace(' ', 'T')
+            
+        # Return as-is for other formats
+        return date_str
+        
+    except Exception:
+        return date_str
 
 @media_bp.route('/media', methods=['GET'])
 def get_all_media():
@@ -78,14 +135,27 @@ def get_all_media():
                 Media.country_zh.ilike(f'%{country}%')
             ))
         if date_from and date_to:
-            # Filter by creation_time range (assuming ISO format)
+            # Convert date filters to ISO 8601 format for proper comparison
+            iso_date_from = convert_date_filter_to_iso8601(date_from)
+            iso_date_to = convert_date_filter_to_iso8601(date_to)
+            
+            # For end date, if it's just YYYY-MM-DD, make it end of day
+            if iso_date_to and len(date_to) == 10:
+                iso_date_to = f"{date_to}T23:59:59"
+            
+            # Filter by creation_time range (comparing ISO format strings)
             query = query.filter(
-                Media.creation_time.between(date_from, date_to)
+                Media.creation_time.between(iso_date_from, iso_date_to)
             )
         elif date_from:
-            query = query.filter(Media.creation_time >= date_from)
+            iso_date_from = convert_date_filter_to_iso8601(date_from)
+            query = query.filter(Media.creation_time >= iso_date_from)
         elif date_to:
-            query = query.filter(Media.creation_time <= date_to)
+            iso_date_to = convert_date_filter_to_iso8601(date_to)
+            # For end date, if it's just YYYY-MM-DD, make it end of day
+            if len(date_to) == 10:
+                iso_date_to = f"{date_to}T23:59:59"
+            query = query.filter(Media.creation_time <= iso_date_to)
             
         if talking == 'true':
             query = query.filter(Media.talking_detected == True)
@@ -210,7 +280,7 @@ def serve_media_file(media_id):
     """Serve the actual media file with streaming support for large files"""
     try:
         media = Media.query.get_or_404(media_id)
-        file_path = media.filepath
+        file_path = get_absolute_file_path(media.filepath)
         
         if not os.path.exists(file_path):
             return jsonify({'error': 'File not found'}), 404
@@ -249,7 +319,7 @@ def serve_media_thumbnail(media_id):
     """Serve a thumbnail image for fast grid display"""
     try:
         media = Media.query.get_or_404(media_id)
-        file_path = media.filepath
+        file_path = get_absolute_file_path(media.filepath)
         
         if not os.path.exists(file_path):
             return jsonify({'error': 'File not found'}), 404
@@ -288,7 +358,7 @@ def open_media_file(media_id):
     """Open media file with system default application"""
     try:
         media = Media.query.get_or_404(media_id)
-        file_path = media.filepath
+        file_path = get_absolute_file_path(media.filepath)
         
         if not os.path.exists(file_path):
             return jsonify({'error': 'File not found'}), 404
@@ -361,13 +431,17 @@ def get_stats():
             db.func.max(Media.creation_time).label('latest')
         ).first()
         
+        # Convert ISO 8601 dates to display format
+        earliest_display = convert_iso8601_to_local_display(date_range.earliest) if date_range.earliest else None
+        latest_display = convert_iso8601_to_local_display(date_range.latest) if date_range.latest else None
+        
         return jsonify({
             'total_media': total_media,
             'total_with_location': total_with_location,
             'total_with_talking': total_with_talking,
             'date_range': {
-                'earliest': date_range.earliest,
-                'latest': date_range.latest
+                'earliest': earliest_display,
+                'latest': latest_display
             }
         })
     except Exception as e:
@@ -397,9 +471,26 @@ def get_date_range():
                 Media.scanned_at.isnot(None)
             ).first()
         
+        # Convert ISO 8601 dates to display format for GUI
+        earliest_display = convert_iso8601_to_local_display(date_range.earliest) if date_range.earliest else None
+        latest_display = convert_iso8601_to_local_display(date_range.latest) if date_range.latest else None
+        
+        # Extract just the date part (YYYY-MM-DD) for date range picker
+        if earliest_display:
+            earliest_date = earliest_display.split(' ')[0]  # Get YYYY-MM-DD part
+        else:
+            earliest_date = None
+            
+        if latest_display:
+            latest_date = latest_display.split(' ')[0]  # Get YYYY-MM-DD part
+        else:
+            latest_date = None
+        
         return jsonify({
-            'earliest': date_range.earliest,
-            'latest': date_range.latest
+            'earliest': earliest_date,
+            'latest': latest_date,
+            'earliest_full': earliest_display,  # Full datetime for reference
+            'latest_full': latest_display       # Full datetime for reference
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -995,12 +1086,23 @@ def update_media_creation_time(media_id):
         
         new_creation_time = data['creation_time']
         
-        # Validate the format (should be YYYY-MM-DD HH:MM:SS)
+        # Validate the format (should be YYYY-MM-DD HH:MM:SS or YYYY-MM-DD hh:mm:ss±##.##)
         try:
             from datetime import datetime
-            datetime.strptime(new_creation_time, '%Y-%m-%d %H:%M:%S')
+            # Try to parse timezone info (both + and - timezones)
+            if ('+' in new_creation_time or new_creation_time.count('-') >= 3):
+                # New format with timezone: YYYY-MM-DD hh:mm:ss±##.##
+                # Split on the last '+' or '-' to separate time from timezone for validation
+                if '+' in new_creation_time:
+                    time_part = new_creation_time.rsplit('+', 1)[0]
+                else:
+                    time_part = new_creation_time.rsplit('-', 1)[0]
+                datetime.strptime(time_part, '%Y-%m-%d %H:%M:%S')
+            else:
+                # Old format: YYYY-MM-DD HH:MM:SS
+                datetime.strptime(new_creation_time, '%Y-%m-%d %H:%M:%S')
         except ValueError:
-            return jsonify({'error': 'Invalid datetime format. Expected YYYY-MM-DD HH:MM:SS'}), 400
+            return jsonify({'error': 'Invalid datetime format. Expected YYYY-MM-DD HH:MM:SS or YYYY-MM-DD hh:mm:ss±##.##'}), 400
         
         # Update the creation_time
         media.creation_time = new_creation_time
@@ -1041,9 +1143,20 @@ def bulk_update_media():
         if creation_time:
             try:
                 from datetime import datetime
-                datetime.strptime(creation_time, '%Y-%m-%d %H:%M:%S')
+                # Try to parse timezone info (both + and - timezones)
+                if ('+' in creation_time or creation_time.count('-') >= 3):
+                    # New format with timezone: YYYY-MM-DD hh:mm:ss±##.##
+                    # Split on the last '+' or '-' to separate time from timezone for validation
+                    if '+' in creation_time:
+                        time_part = creation_time.rsplit('+', 1)[0]
+                    else:
+                        time_part = creation_time.rsplit('-', 1)[0]
+                    datetime.strptime(time_part, '%Y-%m-%d %H:%M:%S')
+                else:
+                    # Old format: YYYY-MM-DD HH:MM:SS
+                    datetime.strptime(creation_time, '%Y-%m-%d %H:%M:%S')
             except ValueError:
-                return jsonify({'error': 'Invalid datetime format. Expected YYYY-MM-DD HH:MM:SS'}), 400
+                return jsonify({'error': 'Invalid datetime format. Expected YYYY-MM-DD HH:MM:SS or YYYY-MM-DD hh:mm:ss±##.##'}), 400
         
         updated_files = []
         failed_files = []
@@ -1088,7 +1201,7 @@ def bulk_update_media():
                         cmd.extend([f'-GPSLatitude={latitude}'])
                         cmd.extend([f'-GPSLongitude={longitude}'])
                         cmd.extend(['-overwrite_original'])
-                        cmd.append(media.filepath)
+                        cmd.append(get_absolute_file_path(media.filepath))
                         
                         # Execute exiftool command
                         result = subprocess.run(cmd, capture_output=True, text=True)

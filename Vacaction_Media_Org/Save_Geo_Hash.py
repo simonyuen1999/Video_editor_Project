@@ -6,7 +6,7 @@ import argparse
 # The translation mapping dictionary should be accessible everywhere in this module.
 hash_dict: dict[str, str] = {}
 
-def load_translation_mappings(input_file: str = "geo_chinese_.list") -> None:
+def load_translation_mappings(input_file: str = "geo_chinese.list") -> None:
     """Populate the global ``hash_dict`` from the provided CSV file."""
     global hash_dict
     hash_dict.clear()
@@ -57,7 +57,7 @@ def save_hash_to_file(output_file: str = "geo_translate_English_Chinese_hash.pic
     with open(output_file, "wb") as f:
         pickle.dump(hash_dict, f)
 
-def main(input_file: str = "geo_chinese_.list") -> None:
+def main(input_file: str = "geo_chinese.list") -> None:
     global hash_dict
     load_translation_mappings(input_file)
     save_hash_to_file()
@@ -80,9 +80,10 @@ The dict[str, str] maps English names to their Chinese translations, data from C
 """
     )
     parser.add_argument(
-        '--input-file',
-        default='geo_chinese_.list',
-        help='Path to the input CSV file containing geographic data (default: geo_chinese_.list)'
+        'input_file',
+        nargs='?',
+        default='geo_chinese.list',
+        help='Path to the input CSV file containing geographic data (default: geo_chinese.list)'
     )
     
     args = parser.parse_args()
