@@ -14,17 +14,18 @@ from metadata_extractor import MetadataExtractor
 media_bp = Blueprint('media', __name__)
 
 # Initialize MetadataExtractor for geo data
-# Look for geo list file in the project root directory
-geo_list_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'geo_chinese_.list')
+# Use the same database path as configured in main.py
+db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(__file__)))), 'media_organizer.db')
 metadata_extractor = None
-if os.path.exists(geo_list_path):
+if os.path.exists(db_path):
     try:
-        metadata_extractor = MetadataExtractor(geo_list_path)
+        metadata_extractor = MetadataExtractor(db_path)
+        print(f"✅ MetadataExtractor initialized with database: {db_path}")
     except Exception as e:
-        print(f"Warning: Could not initialize MetadataExtractor: {e}")
+        print(f"❌ Warning: Could not initialize MetadataExtractor: {e}")
         metadata_extractor = None
 else:
-    print(f"Warning: Geo list file not found at {geo_list_path}")
+    print(f"⚠️  Warning: Database not found at {db_path}")
 
 @media_bp.route('/media', methods=['GET'])
 def get_all_media():
@@ -522,10 +523,10 @@ def get_media_by_filename_pattern():
 
 @media_bp.route('/media/cities', methods=['GET'])
 def get_cities():
-    """Get all unique cities with standardized coordinates from geo list data"""
+    """Get all unique cities with standardized coordinates from database geo data"""
     try:
-        if not metadata_extractor or not metadata_extractor.geo_list_path:
-            # Fallback to database data if geo list is not available
+        if not metadata_extractor or not metadata_extractor.geo_data:
+            # Fallback to database data if geo data is not available
             return get_cities_from_database()
         
         # Get unique city+country combinations from database
@@ -563,7 +564,7 @@ def get_cities():
                     break
             
             if matching_geo:
-                # Use standardized coordinates and names from geo list
+                # Use standardized coordinates and names from geo database
                 lat, lon, geo_city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, geo_country_en, country_zh, timezone = matching_geo
                 
                 city_display = f"{geo_city_en} | {city_zh}" if city_zh else geo_city_en
@@ -582,7 +583,7 @@ def get_cities():
                     'longitude': lon
                 })
             else:
-                # City+country not found in geo list, get Chinese name from database if available
+                # City+country not found in geo database, get Chinese name from media database if available
                 db_city_zh = db.session.query(Media.city_zh).filter(
                     Media.city_en == city_en,
                     Media.country_en == country_en,
@@ -694,7 +695,7 @@ def get_countries():
 
 @media_bp.route('/media/geo-countries', methods=['GET'])
 def get_geo_countries():
-    """Get all countries from geo_chinese_.list file (for FixInfo view)"""
+    """Get all countries from database geo_data table (for FixInfo view)"""
     try:
         # Use the metadata_extractor to get countries from geo file
         if not metadata_extractor or not metadata_extractor.geo_data:
@@ -780,7 +781,7 @@ def get_cities_by_country():
 
 @media_bp.route('/media/geo-cities-by-country', methods=['GET'])
 def get_geo_cities_by_country():
-    """Get all cities from geo_chinese_.list file filtered by country (for FixInfo view)"""
+    """Get all cities from database geo_data table filtered by country (for FixInfo view)"""
     try:
         country = request.args.get('country')
         if not country:
