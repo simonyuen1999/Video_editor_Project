@@ -23,7 +23,7 @@ except ImportError:
     logging.warning("OpenCV not available. Visual analysis will be limited.")
 
 try:
-    import librosa
+    import librosa  # type: ignore
     LIBROSA_AVAILABLE = True
     
     # Configure librosa to suppress audio backend warnings

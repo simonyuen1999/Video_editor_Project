@@ -39,6 +39,21 @@
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
+        .timezone-banner {
+            background: #2c3e50;
+            color: white;
+            padding: 8px 0;
+            text-align: center;
+            font-size: 0.9rem;
+            border-bottom: 2px solid #34495e;
+        }
+
+        .timezone-info {
+            font-size: 0.9rem;
+            display: inline-block;
+            margin: 0 15px;
+        }
+
         .nav-links {
             text-align: center;
             margin-bottom: 20px;
@@ -816,6 +831,12 @@
     </style>
 </head>
 <body>
+    <!-- Timezone Display Banner -->
+    <div class="timezone-banner" id="timezoneBanner">
+        <span class="timezone-info">Display Timezone: <strong id="displayTime">Loading...</strong></span>
+        <span class="timezone-info">Offset: <strong id="offsetTime">Loading...</strong></span>
+    </div>
+    
     <div class="container">
         <div class="header">
             <h1>FixInfo View</h1>
@@ -987,6 +1008,21 @@
         let allFilenamePatterns = [];
         let currentFilenamePattern = '';
 
+        // Load timezone configuration
+        async function loadTimezoneConfig() {
+            try {
+                const response = await fetch('/config/timezone');
+                const config = await response.json();
+                
+                document.getElementById('offsetTime').textContent = config.offsetTime;
+                document.getElementById('displayTime').textContent = config.displayTime;
+            } catch (error) {
+                console.error('Error loading timezone config:', error);
+                document.getElementById('offsetTime').textContent = '+08:00';
+                document.getElementById('displayTime').textContent = 'ASIA Time';
+            }
+        }
+
         // Utility functions for preserving checkbox selections
         function saveCurrentSelections() {
             const selections = new Set();
@@ -1008,6 +1044,9 @@
 
         // Initialize the page
         document.addEventListener('DOMContentLoaded', async function() {
+            // Load timezone configuration
+            await loadTimezoneConfig();
+            
             // Load countries for dropdown
             loadCountries();
             

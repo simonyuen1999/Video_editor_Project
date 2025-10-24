@@ -36,6 +36,23 @@
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
+        .timezone-banner {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            text-align: center;
+            padding: 10px 20px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .timezone-info {
+            font-size: 0.9rem;
+            display: inline-block;
+            margin: 0 15px;
+        }
+
         .nav-links {
             text-align: center;
             margin-bottom: 20px;
@@ -476,6 +493,13 @@
 </head>
 <body>
     <div class="container">
+        <!-- Timezone Display Banner -->
+        <div class="timezone-banner" id="timezoneBanner">
+            <span class="timezone-info">🕐 Display Timezone: <span id="displayTimezone">Loading...</span></span>
+            <span class="timezone-info">📍 Offset: <span id="timezoneOffset">Loading...</span></span>
+            <span class="timezone-info">📝 All times shown in this timezone</span>
+        </div>
+        
         <div class="header">
             <h1>🏙️ City View</h1>
             <p>Browse your vacation memories by city</p>
@@ -553,8 +577,29 @@
         let cityMediaData = [];
         let allCities = [];
 
+        // Load timezone configuration on page load
+        async function loadTimezoneConfig() {
+            try {
+                const response = await fetch('/api/config/timezone');
+                const config = await response.json();
+                
+                if (config.offsetTime && config.displayTime) {
+                    document.getElementById('displayTimezone').textContent = config.displayTime;
+                    document.getElementById('timezoneOffset').textContent = config.offsetTime;
+                } else {
+                    document.getElementById('displayTimezone').textContent = 'ASIA Time';
+                    document.getElementById('timezoneOffset').textContent = '+08:00';
+                }
+            } catch (error) {
+                console.warn('Could not load timezone config:', error);
+                document.getElementById('displayTimezone').textContent = 'ASIA Time';
+                document.getElementById('timezoneOffset').textContent = '+08:00';
+            }
+        }
+
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
+            loadTimezoneConfig();
             loadCountries();
             
             // Add country selection change handler

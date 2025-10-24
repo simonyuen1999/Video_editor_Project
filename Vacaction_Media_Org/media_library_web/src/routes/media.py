@@ -1242,3 +1242,18 @@ def bulk_update_media():
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+@media_bp.route('/config/timezone', methods=['GET'])
+def get_timezone_config():
+    """Get timezone configuration for web display"""
+    try:
+        offset_time = Config.get_value('offsetTime', '+08:00')
+        display_time = Config.get_value('displayTime', 'ASIA Time')
+        
+        return jsonify({
+            'offsetTime': offset_time,
+            'displayTime': display_time
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

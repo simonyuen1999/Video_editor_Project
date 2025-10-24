@@ -4,18 +4,18 @@ import re
 
 db = SQLAlchemy()
 
-def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None):
+def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None, target_offset=None):
     """
-    Convert ISO 8601 datetime string with timezone offset to local time for display.
-    This function converts the ISO 8601 datetime (which represents the actual local time 
-    when the photo was taken) to a display format showing the capture location's local time.
+    Convert ISO 8601 datetime string to consistent local display time using config offsetTime.
+    This function converts the ISO 8601 datetime to the target timezone specified in config.
     
     Args:
         iso_datetime_str: ISO 8601 format datetime (e.g., "2023-12-25T14:30:45.123+08:00")
-        timezone_str: Optional timezone string from database (e.g., "Asia/Hong_Kong")
+        timezone_str: Optional timezone string from database (e.g., "Asia/Hong_Kong") - not used currently
+        target_offset: Target timezone offset for display (e.g., "+08:00") from config
         
     Returns:
-        String in format "YYYY-MM-DD HH:MM:SS (Local)" showing capture location time
+        String in format "YYYY-MM-DD HH:MM:SS" converted to target timezone for consistent display
     """
     if not iso_datetime_str:
         return None
@@ -24,35 +24,42 @@ def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None):
         from datetime import datetime, timezone, timedelta
         import re
         
+        # Parse target offset if provided
+        target_tz = None
+        if target_offset:
+            # Parse target offset format: +HH:MM or -HH:MM
+            match = re.match(r'^([+-])(\d{2}):(\d{2})$', target_offset)
+            if match:
+                sign, hours, minutes = match.groups()
+                offset_hours = int(hours) if sign == '+' else -int(hours)
+                offset_minutes = int(minutes) if sign == '+' else -int(minutes)
+                total_minutes = offset_hours * 60 + offset_minutes
+                target_tz = timezone(timedelta(minutes=total_minutes))
+        
         # Handle ISO 8601 format: YYYY-MM-DDThh:mm:ss[.###]±HH:MM
         if 'T' in iso_datetime_str:
             # Parse ISO 8601 datetime with timezone
-            # This datetime already represents the local time when photo was taken
             dt_with_tz = datetime.fromisoformat(iso_datetime_str.replace('Z', '+00:00'))
             
-            # Extract the local time component (this is what we want to display)
-            # The timezone offset tells us what timezone the photo was taken in
-            local_dt = dt_with_tz.replace(tzinfo=None)  # Remove timezone info for display
-            
-            # Get timezone info for display
-            tz_offset = dt_with_tz.utcoffset()
-            if tz_offset:
-                # Calculate timezone offset for display
-                total_seconds = int(tz_offset.total_seconds())
-                hours = total_seconds // 3600
-                minutes = abs((total_seconds % 3600) // 60)
-                
-                # Format timezone offset
-                if hours >= 0:
-                    tz_display = f"UTC+{hours:02d}:{minutes:02d}"
-                else:
-                    tz_display = f"UTC{hours:03d}:{minutes:02d}"
-                
-                # Return formatted datetime with timezone indication
-                return f"{local_dt.strftime('%Y-%m-%d %H:%M:%S')} ({tz_display})"
+            if target_tz:
+                # Convert to target timezone for consistent display
+                converted_dt = dt_with_tz.astimezone(target_tz)
+                return converted_dt.strftime('%Y-%m-%d %H:%M:%S')
             else:
-                # No timezone info available
-                return f"{local_dt.strftime('%Y-%m-%d %H:%M:%S')} (Local)"
+                # No target timezone - use original behavior
+                local_dt = dt_with_tz.replace(tzinfo=None)
+                tz_offset = dt_with_tz.utcoffset()
+                if tz_offset:
+                    total_seconds = int(tz_offset.total_seconds())
+                    hours = total_seconds // 3600
+                    minutes = abs((total_seconds % 3600) // 60)
+                    if hours >= 0:
+                        tz_display = f"UTC+{hours:02d}:{minutes:02d}"
+                    else:
+                        tz_display = f"UTC{hours:03d}:{minutes:02d}"
+                    return f"{local_dt.strftime('%Y-%m-%d %H:%M:%S')} ({tz_display})"
+                else:
+                    return f"{local_dt.strftime('%Y-%m-%d %H:%M:%S')} (Local)"
         
         # Handle legacy formats with timezone
         elif '+' in iso_datetime_str or iso_datetime_str.count('-') >= 3:
@@ -69,15 +76,39 @@ def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None):
                 tz_part = parts[1]
                 tz_sign = '-'
             
-            # Parse timezone offset
+            # If target_tz is provided, try to convert legacy format too
+            if target_tz:
+                try:
+                    # Create datetime with original timezone
+                    dt_str = datetime_part.replace(' ', 'T')
+                    if ':' in tz_part:
+                        tz_hours, tz_minutes = tz_part.split(':')
+                    elif '.' in tz_part:
+                        tz_hours, tz_minutes = tz_part.split('.')
+                    else:
+                        tz_hours = tz_part[:2] if len(tz_part) >= 2 else tz_part
+                        tz_minutes = tz_part[2:4] if len(tz_part) >= 4 else '00'
+                    
+                    # Create timezone offset
+                    offset_hours = int(tz_hours) if tz_sign == '+' else -int(tz_hours)
+                    offset_minutes = int(tz_minutes) if tz_sign == '+' else -int(tz_minutes)
+                    original_tz = timezone(timedelta(hours=offset_hours, minutes=offset_minutes))
+                    
+                    # Parse and convert
+                    dt_naive = datetime.fromisoformat(dt_str)
+                    dt_with_tz = dt_naive.replace(tzinfo=original_tz)
+                    converted_dt = dt_with_tz.astimezone(target_tz)
+                    return converted_dt.strftime('%Y-%m-%d %H:%M:%S')
+                except:
+                    # Fall back to original format
+                    pass
+            
+            # Format timezone display for legacy format
             if ':' in tz_part:
-                # Format: HH:MM
                 tz_hours, tz_minutes = tz_part.split(':')
             elif '.' in tz_part:
-                # Format: HH.MM
                 tz_hours, tz_minutes = tz_part.split('.')
             else:
-                # Format: HHMM or HH
                 if len(tz_part) >= 4:
                     tz_hours = tz_part[:2]
                     tz_minutes = tz_part[2:4]
@@ -85,15 +116,11 @@ def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None):
                     tz_hours = tz_part
                     tz_minutes = '00'
             
-            # Format timezone display
             tz_display = f"UTC{tz_sign}{tz_hours.zfill(2)}:{tz_minutes.zfill(2)}"
-            
-            # Return formatted datetime with timezone indication
             return f"{datetime_part} ({tz_display})"
         
         else:
             # No timezone information - display as local time
-            # Try to parse and reformat for consistency
             try:
                 if ' ' in iso_datetime_str and ':' in iso_datetime_str:
                     # Format: YYYY-MM-DD HH:MM:SS
@@ -105,8 +132,7 @@ def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None):
                 return f"{iso_datetime_str} (Local)"
             
     except Exception as e:
-        # Fallback: return original string with local indication if any error occurs
-        return f"{iso_datetime_str} (Unknown TZ)" if iso_datetime_str else None
+        return iso_datetime_str
 
 class Media(db.Model):
     __tablename__ = 'media_files'
@@ -130,15 +156,11 @@ class Media(db.Model):
     country_en = db.Column(db.String(100))
     country_zh = db.Column(db.String(100))
     timezone = db.Column(db.String(50))
-    people_count = db.Column(db.Integer, default=0)
-    activities = db.Column(db.Text)  # JSON string
-    scenery = db.Column(db.Text)     # JSON string
-    talking_detected = db.Column(db.Boolean, default=False)
-    scanned_at = db.Column(db.String(50), default=lambda: datetime.utcnow().isoformat())
-
+    
     def to_dict(self):
-        # Convert creation_time from ISO 8601 to local display format
-        display_creation_time = convert_iso8601_to_local_display(self.creation_time, self.timezone)
+        """Convert Media object to dictionary for JSON response"""
+        # Get timezone configuration for consistent display
+        offset_time = Config.get_value('offsetTime', '+08:00')
         
         return {
             'id': self.id,
@@ -147,8 +169,7 @@ class Media(db.Model):
             'file_extension': self.file_extension,
             'file_type': self.file_type,
             'size': self.size,
-            'creation_time': display_creation_time,  # Converted to local display format
-            'creation_time_raw': self.creation_time,  # Keep original ISO 8601 for reference
+            'creation_time': self.creation_time,
             'latitude': self.latitude,
             'longitude': self.longitude,
             'city_en': self.city_en,
@@ -161,21 +182,17 @@ class Media(db.Model):
             'country_en': self.country_en,
             'country_zh': self.country_zh,
             'timezone': self.timezone,
-            'activities': self.activities,
-            'scenery': self.scenery,
-            'talking_detected': self.talking_detected,
-            'scanned_at': self.scanned_at
+            'formatted_creation_time': convert_iso8601_to_local_display(self.creation_time, self.timezone, offset_time)
         }
 
 class Config(db.Model):
     __tablename__ = 'config'
     
-    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    key = db.Column(db.String(100), unique=True, nullable=False)
+    key = db.Column(db.String(100), primary_key=True)
     value = db.Column(db.Text, nullable=False)
     description = db.Column(db.Text)
-    created_at = db.Column(db.String(50), default=lambda: datetime.utcnow().isoformat())
-    updated_at = db.Column(db.String(50), default=lambda: datetime.utcnow().isoformat())
+    created_at = db.Column(db.String(50), default=lambda: datetime.now().isoformat())
+    updated_at = db.Column(db.String(50), default=lambda: datetime.now().isoformat())
     
     @staticmethod
     def get_value(key, default=None):

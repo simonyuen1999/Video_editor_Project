@@ -156,6 +156,8 @@ class MediaOrganizerDB:
                     activities TEXT,
                     scenery TEXT,
                     talking_detected BOOLEAN DEFAULT 0,
+                    hasGPS BOOLEAN DEFAULT 0,
+                    shareGPS BOOLEAN DEFAULT 0,
                     scanned_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
@@ -206,6 +208,18 @@ class MediaOrganizerDB:
             self.cursor.execute('''
                 CREATE INDEX IF NOT EXISTS idx_config_key ON config (key)
             ''')
+            
+            # Insert default configuration values if they don't exist
+            default_configs = [
+                ('offsetTime', '+08:00', 'Web server display timezone offset for converting UTC creation_time to local display time'),
+                ('displayTime', 'ASIA Time', 'Web server display timezone location name shown in views')
+            ]
+            
+            for key, value, description in default_configs:
+                self.cursor.execute('''
+                    INSERT OR IGNORE INTO config (key, value, description)
+                    VALUES (?, ?, ?)
+                ''', (key, value, description))
             
             self.conn.commit()
             logging.debug("Media files, geo, and config tables ensured to exist with geo fields.")
@@ -273,11 +287,15 @@ class MediaOrganizerDB:
                 metadata_to_store = metadata
                 relative_filepath = original_filepath
 
+            # Determine hasGPS based on presence of latitude and longitude
+            has_gps = bool(metadata_to_store.get('latitude') and metadata_to_store.get('longitude'))
+            
             self.cursor.execute('''
                 INSERT INTO media_files (
                     filepath, filename, file_extension, file_type, size, creation_time, latitude, longitude,
-                    city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone,
+                    hasGPS, shareGPS
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 metadata_to_store.get('filepath'),
                 metadata_to_store.get('filename'),
@@ -297,6 +315,8 @@ class MediaOrganizerDB:
                 metadata_to_store.get('country_en'),
                 metadata_to_store.get('country_zh'),
                 metadata_to_store.get('timezone'),
+                1 if has_gps else 0,  # hasGPS
+                0  # shareGPS (default to False/0)
             ))
             self.conn.commit()
             self.add_media_file_count += 1
@@ -370,6 +390,7 @@ class MediaOrganizerDB:
             self.conn.rollback()
             logging.debug(f"Rolled back changes for {filepath}")
 
+    # TODO: update shareGPS ?
     def update_media_file_geo(self, filepath, geo_data, base_directory=None):
         try:
             # Convert to relative path for database operations
@@ -403,6 +424,7 @@ class MediaOrganizerDB:
             self.conn.rollback()
             logging.debug(f"Rolled back changes for {relative_filepath}")
 
+    # Update media file activities and scenery
     def update_media_file_semantic(self, filepath, semantic_data, base_directory=None):
         try:
             # Convert to relative path for database operations
@@ -429,22 +451,62 @@ class MediaOrganizerDB:
             self.conn.rollback()
             logging.debug(f"Rolled back changes for {relative_filepath}")
 
-    def get_files_with_geo(self):
-        self.cursor.execute(
-            'SELECT filepath, creation_time, latitude, longitude, city_en, city_zh, ' + \
+    # Get files with geo data: Must have creation_time, city_en is not NULL, and hasGPS is True.
+    # creation_time is the key data for the media file.
+    #   metadata_extractor.py has logic to extract creation_time from various metadata fields (from different field and priorities)
+    # hasGPS (True) field added in DB schema to indicate presence of GPS data during the initial scan.
+    #   hasGPS field won't be updated in the later shareGeoInfo section.
+    #   hasGPS is True indicates this the key file for search the time different during shareGeoInfo logic.
+    #   When hasGPS (False) and has geo info which indicates geo info is not from initial scan.
+    #       This is not the key file for shareGeoInfo logic, so do not use it for calculating time difference.
+    #   shareGPS (True) indicate the geo data is updated from shareGeoInfo logic.
+    def get_files_with_geo(self, onlyHasGPSKeyFile = 'Yes'):
+        # Get only key files with hasGPS = True
+        if onlyHasGPSKeyFile == 'Yes':
+            self.cursor.execute(
+                'SELECT filepath, creation_time, latitude, longitude, city_en, city_zh, ' + \
+                   'region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone ' + \
+                   'FROM media_files WHERE creation_time IS NOT NULL and city_en IS NOT NULL and hasGPS = 1')
+        # Get all files with geo data, regardless of hasGPS
+        elif onlyHasGPSKeyFile == 'AllFiles':
+            self.cursor.execute(
+                'SELECT filepath, creation_time, latitude, longitude, city_en, city_zh, ' + \
                    'region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone ' + \
                    'FROM media_files WHERE creation_time IS NOT NULL and city_en IS NOT NULL')
+        else:
+            logging.error(f"get_files_with_geo: Invalid onlyHasGPSKeyFile value: {onlyHasGPSKeyFile}")
+            return []
         arr = self.cursor.fetchall()
         # logging.info(f"== Found {len(arr)} image files with city_en data.")
         #for a in arr:
         #    logging.info(f"geo data: {a}")
         return arr
 
+    def get_media_files_geo_count(self, All = False, hasGPS=False, shareGPS=False):
+        """Get count of media files with geo data based on hasGPS and shareGPS flags."""
+        if All:
+            query = 'SELECT COUNT(*) FROM media_files WHERE creation_time IS NOT NULL'
+            self.cursor.execute(query)
+            count = self.cursor.fetchone()[0]
+            return count
+        
+        query = 'SELECT COUNT(*) FROM media_files WHERE creation_time IS NOT NULL AND hasGPS = ? AND shareGPS = ?'
+        params = []
+        params.append(hasGPS)
+        params.append(shareGPS)
+        
+        self.cursor.execute(query, tuple(params))
+        count = self.cursor.fetchone()[0]
+        return count
+    
+    # Get files without geo data: Must have creation_time, city_en is NULL, and latitude is NULL and hasGPS is False.
+    # Getting files (no geo info) for updating geo data from nearby files with geo data.
+    # Skip all the key files with hasGPS (True).
     def get_files_without_geo(self):
         self.cursor.execute(
             'SELECT filepath, creation_time, latitude, longitude, city_en, city_zh, ' + \
                    'region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone ' + \
-                   'FROM media_files WHERE creation_time IS NOT NULL AND city_en IS NULL AND latitude IS NULL'
+                   'FROM media_files WHERE creation_time IS NOT NULL AND city_en IS NULL AND latitude IS NULL AND hasGPS = 0'
         )
         arr = self.cursor.fetchall()
         # logging.info(f"== Found {len(arr)} files without geo data (city_en is NULL and latitude is NULL).")
@@ -520,6 +582,8 @@ class MediaOrganizerDB:
                             pillow_heif.register_heif_opener()
                         except ImportError:
                             logging.warning("pillow_heif not available, HEIC support may be limited")
+                        except Exception as e:
+                            logging.warning(f"Error setting up HEIC support: {e}")
                     
                     with Image.open(filepath) as img:
                         # Convert HEIC to RGB if needed
@@ -766,15 +830,15 @@ class MediaOrganizerDB:
             logging.error(f"Error getting geo data sample: {e}")
             return []
 
-    def get_config(self, key):
+    def get_config(self, key, default=None):
         """Get a configuration value by key."""
         try:
             self.cursor.execute('SELECT value FROM config WHERE key = ?', (key,))
             result = self.cursor.fetchone()
-            return result[0] if result else None
+            return result[0] if result else default
         except sqlite3.Error as e:
             logging.error(f"Error getting config value for key '{key}': {e}")
-            return None
+            return default
 
     def set_config(self, key, value, description=None):
         """Set a configuration value. Updates if key exists, inserts if new."""
@@ -855,6 +919,82 @@ def cleanup_thumbnails(path):
     
     logging.info(f"Cleaned up {thumbnail_count} thumbnail files")
     return thumbnail_count
+
+def configure_timezone_settings(db):
+    """Configure timezone offset and display settings for web server views."""
+    print("\n" + "="*80)
+    print("WEB SERVER TIMEZONE DISPLAY CONFIGURATION")
+    print("="*80)
+    print("Configure timezone settings for web server views display.")
+    print("These settings control how creation_time is converted and displayed")
+    print("in all web server views (thumbnails and lists).")
+    print("="*80)
+    
+    # Get current values from database
+    current_offset = db.get_config('offsetTime', '-04:00')
+    current_display = db.get_config('displayTime', 'Toronto')
+    
+    print(f"\nCurrent settings:")
+    print(f"  Timezone Offset: {current_offset}")
+    print(f"  Display Location: {current_display}")
+    print()
+    
+    # Ask user for offsetTime
+    print("TIMEZONE OFFSET FOR WEB DISPLAY:")
+    print("Enter the timezone offset for displaying media files in web views")
+    print("Example: -04:00 for EDT Canada/US")
+    print("         +02:00 for CEST Europe") 
+    print("         +08:00 for HKT or Asia")
+    print("")
+    print("This converts UTC creation_time to your preferred local display time.")
+    print("For example:")
+    print("  If offsetTime='+08:00' and creation_time='2025-03-20T16:23:51.000+08:00'")
+    print("  Then display: '2025-03-20 4:23:51 PM'")
+    print("  If offsetTime='+08:00' and creation_time='2025-04-25T18:20:18.000-04:00'") 
+    print("  Then display: '2025-04-26 06:20:18 AM'")
+    print()
+    
+    while True:
+        user_offset = input(f"Enter timezone offset (press Enter to keep '{current_offset}'): ").strip()
+        
+        if not user_offset:
+            user_offset = current_offset
+            break
+        
+        # Validate timezone offset format
+        import re
+        if re.match(r'^[+-]\d{2}:\d{2}$', user_offset):
+            break
+        else:
+            print("ERROR: Invalid format. Please use format like '+08:00' or '-04:00'")
+    
+    # Ask user for displayTime
+    print(f"\nDISPLAY LOCATION:")
+    print("Enter the location name for web views display label (e.g., 'Toronto', 'Asia', 'Hong Kong')")
+    print("This appears as a label on top of all web views showing the timezone context.")
+    
+    user_display = input(f"Enter display location (press Enter to keep '{current_display}'): ").strip()
+    if not user_display:
+        user_display = current_display
+    
+    # Save the configuration
+    print(f"\nSaving web server timezone display configuration:")
+    print(f"  Timezone Offset: {user_offset}")
+    print(f"  Display Location: {user_display}")
+    
+    success1 = db.set_config('offsetTime', user_offset, 'Web server display timezone offset for converting UTC creation_time to local display time')
+    success2 = db.set_config('displayTime', user_display, 'Web server display timezone location name shown in views')
+    
+    if success1 and success2:
+        print("✓ Web server timezone display configuration saved successfully.")
+        print("  These settings will be used in all web views to display local capture time.")
+        print("  The offset and location will appear as labels on top of all views.")
+    else:
+        print("ERROR: Failed to save timezone configuration.")
+        print("       The web server will continue with default values.")
+        print("       The program will continue with default values.")
+    
+    print("="*80)
 
 # =====================================================================================
 def main():
@@ -1110,6 +1250,10 @@ Option 'updateMediaInfo' is specified.
                     print("✓ Base directory saved to configuration successfully.")
                     print("  This configuration is now permanent and cannot be changed during normal operation.")
                     print("  Use --deldb option if you need to reconfigure in the future.")
+                    
+                    # Configure timezone settings
+                    configure_timezone_settings(db)
+                    
                     break
                 else:
                     print("ERROR: Failed to save configuration. Please try again.")
@@ -1437,9 +1581,10 @@ Option 'updateMediaInfo' is specified.
         logging.info("Do not Sync File System and DB, go to next step.")
 
     # ==================================================================================
-    # Update city translation if requested
+    # Update city translation (city_en -> city_zh) if requested
     if args.updateCity:
-        image_files_with_geo = db.get_files_with_geo()
+        # Get all image files having geo data, including hasGPS = True key file.
+        image_files_with_geo = db.get_files_with_geo( onlyHasGPSKeyFile = 'AllFiles' )
         for image_file in image_files_with_geo:
             # image_file[0] now contains relative path from database
             # Convert to absolute path for the method call
@@ -1467,7 +1612,8 @@ Option 'updateMediaInfo' is specified.
 
         # All iPhone images are HEIC, some other images may have geo data.
         # Once we have more media files (Image and Video) with geo data, we can use them to find nearby videos.
-        image_files_with_geo = db.get_files_with_geo()
+        # Get all image key files (hasGPS = True) with geo data
+        image_files_with_geo = db.get_files_with_geo( onlyHasGPSKeyFile = 'Yes')
         logging.info(f">> Found {len(image_files_with_geo)} media files with geo data.")
 
         #for a in image_files_with_geo:
@@ -1500,7 +1646,9 @@ Option 'updateMediaInfo' is specified.
         # Update the original list
         image_files_with_geo = updated_image_files_with_geo
 
-        # Process each media file without geo data to find closest image with geo data
+        # Process each media file without geo data to find closest image file (hasGPS = True)
+        # Since all_files_without_geo has only key file, so the search and update no geo data is bounded by key file only.
+        update_counter = 0
         for media_file in all_files_without_geo:
             media_filepath = media_file[0]
             media_creation_time = media_file[1]
@@ -1510,11 +1658,6 @@ Option 'updateMediaInfo' is specified.
                 logging.debug(f"Skipping {media_filepath} - invalid creation time format: {media_creation_time}")
                 continue
 
-            # Already use SQL to filter out files without creation_time (SQL: creation_time IS NOT NULL)
-            #if not media_creation_time:
-            #    logging.debug(f"Skipping {media_filepath} - no creation time available")
-            #    continue
-
             # Find the closest image file by creation time
             closest_image = None
             min_time_diff = float('inf')
@@ -1523,15 +1666,11 @@ Option 'updateMediaInfo' is specified.
                 image_filepath = image_file[0]
                 image_time = image_file[-1]
 
-                # Already use SQL to filter out files without creation_time (SQL: creation_time IS NOT NULL)
-                # if not image_creation_time:
-                #    continue
-                    
                 try:
                     # Calculate time difference in seconds
                     time_diff = abs((media_time - image_time).total_seconds())
 
-                    if time_diff > time_diff_seconds:  # Use seconds for search, default 4h (240 minutes = 4 hours)
+                    if time_diff > time_diff_seconds:
                         continue  # Skip images that are more than 4 hours apart
 
                     if time_diff < min_time_diff:
@@ -1542,8 +1681,8 @@ Option 'updateMediaInfo' is specified.
                     logging.debug(f"Error parsing timestamps for {media_filepath} or {image_filepath}: {e}")
                     continue
 
-            # If we found a close image (within reasonable time window, e.g., 4 hours = 240 minutes)
-            if closest_image and min_time_diff <= time_diff_seconds:  # 240 minutes = 4 hours
+            # If we found a close image (within reasonable time window, e.g., default 60 minutes = 1 hr)
+            if closest_image and min_time_diff <= time_diff_seconds:
                 # Extract geo data from closest image
                 geo_data = {
                     'latitude': closest_image[2],
@@ -1561,12 +1700,14 @@ Option 'updateMediaInfo' is specified.
                 }
                 
                 # Update the media file with geo data from closest image
+                # set hasGPS = False, shareGPS = True to indicate geo data is shared
                 try:
                     db.cursor.execute('''
                         UPDATE media_files
                         SET latitude = ?, longitude = ?, city_en = ?, city_zh = ?, 
                             region_en = ?, region_zh = ?, subregion_en = ?, subregion_zh = ?,
-                            country_code = ?, country_en = ?, country_zh = ?, timezone = ?
+                            country_code = ?, country_en = ?, country_zh = ?, timezone = ?,
+                            hasGPS = ?, shareGPS = ?
                         WHERE filepath = ?
                     ''', (
                         geo_data['latitude'], geo_data['longitude'],
@@ -1575,11 +1716,14 @@ Option 'updateMediaInfo' is specified.
                         geo_data['subregion_en'], geo_data['subregion_zh'],
                         geo_data['country_code'], geo_data['country_en'],
                         geo_data['country_zh'], geo_data['timezone'],
+                        False,  # Set hasGPS to False. This indicates geo data is not the key file.
+                        True,   # Set shareGPS to True. This indicates geo data is shared from another file.
                         media_filepath
                     ))
                     db.conn.commit()
-                    
-                    logging.info(f"Updated geo data for {media_filepath} from {closest_image[0]} "
+
+                    update_counter += 1
+                    logging.info(f"({update_counter}) Updated geo data for {media_filepath} from {closest_image[0]} "
                             f"(time diff: {min_time_diff:.0f} seconds)")
                             
                 except sqlite3.Error as e:
@@ -1594,6 +1738,32 @@ Option 'updateMediaInfo' is specified.
         logging.info("Skipping geo metadata sharing as per user request.")
 
     # ==================================================================================
+
+    # Add a media_files table statistic summary at the end of the run
+    logging.info("=" * 80)
+    logging.info("MEDIA FILES TABLE SUMMARY")
+    logging.info("=" * 80)
+
+    # There are three possible scenarios for media files table:
+    # 1. Both hasGPS and shareGPS are False: media file has no geo data
+    # 2. hasGPS is True, shareGPS is False: media file is the key file with original geo data from metadata
+    # 3. hasGPS is False, shareGPS is True: media file has geo data shared from another file.
+
+    no_geo_count = db.get_media_files_geo_count( hasGPS = False, shareGPS = False )
+    key_geo_count = db.get_media_files_geo_count( hasGPS = True, shareGPS = False )
+    shared_geo_count = db.get_media_files_geo_count( hasGPS = False, shareGPS = True )
+    sub_total = no_geo_count + key_geo_count + shared_geo_count
+
+    logging.info(f"Media files without geo data: {no_geo_count}")
+    logging.info(f"Media files with key geo data (hasGPS=True): {key_geo_count}")
+    logging.info(f"Media files with shared geo data (shareGPS=True): {shared_geo_count}")
+    logging.info("-" * 60)
+    logging.info(f"Subtotal (should match total below): {sub_total}")
+    logging.info("=" * 80)
+
+    total_media_files = db.get_media_files_geo_count( All = True )
+    logging.info(f"Total media files in database: {total_media_files}")
+    logging.info("=" * 80)
 
     db.close()
     logging.info("Media organization complete.")
