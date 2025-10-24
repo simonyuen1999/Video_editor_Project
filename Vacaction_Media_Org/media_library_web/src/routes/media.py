@@ -825,12 +825,11 @@ def get_cities_by_country():
             return jsonify({'error': 'Country parameter is required'}), 400
         
         # Group by city to get unique cities with representative coordinates
-        from sqlalchemy import func
         cities = db.session.query(
             Media.city_en,
             Media.city_zh,
-            func.min(Media.latitude).label('latitude'),
-            func.min(Media.longitude).label('longitude')
+            db.func.min(Media.latitude).label('latitude'),
+            db.func.min(Media.longitude).label('longitude')
         ).filter(
             Media.city_en.isnot(None),
             Media.city_en != '',

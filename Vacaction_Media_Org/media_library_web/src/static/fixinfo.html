@@ -1870,15 +1870,31 @@
         function formatCreationTime(timeString) {
             if (!timeString) return 'No time set';
             
+            // The backend now provides timezone-aware local time in format:
+            // "YYYY-MM-DD HH:MM:SS (UTC+XX:XX)" or "YYYY-MM-DD HH:MM:SS (Local)"
+            // Display this as-is since it represents the actual local time when photo was taken
+            
             try {
+                // If the time already includes timezone info, return as-is
+                if (timeString.includes('(') && timeString.includes(')')) {
+                    return timeString;
+                }
+                
+                // Legacy format handling
                 const date = new Date(timeString);
-                return date.toLocaleString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
+                if (!isNaN(date.getTime())) {
+                    // For legacy dates without timezone info, add Local indicator
+                    const formatted = date.toLocaleString('en-US', {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                    return formatted + ' (Local)';
+                }
+                
+                return timeString;
             } catch (e) {
                 return timeString;
             }
