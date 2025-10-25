@@ -826,6 +826,7 @@ class MetadataExtractor:
         Latitude  = metadata[0].get("GPSLatitude", "N/A") if "GPSLatitude" in metadata[0] else None
         Longitude = metadata[0].get("GPSLongitude", "N/A") if "GPSLongitude" in metadata[0] else None
 
+        # -------- convert_exif_to_iso8601() is a method within _run_exiftool() to convert exif datetime to ISO 8601-------------
         def convert_exif_to_iso8601(exif_datetime_str):
             """
             Convert exiftool datetime format to ISO 8601 format.
@@ -880,6 +881,7 @@ class MetadataExtractor:
                     iso_datetime += timezone_part
                 
                 return iso_datetime
+            # -----------------------------------------------------------------------------------------
                 
             except Exception as e:
                 logger.debug(f"Error converting datetime '{exif_datetime_str}' to ISO 8601: {e}")
@@ -979,44 +981,66 @@ class MetadataExtractor:
                         logger.debug(f"Extracted offsetTime: {saved_offset_time}")
                         break
             
-            # Process non-empty raw data and convert to ISO 8601
-            candidate_dates = []
-            for field_name in raw_date_fields:
-                raw_value = raw_date_values.get(field_name)
-                if raw_value and raw_value != "N/A":
-                    # Ensure raw_value is a string before calling string methods
-                    raw_value_str = str(raw_value) if not isinstance(raw_value, str) else raw_value
-                    # If raw data doesn't have offsetTime but we found one, add it
-                    processed_value = raw_value_str
-                    
-                    # Check if this value already has timezone info
-                    has_existing_timezone = False
-                    if ':' in raw_value_str and ' ' in raw_value_str:
-                        time_part = raw_value_str.split(' ', 1)[-1]  # Get part after space
-                        # Check for timezone offset in the time portion
-                        if '+' in time_part or '-' in time_part:
-                            has_existing_timezone = True
-                    
-                    # Add saved offset time if this value doesn't have timezone and we found one
-                    if saved_offset_time and not has_existing_timezone:
-                        processed_value = raw_value_str + saved_offset_time
-                        logger.debug(f"Added offsetTime to {field_name}: {processed_value}")
-                    
-                    # Convert to ISO 8601
-                    iso_date = convert_exif_to_iso8601(processed_value)
-                    if iso_date:
-                        candidate_dates.append((field_name, iso_date, processed_value))
-                        logger.debug(f"Converted {field_name} to ISO 8601: {iso_date}")
-            
-            # Find the oldest (earliest) date as CreateDate
-            if candidate_dates:
-                # Sort by ISO 8601 date string (chronologically)
-                candidate_dates.sort(key=lambda x: x[1])
-                earliest_field, earliest_date, earliest_raw = candidate_dates[0]
-                CreateDate = earliest_date
-                logger.debug(f"Selected earliest date from {earliest_field}: {CreateDate} (raw: {earliest_raw})")
+            # Since DJI file does not have correct 'Create Date', 'Modify Date', and 'File Modification Date/Time' is PC system time,
+            # For DJI files, we cannot use these field, instead we use its original file name 'DJI_YYYYMMDDHHMMSS_xxxx' to determine the CreateDate.
+
+            # If this filepath is DJI_YYYYMMDDHHMMSS_xxxx format, try to extract date from the origianl filename
+            import re
+            dji_filename_pattern = r'DJI_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})_'
+            filename = os.path.basename(filepath)
+            dji_match = re.search(dji_filename_pattern, filename)
+            if dji_match:
+                # Extract date components from the filename
+                year = dji_match.group(1)
+                month = dji_match.group(2)
+                day = dji_match.group(3)
+                hour = dji_match.group(4)
+                minute = dji_match.group(5)
+                second = dji_match.group(6)
+                # Construct the CreateDate from the extracted components
+                CreateDate = f"{year}-{month}-{day}T{hour}:{minute}:{second}.000"+saved_offset_time if saved_offset_time else ""
+                logger.debug(f"Extracted CreateDate {CreateDate} from DJI {filename}")
             else:
-                logger.debug("No valid dates found in raw data processing")
+                # If not DJI file, proceed with normal raw data processing as logic below.
+                # Process non-empty raw data and convert to ISO 8601
+                candidate_dates = []
+                for field_name in raw_date_fields:
+                    raw_value = raw_date_values.get(field_name)
+                    if raw_value and raw_value != "N/A":
+                        # Ensure raw_value is a string before calling string methods
+                        raw_value_str = str(raw_value) if not isinstance(raw_value, str) else raw_value
+                        # If raw data doesn't have offsetTime but we found one, add it
+                        processed_value = raw_value_str
+                        
+                        # Check if this value already has timezone info
+                        has_existing_timezone = False
+                        if ':' in raw_value_str and ' ' in raw_value_str:
+                            time_part = raw_value_str.split(' ', 1)[-1]  # Get part after space
+                            # Check for timezone offset in the time portion
+                            if '+' in time_part or '-' in time_part:
+                                has_existing_timezone = True
+                        
+                        # Add saved offset time if this value doesn't have timezone and we found one
+                        if saved_offset_time and not has_existing_timezone:
+                            processed_value = raw_value_str + saved_offset_time
+                            logger.debug(f"Added offsetTime to {field_name}: {processed_value}")
+                        
+                        # Convert to ISO 8601
+                        iso_date = convert_exif_to_iso8601(processed_value)
+                        if iso_date:
+                            candidate_dates.append((field_name, iso_date, processed_value))
+                            logger.debug(f"Converted {field_name} to ISO 8601: {iso_date}")
+                
+                # Find the oldest (earliest) date as CreateDate
+                if candidate_dates:
+                    # Sort by ISO 8601 date string (chronologically)
+                    candidate_dates.sort(key=lambda x: x[1])
+                    earliest_field, earliest_date, earliest_raw = candidate_dates[0]
+                    CreateDate = earliest_date
+                    logger.debug(f"Selected earliest date from {earliest_field}: {CreateDate} (raw: {earliest_raw})")
+                else:
+                    logger.debug("No valid dates found in raw data processing")
+
         # ---------------------------------------------
         
         # If no date found, log all available date fields for debugging and stop
@@ -1030,8 +1054,10 @@ class MetadataExtractor:
             logger.error(f"FATAL: No usable creation date found for {filepath}. Please check the problem!")
             logger.error(f"Available date fields: {available_dates}")
             logger.error(f"Raw date values checked: subsec_modify_date_raw={subsec_modify_date_raw}, file_modify_date_raw={file_modify_date_raw}, datetime_original_raw={datetime_original_raw}, create_date_raw={create_date_raw}, modify_date_raw={modify_date_raw}, gps_datetime_raw={gps_datetime_raw}")
+
+            # Only for debugging, uncomment below to pause execution
             # Stop execution and let user check the problem
-            os.exit(0)
+            # os.exit(0)
             return None
 
         # Store individual date fields for debugging analysis

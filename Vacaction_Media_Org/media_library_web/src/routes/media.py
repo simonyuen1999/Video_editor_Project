@@ -209,6 +209,7 @@ def get_all_media():
                 if include_record:
                     filtered_records.append(media)
             
+            # Preserve the original order from the database query
             media_records = filtered_records
         
         # Convert to list of dictionaries and parse JSON fields
@@ -432,8 +433,10 @@ def get_stats():
         ).first()
         
         # Convert ISO 8601 dates to display format
-        earliest_display = convert_iso8601_to_local_display(date_range.earliest) if date_range.earliest else None
-        latest_display = convert_iso8601_to_local_display(date_range.latest) if date_range.latest else None
+        from src.models.media import Config
+        offset_time = Config.get_value('offsetTime', '+08:00')
+        earliest_display = convert_iso8601_to_local_display(date_range.earliest, None, offset_time) if date_range.earliest else None
+        latest_display = convert_iso8601_to_local_display(date_range.latest, None, offset_time) if date_range.latest else None
         
         return jsonify({
             'total_media': total_media,

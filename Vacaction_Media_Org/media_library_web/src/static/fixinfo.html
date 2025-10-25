@@ -1450,7 +1450,7 @@
                 const isVideo = mediaItem.file_extension && 
                     ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(mediaItem.file_extension.toLowerCase());
                 
-                const displayTime = formatCreationTime(mediaItem.creation_time);
+                const displayTime = formatCreationTime(mediaItem.formatted_creation_time, mediaItem.creation_time);
                 const location = mediaItem.city_zh && mediaItem.city_en ? 
                     `${mediaItem.city_zh} | ${mediaItem.city_en}` : 
                     (mediaItem.city_zh || mediaItem.city_en || 'Unknown location');
@@ -1506,17 +1506,30 @@
 
         function parseJsonArray(jsonString) {
             try {
-                if (Array.isArray(jsonString)) return jsonString;
+                if (Array.isArray(jsonString)) {
+                    return jsonString.filter(item => 
+                        !item.toLowerCase().includes('people') && 
+                        !item.toLowerCase().includes('person') &&
+                        item !== 'NotFound'
+                    );
+                }
                 if (typeof jsonString === 'string' && jsonString) {
+                    if (jsonString === 'NotFound') return [];
                     return JSON.parse(jsonString).filter(item => 
                         !item.toLowerCase().includes('people') && 
-                        !item.toLowerCase().includes('person')
+                        !item.toLowerCase().includes('person') &&
+                        item !== 'NotFound'
                     );
                 }
             } catch (e) {
                 // If parsing fails, try splitting by comma
                 if (typeof jsonString === 'string') {
-                    return jsonString.split(',').map(s => s.trim()).filter(s => s);
+                    if (jsonString === 'NotFound') return [];
+                    return jsonString.split(',').map(s => s.trim()).filter(s => 
+                        s && s !== 'NotFound' &&
+                        !s.toLowerCase().includes('people') && 
+                        !s.toLowerCase().includes('person')
+                    );
                 }
             }
             return [];
@@ -1906,37 +1919,21 @@
             }
         }
 
-        function formatCreationTime(timeString) {
-            if (!timeString) return 'No time set';
+        function formatCreationTime(formattedCreationTime, originalCreationTime = null) {
+            if (!formattedCreationTime) return 'No time set';
             
-            // The backend now provides timezone-aware local time in format:
-            // "YYYY-MM-DD HH:MM:SS (UTC+XX:XX)" or "YYYY-MM-DD HH:MM:SS (Local)"
-            // Display this as-is since it represents the actual local time when photo was taken
+            // The backend now provides timezone-converted local time using config offsetTime
+            // In format: "YYYY-MM-DD HH:MM:SS AM/PM" already converted to the configured display timezone
+            // Display this as-is since it represents the converted local display time
             
-            try {
-                // If the time already includes timezone info, return as-is
-                if (timeString.includes('(') && timeString.includes(')')) {
-                    return timeString;
-                }
-                
-                // Legacy format handling
-                const date = new Date(timeString);
-                if (!isNaN(date.getTime())) {
-                    // For legacy dates without timezone info, add Local indicator
-                    const formatted = date.toLocaleString('en-US', {
-                        year: 'numeric',
-                        month: 'short',
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit'
-                    });
-                    return formatted + ' (Local)';
-                }
-                
-                return timeString;
-            } catch (e) {
-                return timeString;
-            }
+            let displayTime = formattedCreationTime;
+            
+            // For debugging: show original ISO 8601 timestamp below
+            //if (originalCreationTime) {
+            //    displayTime += `<br><small style="color: #666; font-size: 0.8em;">Original: ${originalCreationTime}</small>`;
+            //}
+
+            return displayTime;
         }
 
         function showError(message) {
@@ -2006,7 +2003,7 @@
                 const isVideo = media.file_extension && 
                     ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
                 
-                const displayTime = formatCreationTime(media.creation_time);
+                const displayTime = formatCreationTime(media.formatted_creation_time, media.creation_time);
                 
                 // Parse activities and scenery arrays if they exist
                 let activities = [];

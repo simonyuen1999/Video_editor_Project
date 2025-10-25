@@ -615,37 +615,28 @@
         document.addEventListener('DOMContentLoaded', loadTimezoneConfig);
         
         // Helper function to format creation time
-        function formatCreationTime(creationTime) {
-            if (!creationTime) return 'Unknown Date';
+        function formatCreationTime(formattedCreationTime, originalCreationTime = null) {
+            if (!formattedCreationTime) return 'Unknown Date';
             
-            // The backend now provides timezone-aware local time in format:
-            // "YYYY-MM-DD HH:MM:SS (UTC+XX:XX)" or "YYYY-MM-DD HH:MM:SS (Local)"
-            // Display this as-is since it represents the actual local time when photo was taken
+            // The backend now provides timezone-converted local time using config offsetTime
+            // In format: "YYYY-MM-DD HH:MM:SS AM/PM" already converted to the configured display timezone
+            // Display this as-is since it represents the converted local display time
             
-            try {
-                // If the time already includes timezone info, return as-is
-                if (creationTime.includes('(') && creationTime.includes(')')) {
-                    return creationTime;
-                }
-                
-                // Legacy format handling - convert dashes to colons in time part
-                let formattedTime = creationTime;
-                if (formattedTime.match && formattedTime.match(/\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}/)) {
-                    formattedTime = formattedTime.replace(/ (\d{2})-(\d{2})-(\d{2})/, ' $1:$2:$3');
-                }
-                
-                // For legacy formats without timezone info, parse and format consistently
-                if (formattedTime.match(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/)) {
-                    const date = new Date(formattedTime);
-                    if (!isNaN(date.getTime())) {
-                        return formattedTime + ' (Local)';
-                    }
-                }
-                
-                return formattedTime;
-            } catch (e) {
-                return creationTime;
-            }
+            let displayTime = formattedCreationTime;
+            
+            // For debugging: show original ISO 8601 timestamp below
+            //if (originalCreationTime) {
+            //    displayTime += `<br><small style="color: #666; font-size: 0.8em;">Original: ${originalCreationTime}</small>`;
+            //}
+
+            return displayTime;
+        }
+
+        function formatCreationTimeClean(formattedCreationTime) {
+            if (!formattedCreationTime) return 'Unknown Date';
+            
+            // Clean display without debugging info - for map view
+            return formattedCreationTime;
         }
 
         // Global variables
@@ -1053,17 +1044,21 @@
                 };
                 
                 // Format creation time for display
-                let displayTime = formatCreationTime(media.creation_time);
+                let displayTime = formatCreationTime(media.formatted_creation_time, media.creation_time);
                 
-                // Parse activities and scenery arrays and filter out people-related entries
+                // Parse activities and scenery arrays and filter out people-related entries and 'NotFound'
                 const activities = (Array.isArray(media.activities) ? media.activities : 
                     (typeof media.activities === 'string' && media.activities ? 
-                     JSON.parse(media.activities) : []))
-                    .filter(activity => !activity.toLowerCase().includes('people') && !activity.toLowerCase().includes('person'));
+                     (media.activities === 'NotFound' ? [] : JSON.parse(media.activities)) : []))
+                    .filter(activity => !activity.toLowerCase().includes('people') && 
+                                      !activity.toLowerCase().includes('person') &&
+                                      activity !== 'NotFound');
                 const scenery = (Array.isArray(media.scenery) ? media.scenery : 
                     (typeof media.scenery === 'string' && media.scenery ? 
-                     JSON.parse(media.scenery) : []))
-                    .filter(scene => !scene.toLowerCase().includes('people') && !scene.toLowerCase().includes('person'));
+                     (media.scenery === 'NotFound' ? [] : JSON.parse(media.scenery)) : []))
+                    .filter(scene => !scene.toLowerCase().includes('people') && 
+                                   !scene.toLowerCase().includes('person') &&
+                                   scene !== 'NotFound');
                 
                 if (currentViewMode === 'list') {
                     return `
@@ -1180,7 +1175,7 @@
                                 ${location.media.slice(0, 3).map(media => `
                                     <div style="margin: 5px 0; padding: 5px; border: 1px solid #ddd; border-radius: 3px;">
                                         <strong>${media.filename}</strong><br>
-                                        <small>${formatCreationTime(media.creation_time)}</small><br>
+                                        <small>${formatCreationTimeClean(media.formatted_creation_time)}</small><br>
                                         <button onclick="openFileInSystem(${media.id})" style="margin-top: 5px; padding: 3px 8px; background: #667eea; color: white; border: none; border-radius: 3px; cursor: pointer;">
                                             Open File
                                         </button>
@@ -1292,7 +1287,7 @@
                 const isVideo = media.file_extension && 
                     ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
                 
-                const displayTime = formatCreationTime(media.creation_time);
+                const displayTime = formatCreationTime(media.formatted_creation_time, media.creation_time);
                 
                 body.innerHTML = `
                     ${isVideo ? 

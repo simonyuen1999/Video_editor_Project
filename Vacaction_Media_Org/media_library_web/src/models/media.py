@@ -42,9 +42,9 @@ def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None, target
             dt_with_tz = datetime.fromisoformat(iso_datetime_str.replace('Z', '+00:00'))
             
             if target_tz:
-                # Convert to target timezone for consistent display
+                # Convert to target timezone for consistent display with 12-hour format
                 converted_dt = dt_with_tz.astimezone(target_tz)
-                return converted_dt.strftime('%Y-%m-%d %H:%M:%S')
+                return converted_dt.strftime('%Y-%m-%d %I:%M:%S %p')
             else:
                 # No target timezone - use original behavior
                 local_dt = dt_with_tz.replace(tzinfo=None)
@@ -94,11 +94,11 @@ def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None, target
                     offset_minutes = int(tz_minutes) if tz_sign == '+' else -int(tz_minutes)
                     original_tz = timezone(timedelta(hours=offset_hours, minutes=offset_minutes))
                     
-                    # Parse and convert
+                    # Parse and convert with 12-hour format
                     dt_naive = datetime.fromisoformat(dt_str)
                     dt_with_tz = dt_naive.replace(tzinfo=original_tz)
                     converted_dt = dt_with_tz.astimezone(target_tz)
-                    return converted_dt.strftime('%Y-%m-%d %H:%M:%S')
+                    return converted_dt.strftime('%Y-%m-%d %I:%M:%S %p')
                 except:
                     # Fall back to original format
                     pass
@@ -156,6 +156,13 @@ class Media(db.Model):
     country_en = db.Column(db.String(100))
     country_zh = db.Column(db.String(100))
     timezone = db.Column(db.String(50))
+    people_count = db.Column(db.Integer, default=0)
+    activities = db.Column(db.Text)
+    scenery = db.Column(db.Text)
+    talking_detected = db.Column(db.Boolean, default=False)
+    hasGPS = db.Column(db.Boolean, default=False)
+    shareGPS = db.Column(db.Boolean, default=False)
+    scanned_at = db.Column(db.String(50))
     
     def to_dict(self):
         """Convert Media object to dictionary for JSON response"""
@@ -182,6 +189,12 @@ class Media(db.Model):
             'country_en': self.country_en,
             'country_zh': self.country_zh,
             'timezone': self.timezone,
+            'people_count': self.people_count,
+            'activities': self.activities,
+            'scenery': self.scenery,
+            'talking_detected': self.talking_detected,
+            'hasGPS': self.hasGPS,
+            'shareGPS': self.shareGPS,
             'formatted_creation_time': convert_iso8601_to_local_display(self.creation_time, self.timezone, offset_time)
         }
 
