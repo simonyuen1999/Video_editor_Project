@@ -135,18 +135,53 @@ def get_all_media():
                 Media.country_zh.ilike(f'%{country}%')
             ))
         if date_from and date_to:
-            # Convert date filters to ISO 8601 format for proper comparison
-            iso_date_from = convert_date_filter_to_iso8601(date_from)
-            iso_date_to = convert_date_filter_to_iso8601(date_to)
-            
-            # For end date, if it's just YYYY-MM-DD, make it end of day
-            if iso_date_to and len(date_to) == 10:
-                iso_date_to = f"{date_to}T23:59:59"
-            
-            # Filter by creation_time range (comparing ISO format strings)
-            query = query.filter(
-                Media.creation_time.between(iso_date_from, iso_date_to)
-            )
+            # Check if this is a single-day query (same date for both from and to)
+            if date_from == date_to and len(date_from) == 10:
+                # Single day query - use proper timezone conversion for mixed timezone data
+                # Get timezone offset from config
+                from src.models.media import Config
+                offset_time = Config.get_value('offsetTime', '+08:00')
+                
+                print(f"🕐 Single-day query: Converting all timestamps to {offset_time} for date {date_from}")
+                
+                # Since we have mixed timezone formats in creation_time (some +08:00, some -04:00),
+                # we need to convert each timestamp to the target timezone before comparing dates.
+                # 
+                # Strategy: Use Python timezone conversion logic to filter in application layer
+                # for more accurate results than SQLite timezone arithmetic
+                
+                # Get all potential matches around the target date (±1 day buffer)
+                from datetime import datetime, timedelta
+                buffer_date_start = (datetime.strptime(date_from, '%Y-%m-%d') - timedelta(days=1)).strftime('%Y-%m-%d')
+                buffer_date_end = (datetime.strptime(date_from, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
+                
+                # Get broader range first, then filter in Python
+                query = query.filter(
+                    db.or_(
+                        Media.creation_time.like(f'{buffer_date_start}%'),
+                        Media.creation_time.like(f'{date_from}%'),
+                        Media.creation_time.like(f'{buffer_date_end}%')
+                    )
+                )
+                
+                # Apply ordering - this will be further filtered by timezone conversion
+                if order.lower() == 'asc':
+                    query = query.order_by(Media.creation_time.asc())
+                else:
+                    query = query.order_by(Media.creation_time.desc())
+            else:
+                # Date range query - use existing logic
+                iso_date_from = convert_date_filter_to_iso8601(date_from)
+                iso_date_to = convert_date_filter_to_iso8601(date_to)
+                
+                # For end date, if it's just YYYY-MM-DD, make it end of day
+                if iso_date_to and len(date_to) == 10:
+                    iso_date_to = f"{date_to}T23:59:59"
+                
+                # Filter by creation_time range (comparing ISO format strings)
+                query = query.filter(
+                    Media.creation_time.between(iso_date_from, iso_date_to)
+                )
         elif date_from:
             iso_date_from = convert_date_filter_to_iso8601(date_from)
             query = query.filter(Media.creation_time >= iso_date_from)
@@ -169,6 +204,63 @@ def get_all_media():
             query = query.order_by(Media.creation_time.desc())  # Default DESC (newest first)
         
         media_records = query.all()
+        
+        # Apply timezone conversion filtering for single-day queries
+        if date_from and date_to and date_from == date_to and len(date_from) == 10:
+            from src.models.media import Config
+            offset_time = Config.get_value('offsetTime', '+08:00')
+            
+            print(f"🔍 Post-filtering {len(media_records)} records by timezone conversion to {offset_time}")
+            
+            timezone_filtered_records = []
+            for media in media_records:
+                if media.creation_time:
+                    # Convert the timestamp to target timezone and extract date
+                    converted_display = convert_iso8601_to_local_display(media.creation_time, None, offset_time)
+                    if converted_display:
+                        # Extract date part from converted display (format: "YYYY-MM-DD HH:MM:SS AM/PM")
+                        converted_date = converted_display.split(' ')[0]
+                        if converted_date == date_from:
+                            # Store the converted datetime for proper sorting using direct timezone conversion
+                            try:
+                                from datetime import datetime, timezone, timedelta
+                                import re
+                                
+                                # Parse target offset to create timezone object
+                                match = re.match(r'^([+-])(\d{2}):(\d{2})$', offset_time)
+                                if match:
+                                    sign, hours, minutes = match.groups()
+                                    offset_hours = int(hours) if sign == '+' else -int(hours)
+                                    offset_minutes = int(minutes) if sign == '+' else -int(minutes)
+                                    total_minutes = offset_hours * 60 + offset_minutes
+                                    target_tz = timezone(timedelta(minutes=total_minutes))
+                                    
+                                    # Parse original ISO timestamp and convert to target timezone
+                                    original_dt = datetime.fromisoformat(media.creation_time.replace('Z', '+00:00'))
+                                    converted_dt = original_dt.astimezone(target_tz)
+                                    media._converted_datetime = converted_dt
+                                else:
+                                    # Fallback - use original timestamp
+                                    media._converted_datetime = datetime.fromisoformat(media.creation_time.replace('Z', '+00:00'))
+                                    
+                            except Exception as e:
+                                print(f"  ⚠️  Could not parse timestamp for sorting: {media.creation_time} - {e}")
+                                media._converted_datetime = media.creation_time  # Fallback
+                            
+                            timezone_filtered_records.append(media)
+                            converted_time_str = media._converted_datetime.strftime('%I:%M:%S %p') if hasattr(media, '_converted_datetime') else 'unknown'
+                            print(f"  ✅ {media.filename}: {media.creation_time} -> {converted_date} @ {converted_time_str} (matches {date_from})")
+                        else:
+                            print(f"  ❌ {media.filename}: {media.creation_time} -> {converted_date} (doesn't match {date_from})")
+            
+            print(f"📊 Timezone filtering result: {len(timezone_filtered_records)}/{len(media_records)} records match {date_from}")
+            media_records = timezone_filtered_records
+            
+            # Re-apply ordering after timezone filtering using converted datetime
+            if order.lower() == 'asc':
+                media_records.sort(key=lambda x: getattr(x, '_converted_datetime', x.creation_time))
+            else:
+                media_records.sort(key=lambda x: getattr(x, '_converted_datetime', x.creation_time), reverse=True)
         
         # Apply activity and scenery filtering after DB query (since JSON search is complex)
         if activity or scenery:

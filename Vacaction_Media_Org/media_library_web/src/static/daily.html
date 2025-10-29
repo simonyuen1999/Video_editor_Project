@@ -492,7 +492,8 @@
             <a href="daily.html" class="active">📅 Daily View</a>
             <a href="city.html">🏙️ City View</a>
             <a href="special.html">🎯 Special View</a>
-            <a href="fixinfo.html">� FixInfo View</a>
+            <a href="fixinfo.html">🔧 FixInfo View</a>
+            <a href="journal.html">📔 Journal</a>
         </div>
 
         <div class="control-panel">
@@ -622,6 +623,20 @@
 
         async function loadStatsAndSetDefaultDate() {
             try {
+                // Check for URL parameter first
+                const urlParams = new URLSearchParams(window.location.search);
+                const dateParam = urlParams.get('date');
+                
+                if (dateParam && dateParam.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                    // Valid date parameter found, use it directly
+                    console.log(`Setting date from URL parameter: ${dateParam}`);
+                    document.getElementById('selected-date').value = dateParam;
+                    currentDate = dateParam;
+                    loadMediaForSelectedDate();
+                    return;
+                }
+                
+                // No valid date parameter, proceed with normal logic
                 const response = await fetch('/api/media/stats');
                 const stats = await response.json();
                 
@@ -704,11 +719,11 @@
                 ];
 
                 const mediaPromises = dates.map(async (dateInfo) => {
-                    const dateFrom = dateInfo.date + ' 00:00:00';
-                    const dateTo = dateInfo.date + ' 23:59:59';
+                    // Use simple date format for single-day queries to leverage timezone-aware logic
+                    const date = dateInfo.date; // Already in YYYY-MM-DD format
                     
                     try {
-                        const response = await fetch(`/api/media?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}&order=asc`);
+                        const response = await fetch(`/api/media?date_from=${encodeURIComponent(date)}&date_to=${encodeURIComponent(date)}&order=asc`);
                         const data = await response.json();
                         return {
                             ...dateInfo,

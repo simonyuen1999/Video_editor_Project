@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from flask import Flask, send_from_directory
 from src.models.media import db, Config
 from src.routes.media import media_bp
+from src.routes.journal import journal_bp
 
 app = Flask(__name__, static_folder=os.path.join(os.path.dirname(__file__), 'static'))
 app.config['SECRET_KEY'] = 'asdf#FGSgvasgf$5$WGT'
@@ -15,6 +16,7 @@ app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB max file size
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600  # Cache files for 1 hour
 
 app.register_blueprint(media_bp, url_prefix='/api')
+app.register_blueprint(journal_bp)
 
 # Use the existing database from scan_main.py
 db_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'media_organizer.db')
