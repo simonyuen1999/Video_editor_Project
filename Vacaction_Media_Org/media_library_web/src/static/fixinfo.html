@@ -1477,6 +1477,7 @@
                             <div class="media-meta">
                                 📅 ${displayTime}<br>
                                 📍 ${location}
+                                ${mediaItem.latitude != null && mediaItem.longitude != null ? `<br>🌐 <a href="https://maps.google.com/?q=${mediaItem.latitude},${mediaItem.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" onclick="event.stopPropagation();" title="Open in Google Maps">${mediaItem.latitude.toFixed(6)}, ${mediaItem.longitude.toFixed(6)} 🗺️</a>` : ''}
                                 ${mediaItem.talking_detected ? '<br>🗣️ Talking detected' : ''}
                             </div>
                             ${activities.length > 0 || scenery.length > 0 ? `
@@ -1600,7 +1601,7 @@
                 <p><strong>New Country:</strong> ${selectedCityData.country_en} | ${selectedCityData.country_zh}</p>
                 <p><strong>New Date & Time:</strong> ${displayDateTime}</p>
                 <p><strong>Creation Time Update:</strong> ${timeUpdateMode}</p>
-                <p><strong>New GPS Coordinates:</strong> ${selectedCityData.latitude}, ${selectedCityData.longitude}</p>
+                <p><strong>New GPS Coordinates:</strong> <a href="https://maps.google.com/?q=${selectedCityData.latitude},${selectedCityData.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${selectedCityData.latitude}, ${selectedCityData.longitude} 🗺️</a></p>
                 <br>
                 <p><em>This will update both the database records and the EXIF data in the media files using exiftool.</em></p>
             `;
@@ -2039,7 +2040,7 @@
                         <p><strong>Filename:</strong> ${media.filename || 'N/A'}</p>
                         <p><strong>Creation Time:</strong> ${displayTime}</p>
                         <p><strong>Location:</strong> ${media.city_zh || 'N/A'} | ${media.city_en || 'N/A'}, ${media.country_zh || 'N/A'} | ${media.country_en || 'N/A'}</p>
-                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> ${media.latitude}, ${media.longitude}</p>` : ''}
+                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${media.latitude}, ${media.longitude} 🗺️</a></p>` : ''}
                         <p><strong>Talking Detected:</strong> ${media.talking_detected ? 'Yes' : 'No'}</p>
                         ${activities.length > 0 ? `<p><strong>Activities:</strong> ${activities.join(', ')}</p>` : ''}
                         ${scenery.length > 0 ? `<p><strong>Scenery:</strong> ${scenery.join(', ')}</p>` : ''}

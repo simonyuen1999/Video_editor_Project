@@ -144,6 +144,37 @@
             color: white;
         }
 
+        .day-group-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .day-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 6px;
+            transition: background-color 0.2s ease;
+        }
+
+        .day-checkbox:hover {
+            background-color: #f0f0f0;
+        }
+
+        .day-checkbox input[type="checkbox"] {
+            margin: 0;
+            transform: scale(1.1);
+        }
+
+        .day-checkbox span {
+            font-size: 0.9rem;
+            color: #555;
+            font-weight: 500;
+        }
+
         .thumbnail-size-control {
             display: flex;
             align-items: center;
@@ -216,6 +247,35 @@
 
         .media-grid.list {
             grid-template-columns: 1fr;
+        }
+
+        .media-card.list-view {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+        }
+
+        .media-card.list-view img, .media-card.list-view video {
+            width: 100px;
+            height: 80px;
+            flex-shrink: 0;
+            margin-right: 20px;
+            border-radius: 8px;
+        }
+
+        .media-card.list-view .media-card-content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            padding: 0;
+        }
+
+        .media-card.list-view h3 {
+            grid-column: 1 / -1;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
         }
 
         .media-grid.thumbnail {
@@ -448,6 +508,21 @@
                     <button class="view-mode-btn" data-mode="list">📋 List</button>
                 </div>
 
+                <div class="day-group-controls">
+                    <label class="day-checkbox">
+                        <input type="checkbox" id="show-previous-day">
+                        <span>📅 Previous</span>
+                    </label>
+                    <label class="day-checkbox">
+                        <input type="checkbox" id="show-selected-day" checked>
+                        <span>📅 Selected</span>
+                    </label>
+                    <label class="day-checkbox">
+                        <input type="checkbox" id="show-next-day">
+                        <span>📅 Next</span>
+                    </label>
+                </div>
+
                 <div class="thumbnail-size-control">
                     <label for="thumbnail-size">Size:</label>
                     <input type="range" id="thumbnail-size" class="size-slider" min="150" max="350" value="200">
@@ -538,6 +613,11 @@
                     modal.style.display = 'none';
                 }
             });
+
+            // Day group checkbox controls
+            document.getElementById('show-previous-day').addEventListener('change', refreshThreeDaysDisplay);
+            document.getElementById('show-selected-day').addEventListener('change', refreshThreeDaysDisplay);
+            document.getElementById('show-next-day').addEventListener('change', refreshThreeDaysDisplay);
         }
 
         async function loadStatsAndSetDefaultDate() {
@@ -655,6 +735,13 @@
             }
         }
 
+        // Function to refresh three days display based on checkbox states
+        function refreshThreeDaysDisplay() {
+            if (threeDaysMediaData) {
+                displayThreeDaysMedia(threeDaysMediaData);
+            }
+        }
+
         function displayThreeDaysMedia(threeDaysData) {
             // Store the data globally for view mode changes
             threeDaysMediaData = threeDaysData;
@@ -662,7 +749,26 @@
             const container = document.getElementById('media-container');
             container.innerHTML = '';
 
-            threeDaysData.forEach(dayData => {
+            // Check which day groups should be displayed based on checkboxes
+            const showPrevious = document.getElementById('show-previous-day')?.checked ?? false;
+            const showSelected = document.getElementById('show-selected-day')?.checked ?? true;
+            const showNext = document.getElementById('show-next-day')?.checked ?? false;
+
+            // Debug: Log the checkbox states and data types
+            console.log('Checkbox states:', { showPrevious, showSelected, showNext });
+            if (threeDaysData.length > 0) {
+                console.log('Day data types:', threeDaysData.map(d => ({ type: d.type, label: d.label })));
+            }
+
+            // Filter the data based on checkbox states
+            const filteredData = threeDaysData.filter(dayData => {
+                if (dayData.type === 'previous' && !showPrevious) return false;
+                if (dayData.type === 'current' && !showSelected) return false;
+                if (dayData.type === 'next' && !showNext) return false;
+                return true;
+            });
+
+            filteredData.forEach(dayData => {
                 const daySection = document.createElement('div');
                 daySection.className = 'day-section';
 
@@ -696,6 +802,18 @@
                 } else {
                     const mediaGrid = document.createElement('div');
                     mediaGrid.className = `media-grid ${currentViewMode}`;
+                    mediaGrid.style.display = 'grid';
+                    
+                    // Debug: Log first media item to check coordinate data
+                    if (dayData.media.length > 0) {
+                        console.log(`Daily View Three-Day Display - ${dayData.label} first media coordinates:`, {
+                            filename: dayData.media[0].filename,
+                            latitude: dayData.media[0].latitude,
+                            longitude: dayData.media[0].longitude,
+                            latType: typeof dayData.media[0].latitude,
+                            lngType: typeof dayData.media[0].longitude
+                        });
+                    }
                     
                     mediaGrid.innerHTML = dayData.media.map(media => {
                         const isVideo = media.file_extension && 
@@ -720,29 +838,114 @@
                                            !scene.toLowerCase().includes('person') &&
                                            scene !== 'NotFound');
 
-                        return `
-                            <div class="media-item ${currentViewMode}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
-                                ${isVideo ? 
-                                    `<video class="media-thumbnail" muted preload="none">
-                                        <source src="/api/media/${media.id}/thumbnail" type="video/${media.file_extension?.substring(1) || 'mp4'}">
-                                    </video>` :
-                                    `<img class="media-thumbnail" src="/api/media/${media.id}/thumbnail" alt="${media.filename}" loading="lazy">`
-                                }
-                                <div class="media-info">
-                                    <div class="media-title">${media.filename}</div>
-                                    <div class="media-meta">
-                                        📅 ${displayTime}<br>
-                                        📍 ${location}
-                                        ${media.talking_detected ? '<br>🗣️ Talking detected' : ''}
+                        // Format file size helper
+                        const formatFileSize = (bytes) => {
+                            if (!bytes) return 'Unknown';
+                            const sizes = ['B', 'KB', 'MB', 'GB'];
+                            const i = Math.floor(Math.log(bytes) / Math.log(1024));
+                            return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+                        };
+
+                        if (currentViewMode === 'list') {
+                            // Debug: Log media data for list view
+                            console.log('Three-day List View - Media item:', {
+                                filename: media.filename,
+                                displayTime: displayTime,
+                                size: media.size,
+                                formatFileSize: formatFileSize(media.size),
+                                location: location,
+                                latitude: media.latitude,
+                                longitude: media.longitude
+                            });
+                            
+                            return `
+                                <div class="media-card list-view" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                                    ${isVideo ? 
+                                        `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
+                                                style="pointer-events: none;"></video>` :
+                                        `<img src="/api/media/${media.id}/thumbnail" alt="Media" 
+                                              loading="lazy"
+                                              onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`
+                                    }
+                                    <div class="media-card-content">
+                                        <h3>${media.filename}</h3>
+                                        <div class="media-info-section">
+                                            <div class="info-item">
+                                                <span class="info-label">📅 Date:</span>
+                                                <span class="info-value">${displayTime}</span>
+                                            </div>
+                                            <div class="info-item">
+                                                <span class="info-label">📏 Size:</span>
+                                                <span class="info-value">${formatFileSize(media.size)}</span>
+                                            </div>
+                                            <div class="info-item">
+                                                <span class="info-label">📍 Location:</span>
+                                                <span class="info-value">${location}</span>
+                                            </div>
+                                            ${(media.latitude !== null && media.latitude !== undefined && media.latitude !== '' && 
+                                               media.longitude !== null && media.longitude !== undefined && media.longitude !== '' &&
+                                               parseFloat(media.latitude) !== 0 && parseFloat(media.longitude) !== 0) ? `
+                                            <div class="info-item">
+                                                <span class="info-label">🌐 Coordinates:</span>
+                                                <span class="info-value">
+                                                    <a href="https://maps.google.com/?q=${parseFloat(media.latitude)},${parseFloat(media.longitude)}" 
+                                                       target="_blank" 
+                                                       style="color: #667eea; text-decoration: none; cursor: pointer;"
+                                                       onclick="event.stopPropagation();"
+                                                       title="Open in Google Maps">
+                                                        ${parseFloat(media.latitude).toFixed(6)}, ${parseFloat(media.longitude).toFixed(6)} 🗺️
+                                                    </a>
+                                                </span>
+                                            </div>` : ''}
+                                            ${media.talking_detected ? `
+                                            <div class="info-item">
+                                                <span class="info-label">🗣️ Talking:</span>
+                                                <span class="info-value">Detected</span>
+                                            </div>` : ''}
+                                        </div>
+                                        <div class="media-info-section">
+                                            ${activities.length > 0 || scenery.length > 0 || media.talking_detected ? `
+                                            <div class="analysis-section">
+                                                <div class="analysis-tags">
+                                                    ${media.talking_detected ? `<span class="analysis-tag talking-indicator">Talking</span>` : ''}
+                                                    ${activities.map(activity => `<span class="analysis-tag activity-tag">${activity}</span>`).join('')}
+                                                    ${scenery.map(scene => `<span class="analysis-tag scenery-tag">${scene}</span>`).join('')}
+                                                </div>
+                                            </div>` : ''}
+                                        </div>
                                     </div>
-                                    ${activities.length > 0 || scenery.length > 0 ? `
-                                    <div class="analysis-tags">
-                                        ${activities.map(activity => `<span class="analysis-tag activity-tag">${activity}</span>`).join('')}
-                                        ${scenery.map(scene => `<span class="analysis-tag scenery-tag">${scene}</span>`).join('')}
-                                    </div>` : ''}
                                 </div>
-                            </div>
-                        `;
+                            `;
+                        } else {
+                            // Thumbnail view
+                            return `
+                                <div class="media-item ${currentViewMode}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                                    ${isVideo ? 
+                                        `<video class="media-thumbnail" muted preload="none">
+                                            <source src="/api/media/${media.id}/thumbnail" type="video/${media.file_extension?.substring(1) || 'mp4'}">
+                                        </video>` :
+                                        `<img class="media-thumbnail" src="/api/media/${media.id}/thumbnail" alt="${media.filename}" loading="lazy">`
+                                    }
+                                    <div class="media-info">
+                                        <div class="media-title">${media.filename}</div>
+                                        <div class="media-meta">
+                                            📅 ${displayTime}<br>
+                                            � ${formatFileSize(media.size)}<br>
+                                            �📍 ${location}
+                                            ${(media.latitude !== null && media.latitude !== undefined && media.latitude !== '' && 
+                                               media.longitude !== null && media.longitude !== undefined && media.longitude !== '' &&
+                                               parseFloat(media.latitude) !== 0 && parseFloat(media.longitude) !== 0) ? `<br>🌐 <a href="https://maps.google.com/?q=${parseFloat(media.latitude)},${parseFloat(media.longitude)}" target="_blank" style="color: #667eea; text-decoration: none;" onclick="event.stopPropagation();" title="Open in Google Maps">${parseFloat(media.latitude).toFixed(6)}, ${parseFloat(media.longitude).toFixed(6)} 🗺️</a>` : ''}
+                                            ${media.talking_detected ? '<br>🗣️ Talking detected' : ''}
+                                        </div>
+                                        ${activities.length > 0 || scenery.length > 0 ? `
+                                        <div class="analysis-tags">
+                                            ${activities.map(activity => `<span class="analysis-tag activity-tag">${activity}</span>`).join('')}
+                                            ${scenery.map(scene => `<span class="analysis-tag scenery-tag">${scene}</span>`).join('')}
+                                        </div>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }
                     }).join('');
 
                     dayContent.appendChild(mediaGrid);
@@ -769,6 +972,7 @@
 
             const mediaGrid = document.createElement('div');
             mediaGrid.className = `media-grid ${currentViewMode}`;
+            mediaGrid.style.display = 'grid';
             
             // Format file size helper
             const formatFileSize = (bytes) => {
@@ -777,6 +981,17 @@
                 const i = Math.floor(Math.log(bytes) / Math.log(1024));
                 return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
             };
+            
+            // Debug: Log first media item to check coordinate data
+            if (data.length > 0) {
+                console.log('Daily View - First media item coordinates:', {
+                    filename: data[0].filename,
+                    latitude: data[0].latitude,
+                    longitude: data[0].longitude,
+                    latType: typeof data[0].latitude,
+                    lngType: typeof data[0].longitude
+                });
+            }
             
             mediaGrid.innerHTML = data.map(media => {
                 const isVideo = media.file_extension && 
@@ -802,16 +1017,28 @@
                                    scene !== 'NotFound');
 
                 if (currentViewMode === 'list') {
+                    // Debug: Log media data for single-day list view
+                    console.log('Single-day List View - Media item:', {
+                        filename: media.filename,
+                        displayTime: displayTime,
+                        size: media.size,
+                        formatFileSize: formatFileSize(media.size),
+                        location: location,
+                        latitude: media.latitude,
+                        longitude: media.longitude
+                    });
+                    
                     return `
-                        <div class="media-item list" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                        <div class="media-card list-view" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
                             ${isVideo ? 
-                                `<video class="media-thumbnail" muted preload="none">
-                                    <source src="/api/media/${media.id}/thumbnail" type="video/${media.file_extension?.substring(1) || 'mp4'}">
-                                </video>` :
-                                `<img class="media-thumbnail" src="/api/media/${media.id}/thumbnail" alt="${media.filename}" loading="lazy">`
+                                `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
+                                        style="pointer-events: none;"></video>` :
+                                `<img src="/api/media/${media.id}/thumbnail" alt="Media" 
+                                      loading="lazy"
+                                      onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`
                             }
-                            <div class="media-info">
-                                <div class="media-title">${media.filename}</div>
+                            <div class="media-card-content">
+                                <h3>${media.filename}</h3>
                                 <div class="media-info-section">
                                     <div class="info-item">
                                         <span class="info-label">📅 Date:</span>
@@ -825,20 +1052,37 @@
                                         <span class="info-label">📍 Location:</span>
                                         <span class="info-value">${location}</span>
                                     </div>
+                                    ${(media.latitude !== null && media.latitude !== undefined && media.latitude !== '' && 
+                                       media.longitude !== null && media.longitude !== undefined && media.longitude !== '' &&
+                                       parseFloat(media.latitude) !== 0 && parseFloat(media.longitude) !== 0) ? `
+                                    <div class="info-item">
+                                        <span class="info-label">🌐 Coordinates:</span>
+                                        <span class="info-value">
+                                            <a href="https://maps.google.com/?q=${parseFloat(media.latitude)},${parseFloat(media.longitude)}" 
+                                               target="_blank" 
+                                               style="color: #667eea; text-decoration: none; cursor: pointer;"
+                                               onclick="event.stopPropagation();"
+                                               title="Open in Google Maps">
+                                                ${parseFloat(media.latitude).toFixed(6)}, ${parseFloat(media.longitude).toFixed(6)} 🗺️
+                                            </a>
+                                        </span>
+                                    </div>` : ''}
                                     ${media.talking_detected ? `
                                     <div class="info-item">
                                         <span class="info-label">🗣️ Talking:</span>
                                         <span class="info-value">Detected</span>
                                     </div>` : ''}
                                 </div>
-                                ${activities.length > 0 || scenery.length > 0 || media.talking_detected ? `
-                                <div class="analysis-section">
-                                    <div class="analysis-tags">
-                                        ${media.talking_detected ? `<span class="analysis-tag talking-indicator">Talking</span>` : ''}
-                                        ${activities.map(activity => `<span class="analysis-tag activity-tag">${activity}</span>`).join('')}
-                                        ${scenery.map(scene => `<span class="analysis-tag scenery-tag">${scene}</span>`).join('')}
-                                    </div>
-                                </div>` : ''}
+                                <div class="media-info-section">
+                                    ${activities.length > 0 || scenery.length > 0 || media.talking_detected ? `
+                                    <div class="analysis-section">
+                                        <div class="analysis-tags">
+                                            ${media.talking_detected ? `<span class="analysis-tag talking-indicator">Talking</span>` : ''}
+                                            ${activities.map(activity => `<span class="analysis-tag activity-tag">${activity}</span>`).join('')}
+                                            ${scenery.map(scene => `<span class="analysis-tag scenery-tag">${scene}</span>`).join('')}
+                                        </div>
+                                    </div>` : ''}
+                                </div>
                             </div>
                         </div>
                     `;
@@ -856,8 +1100,11 @@
                                 <div class="media-title">${media.filename}</div>
                                 <div class="media-meta">
                                     📅 ${displayTime}<br>
-                                    📏 ${formatFileSize(media.size)}<br>
+                                                                                � ${formatFileSize(media.size)}<br>
                                     📍 ${location}
+                                    ${(media.latitude !== null && media.latitude !== undefined && media.latitude !== '' && 
+                                       media.longitude !== null && media.longitude !== undefined && media.longitude !== '' &&
+                                       parseFloat(media.latitude) !== 0 && parseFloat(media.longitude) !== 0) ? `<br>🌐 <a href="https://maps.google.com/?q=${parseFloat(media.latitude)},${parseFloat(media.longitude)}" target="_blank" style="color: #667eea; text-decoration: none;" onclick="event.stopPropagation();" title="Open in Google Maps">${parseFloat(media.latitude).toFixed(6)}, ${parseFloat(media.longitude).toFixed(6)} 🗺️</a>` : ''}
                                     ${media.talking_detected ? '<br>🗣️ Talking detected' : ''}
                                 </div>
                                 ${activities.length > 0 || scenery.length > 0 ? `
@@ -964,7 +1211,7 @@
                         <p><strong>Filename:</strong> ${media.filename || 'N/A'}</p>
                         <p><strong>Creation Time:</strong> ${displayTime}</p>
                         <p><strong>Location:</strong> ${media.city_zh || 'N/A'}, ${media.country_zh || 'N/A'}</p>
-                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> ${media.latitude}, ${media.longitude}</p>` : ''}
+                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${media.latitude}, ${media.longitude} 🗺️</a></p>` : ''}
                         <p><strong>Talking Detected:</strong> ${media.talking_detected ? 'Yes' : 'No'}</p>
                         ${media.activities && media.activities.length > 0 ? `<p><strong>Activities:</strong> ${media.activities.join(', ')}</p>` : ''}
                         ${media.scenery && media.scenery.length > 0 ? `<p><strong>Scenery:</strong> ${media.scenery.join(', ')}</p>` : ''}
