@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Journal - Vacation Media Organizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .navigation {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .nav-link {
+            display: inline-block;
+            margin: 0 10px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            border-radius: 25px;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .sync-section {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .sync-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .sync-btn:hover {
+            background: #5a6fd8;
+            transform: translateY(-2px);
+        }
+
+        .sync-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .sync-status {
+            font-size: 0.9rem;
+            color: #666;
+            margin-left: 10px;
+        }
+
+        .add-entry-btn {
+            padding: 10px 20px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .add-entry-btn:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .journal-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .journal-list {
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .journal-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .journal-entry-row {
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s ease;
+        }
+
+        .journal-entry-row:hover {
+            background-color: #f8f9fa;
+        }
+
+        .journal-entry-row:last-child {
+            border-bottom: none;
+        }
+
+        .journal-entry-cell {
+            padding: 15px 20px;
+            vertical-align: top;
+        }
+
+        .journal-entry-cell.date-location-cell {
+            width: 40%;
+            border-right: 1px solid #eee;
+        }
+
+        .journal-entry-cell.comment-cell {
+            width: 60%;
+        }
+
+        .entry-date {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #667eea;
+            transition: all 0.2s ease;
+            margin-bottom: 8px;
+        }
+
+        .entry-location-line {
+            font-size: 0.9rem;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .location-text {
+            margin-bottom: 4px;
+        }
+
+        .coordinates-text {
+            font-size: 0.85rem;
+        }
+
+        .date-clickable {
+            cursor: pointer;
+            user-select: none;
+            margin-right: 8px;
+        }
+
+        .date-clickable:hover {
+            color: #5a6fd8;
+            transform: scale(1.02);
+        }
+
+        .media-count-clickable {
+            cursor: pointer;
+            user-select: none;
+            color: #28a745;
+            font-weight: bold;
+            transition: all 0.2s ease;
+        }
+
+        .media-count-clickable:hover {
+            color: #218838;
+            background: rgba(40, 167, 69, 0.1);
+            border-radius: 4px;
+            padding: 2px 4px;
+            transform: scale(1.1);
+        }
+
+        .entry-time {
+            font-size: 0.9rem;
+            color: #666;
+            background: #f0f0f0;
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-top: 5px;
+        }
+
+        .entry-comment {
+            font-size: 1rem;
+            line-height: 1.5;
+            color: #333;
+            white-space: normal; /* Normal wrapping since we're using <br> tags */
+            word-wrap: break-word; /* Break long words if needed */
+            overflow-wrap: break-word; /* Additional word breaking support */
+        }
+
+        .entry-location-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .location-text {
+            flex: 1;
+            min-width: 200px;
+        }
+
+        .coordinates-link {
+            color: #667eea;
+            text-decoration: none;
+            font-size: 0.85rem;
+            padding: 4px 8px;
+            background: rgba(102, 126, 234, 0.1);
+            border-radius: 12px;
+            transition: all 0.3s ease;
+        }
+
+        .coordinates-link:hover {
+            background: rgba(102, 126, 234, 0.2);
+            text-decoration: none;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #999;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        /* Modal Styles */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 30px;
+            border-radius: 15px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 15px;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            color: #333;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            background: none;
+        }
+
+        .close:hover {
+            color: #333;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+        }
+
+        .form-group textarea {
+            min-height: 120px; /* Increased from 100px for better multi-line editing */
+            resize: vertical;
+            line-height: 1.5; /* Better line spacing for readability */
+            font-family: inherit; /* Use the same font as the rest of the form */
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+
+        .form-row .form-group {
+            flex: 1;
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        }
+
+        .save-btn {
+            background: #28a745;
+            color: white;
+        }
+
+        .save-btn:hover {
+            background: #218838;
+        }
+
+        .cancel-btn {
+            background: #6c757d;
+            color: white;
+        }
+
+        .cancel-btn:hover {
+            background: #5a6268;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📔 Journal</h1>
+            <p>Your travel diary and daily notes</p>
+        </div>
+
+        <div class="navigation">
+            <a href="index.html" class="nav-link">🗺️ Map View</a>
+            <a href="daily.html" class="nav-link">📅 Daily View</a>
+            <a href="city.html" class="nav-link">🏙️ City View</a>
+            <a href="special.html" class="nav-link">⭐ Special</a>
+            <a href="fixinfo.html" class="nav-link">🔧 Fix Info</a>
+            <a href="journal.html" class="nav-link" style="background: rgba(255, 255, 255, 0.4);">📔 Journal</a>
+        </div>
+
+        <div class="controls">
+            <div class="sync-section">
+                <button id="sync-btn" class="sync-btn">🔄 Sync with Media Dates</button>
+                <span id="sync-status" class="sync-status">Ready to sync</span>
+            </div>
+            <button id="add-entry-btn" class="add-entry-btn">➕ Add Journal Entry</button>
+        </div>
+
+        <div class="journal-container">
+            <div id="loading" class="loading" style="display: none;">
+                <h3>Loading journal entries...</h3>
+            </div>
+            <div id="journal-list" class="journal-list">
+                <!-- Journal entries will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Journal Entry Modal -->
+    <div id="journal-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modal-title" class="modal-title">Add Journal Entry</h2>
+                <button class="close">&times;</button>
+            </div>
+            <form id="journal-form">
+                <input type="hidden" id="entry-id">
+                
+                <div class="form-group" id="date-field">
+                    <label for="entry-date">Date *</label>
+                    <input type="date" id="entry-date" required>
+                </div>
+                
+                <div class="form-group" id="date-display" style="display: none;">
+                    <label>Date</label>
+                    <div id="display-date" style="padding: 10px; background: #f8f9fa; border-radius: 6px; color: #666; font-size: 1rem;"></div>
+                    <small style="color: #666; font-size: 0.8rem;">Date cannot be changed as it corresponds to media file dates</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="entry-time-range">Time Range (optional)</label>
+                    <input type="text" id="entry-time-range" placeholder="e.g., 09:00-12:00 or leave empty for whole day">
+                </div>
+
+                <div class="form-group">
+                    <label for="entry-comment">Comment</label>
+                    <textarea id="entry-comment" placeholder="Write about your day, experiences, thoughts..."></textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="entry-city-en">City (English)</label>
+                        <input type="text" id="entry-city-en" placeholder="e.g., Los Angeles">
+                    </div>
+                    <div class="form-group">
+                        <label for="entry-city-zh">City (Chinese)</label>
+                        <input type="text" id="entry-city-zh" placeholder="e.g., 洛杉矶">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="entry-country-en">Country (English)</label>
+                        <input type="text" id="entry-country-en" placeholder="e.g., United States">
+                    </div>
+                    <div class="form-group">
+                        <label for="entry-country-zh">Country (Chinese)</label>
+                        <input type="text" id="entry-country-zh" placeholder="e.g., 美国">
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="entry-latitude">Latitude</label>
+                        <input type="number" id="entry-latitude" step="any" placeholder="e.g., 34.0522">
+                    </div>
+                    <div class="form-group">
+                        <label for="entry-longitude">Longitude</label>
+                        <input type="number" id="entry-longitude" step="any" placeholder="e.g., -118.2437">
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button type="button" class="modal-btn cancel-btn">Cancel</button>
+                    <button type="submit" class="modal-btn save-btn">Save Entry</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let journalEntries = [];
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize page
+            loadJournalEntries();
+
+            // Event listeners
+            document.getElementById('sync-btn').addEventListener('click', syncWithMediaDates);
+            document.getElementById('add-entry-btn').addEventListener('click', showAddEntryModal);
+            document.querySelector('.close').addEventListener('click', closeModal);
+            document.querySelector('.cancel-btn').addEventListener('click', closeModal);
+            document.getElementById('journal-form').addEventListener('submit', saveJournalEntry);
+
+            // Close modal when clicking outside
+            window.addEventListener('click', function(event) {
+                const modal = document.getElementById('journal-modal');
+                if (event.target === modal) {
+                    closeModal();
+                }
+            });
+        });
+
+        async function syncWithMediaDates() {
+            const syncBtn = document.getElementById('sync-btn');
+            const syncStatus = document.getElementById('sync-status');
+            
+            syncBtn.disabled = true;
+            syncStatus.textContent = 'Syncing...';
+            
+            try {
+                const response = await fetch('/api/journal/sync', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    syncStatus.textContent = `Synced! Added ${result.added_entries} new entries.`;
+                    // Reload journal entries to show new ones
+                    await loadJournalEntries();
+                } else {
+                    throw new Error('Sync failed');
+                }
+            } catch (error) {
+                console.error('Error syncing with media dates:', error);
+                syncStatus.textContent = 'Sync failed. Please try again.';
+            } finally {
+                syncBtn.disabled = false;
+                // Reset status after 3 seconds
+                setTimeout(() => {
+                    syncStatus.textContent = 'Ready to sync';
+                }, 3000);
+            }
+        }
+
+        async function loadJournalEntries() {
+            const loading = document.getElementById('loading');
+            const journalList = document.getElementById('journal-list');
+            
+            loading.style.display = 'block';
+            
+            try {
+                const response = await fetch('/api/journal/entries');
+                if (response.ok) {
+                    journalEntries = await response.json();
+                    displayJournalEntries(journalEntries);
+                } else {
+                    throw new Error('Failed to load journal entries');
+                }
+            } catch (error) {
+                console.error('Error loading journal entries:', error);
+                journalList.innerHTML = '<div class="empty-state"><h3>Error loading journal entries</h3><p>Please try refreshing the page.</p></div>';
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatCommentForDisplay(comment) {
+            if (!comment) return '';
+            // Escape HTML to prevent XSS, then convert newlines to <br> tags
+            return escapeHtml(comment).replace(/\n/g, '<br>');
+        }
+
+        function setCommentContent(element, comment) {
+            if (!comment) {
+                element.textContent = '';
+                return;
+            }
+            // Use innerHTML since we've already escaped the content and only added <br> tags
+            element.innerHTML = formatCommentForDisplay(comment);
+        }
+
+        function displayJournalEntries(entries) {
+            const journalList = document.getElementById('journal-list');
+            
+            if (entries.length === 0) {
+                journalList.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No journal entries yet</h3>
+                        <p>Click "Sync with Media Dates" to add entries for your media dates, or add manual entries.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Create table structure with single row per date
+            journalList.innerHTML = `
+                <table class="journal-table">
+                    <tbody>
+                        ${entries.map(entry => {
+                            const location = formatLocation(entry);
+                            const coordinates = formatCoordinates(entry);
+                            const dateInfo = formatDate(entry.date, entry.media_count);
+                            
+                            // Single row per date with Date/Location in first column, Comment in second column
+                            return `
+                                <tr class="journal-entry-row">
+                                    <td class="journal-entry-cell date-location-cell">
+                                        <div class="entry-date">
+                                            <span class="date-clickable" onclick="editEntry(${entry.id})" title="Click to edit this entry">${dateInfo.weekday} ${dateInfo.date}</span>
+                                            <span class="media-count-clickable" onclick="openDailyView('${entry.date}')" title="Click to view daily media">(${dateInfo.mediaCount})</span>
+                                        </div>
+                                        ${entry.time_range ? `<div class="entry-time">${entry.time_range}</div>` : ''}
+                                        <div class="entry-location-line">
+                                            ${location ? `<div class="location-text">📍 ${location}</div>` : ''}
+                                            ${coordinates ? `<div class="coordinates-text">${coordinates}</div>` : ''}
+                                        </div>
+                                    </td>
+                                    <td class="journal-entry-cell comment-cell">
+                                        <div class="entry-comment">${formatCommentForDisplay(entry.comment)}</div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function formatDate(dateStr, mediaCount = 0) {
+            // Parse date as local date to avoid timezone issues
+            const parts = dateStr.split('-');
+            const date = new Date(parts[0], parts[1] - 1, parts[2]); // Year, Month (0-based), Day
+            
+            // Get weekday
+            const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+            
+            // Format: Mon 2025-03-17 (7) - using YYYY-MM-DD format
+            const formattedDate = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+            
+            return {
+                weekday: weekday,
+                date: formattedDate,
+                mediaCount: mediaCount,
+                fullDisplay: `${weekday} ${formattedDate} (${mediaCount})`
+            };
+        }
+
+        function formatLocation(entry) {
+            const parts = [];
+            if (entry.city_zh && entry.city_en) {
+                parts.push(`${entry.city_zh} (${entry.city_en})`);
+            } else if (entry.city_zh) {
+                parts.push(entry.city_zh);
+            } else if (entry.city_en) {
+                parts.push(entry.city_en);
+            }
+            
+            if (entry.country_zh && entry.country_en) {
+                parts.push(`${entry.country_zh} (${entry.country_en})`);
+            } else if (entry.country_zh) {
+                parts.push(entry.country_zh);
+            } else if (entry.country_en) {
+                parts.push(entry.country_en);
+            }
+            
+            return parts.join(', ');
+        }
+
+        function formatCoordinates(entry) {
+            if (entry.latitude && entry.longitude) {
+                return `<a href="https://maps.google.com/?q=${entry.latitude},${entry.longitude}" target="_blank" class="coordinates-link" title="Open in Google Maps">🌐 ${parseFloat(entry.latitude).toFixed(6)}, ${parseFloat(entry.longitude).toFixed(6)} 🗺️</a>`;
+            }
+            return '';
+        }
+
+        function openDailyView(date) {
+            // Open Daily View in new window with the selected date
+            const dailyUrl = `daily.html?date=${date}`;
+            window.open(dailyUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+        }
+
+        function showAddEntryModal() {
+            document.getElementById('modal-title').textContent = 'Add Journal Entry';
+            document.getElementById('journal-form').reset();
+            document.getElementById('entry-id').value = '';
+            
+            // Show date input field for adding
+            document.getElementById('date-field').style.display = 'block';
+            document.getElementById('date-display').style.display = 'none';
+            document.getElementById('entry-date').required = true;
+            
+            document.getElementById('journal-modal').style.display = 'block';
+        }
+
+        function editEntry(entryId) {
+            const entry = journalEntries.find(e => e.id === entryId);
+            if (!entry) return;
+
+            document.getElementById('modal-title').textContent = 'Edit Journal Entry';
+            document.getElementById('entry-id').value = entry.id;
+            
+            // Hide date input field and show read-only date display for editing
+            document.getElementById('date-field').style.display = 'none';
+            document.getElementById('date-display').style.display = 'block';
+            document.getElementById('display-date').textContent = entry.date;
+            document.getElementById('entry-date').required = false;
+            
+            // Populate other fields
+            document.getElementById('entry-time-range').value = entry.time_range || '';
+            document.getElementById('entry-comment').value = entry.comment || '';
+            document.getElementById('entry-city-en').value = entry.city_en || '';
+            document.getElementById('entry-city-zh').value = entry.city_zh || '';
+            document.getElementById('entry-country-en').value = entry.country_en || '';
+            document.getElementById('entry-country-zh').value = entry.country_zh || '';
+            document.getElementById('entry-latitude').value = entry.latitude || '';
+            document.getElementById('entry-longitude').value = entry.longitude || '';
+            
+            document.getElementById('journal-modal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('journal-modal').style.display = 'none';
+        }
+
+        async function saveJournalEntry(event) {
+            event.preventDefault();
+            
+            const entryId = document.getElementById('entry-id').value;
+            const isEditing = !!entryId;
+            
+            let entryData;
+            
+            if (isEditing) {
+                // For editing, don't include date - get it from the display
+                const currentEntry = journalEntries.find(e => e.id == entryId);
+                entryData = {
+                    date: currentEntry.date, // Use existing date
+                    time_range: document.getElementById('entry-time-range').value || null,
+                    comment: document.getElementById('entry-comment').value || null,
+                    city_en: document.getElementById('entry-city-en').value || null,
+                    city_zh: document.getElementById('entry-city-zh').value || null,
+                    country_en: document.getElementById('entry-country-en').value || null,
+                    country_zh: document.getElementById('entry-country-zh').value || null,
+                    latitude: document.getElementById('entry-latitude').value ? parseFloat(document.getElementById('entry-latitude').value) : null,
+                    longitude: document.getElementById('entry-longitude').value ? parseFloat(document.getElementById('entry-longitude').value) : null
+                };
+            } else {
+                // For adding new entry, include date from input
+                entryData = {
+                    date: document.getElementById('entry-date').value,
+                    time_range: document.getElementById('entry-time-range').value || null,
+                    comment: document.getElementById('entry-comment').value || null,
+                    city_en: document.getElementById('entry-city-en').value || null,
+                    city_zh: document.getElementById('entry-city-zh').value || null,
+                    country_en: document.getElementById('entry-country-en').value || null,
+                    country_zh: document.getElementById('entry-country-zh').value || null,
+                    latitude: document.getElementById('entry-latitude').value ? parseFloat(document.getElementById('entry-latitude').value) : null,
+                    longitude: document.getElementById('entry-longitude').value ? parseFloat(document.getElementById('entry-longitude').value) : null
+                };
+            }
+            
+            try {
+                let response;
+                if (entryId) {
+                    // Update existing entry
+                    response = await fetch(`/api/journal/entries/${entryId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(entryData)
+                    });
+                } else {
+                    // Create new entry
+                    response = await fetch('/api/journal/entries', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(entryData)
+                    });
+                }
+
+                if (response.ok) {
+                    closeModal();
+                    await loadJournalEntries();
+                } else {
+                    throw new Error('Failed to save entry');
+                }
+            } catch (error) {
+                console.error('Error saving journal entry:', error);
+                alert('Failed to save journal entry. Please try again.');
+            }
+        }
+    </script>
+</body>
+</html>
