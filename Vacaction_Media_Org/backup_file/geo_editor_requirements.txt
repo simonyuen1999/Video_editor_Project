@@ -1,0 +1,14 @@
+# Geographic Translation Editor Dependencies
+# Install with: pip install -r requirements.txt
+
+# Optional: For web search functionality
+# If not installed, the app will still work with fallback translations
+requests>=2.25.0
+
+# Core dependencies (usually pre-installed with Python)
+# tkinter (built-in with Python)
+# csv (built-in)
+# os (built-in)
+# re (built-in)
+# urllib (built-in)
+# threading (built-in)

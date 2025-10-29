@@ -39,6 +39,21 @@
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
+        .timezone-banner {
+            background: #2c3e50;
+            color: white;
+            padding: 8px 0;
+            text-align: center;
+            font-size: 0.9rem;
+            border-bottom: 2px solid #34495e;
+        }
+
+        .timezone-info {
+            font-size: 0.9rem;
+            display: inline-block;
+            margin: 0 15px;
+        }
+
         .nav-links {
             text-align: center;
             margin-bottom: 20px;
@@ -816,6 +831,12 @@
     </style>
 </head>
 <body>
+    <!-- Timezone Display Banner -->
+    <div class="timezone-banner" id="timezoneBanner">
+        <span class="timezone-info">Display Timezone: <strong id="displayTime">Loading...</strong></span>
+        <span class="timezone-info">Offset: <strong id="offsetTime">Loading...</strong></span>
+    </div>
+    
     <div class="container">
         <div class="header">
             <h1>FixInfo View</h1>
@@ -828,6 +849,7 @@
             <a href="daily.html">📅 Daily View</a>
             <a href="special.html">⭐ Special View</a>
             <a href="fixinfo.html" class="active">🔧 FixInfo View</a>
+            <a href="journal.html">📔 Journal</a>
         </div>
 
         <div class="control-panel">
@@ -987,6 +1009,21 @@
         let allFilenamePatterns = [];
         let currentFilenamePattern = '';
 
+        // Load timezone configuration
+        async function loadTimezoneConfig() {
+            try {
+                const response = await fetch('/config/timezone');
+                const config = await response.json();
+                
+                document.getElementById('offsetTime').textContent = config.offsetTime;
+                document.getElementById('displayTime').textContent = config.displayTime;
+            } catch (error) {
+                console.error('Error loading timezone config:', error);
+                document.getElementById('offsetTime').textContent = '+08:00';
+                document.getElementById('displayTime').textContent = 'ASIA Time';
+            }
+        }
+
         // Utility functions for preserving checkbox selections
         function saveCurrentSelections() {
             const selections = new Set();
@@ -1008,6 +1045,9 @@
 
         // Initialize the page
         document.addEventListener('DOMContentLoaded', async function() {
+            // Load timezone configuration
+            await loadTimezoneConfig();
+            
             // Load countries for dropdown
             loadCountries();
             
@@ -1411,7 +1451,7 @@
                 const isVideo = mediaItem.file_extension && 
                     ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(mediaItem.file_extension.toLowerCase());
                 
-                const displayTime = formatCreationTime(mediaItem.creation_time);
+                const displayTime = formatCreationTime(mediaItem.formatted_creation_time, mediaItem.creation_time);
                 const location = mediaItem.city_zh && mediaItem.city_en ? 
                     `${mediaItem.city_zh} | ${mediaItem.city_en}` : 
                     (mediaItem.city_zh || mediaItem.city_en || 'Unknown location');
@@ -1438,6 +1478,7 @@
                             <div class="media-meta">
                                 📅 ${displayTime}<br>
                                 📍 ${location}
+                                ${mediaItem.latitude != null && mediaItem.longitude != null ? `<br>🌐 <a href="https://maps.google.com/?q=${mediaItem.latitude},${mediaItem.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" onclick="event.stopPropagation();" title="Open in Google Maps">${mediaItem.latitude.toFixed(6)}, ${mediaItem.longitude.toFixed(6)} 🗺️</a>` : ''}
                                 ${mediaItem.talking_detected ? '<br>🗣️ Talking detected' : ''}
                             </div>
                             ${activities.length > 0 || scenery.length > 0 ? `
@@ -1467,17 +1508,30 @@
 
         function parseJsonArray(jsonString) {
             try {
-                if (Array.isArray(jsonString)) return jsonString;
+                if (Array.isArray(jsonString)) {
+                    return jsonString.filter(item => 
+                        !item.toLowerCase().includes('people') && 
+                        !item.toLowerCase().includes('person') &&
+                        item !== 'NotFound'
+                    );
+                }
                 if (typeof jsonString === 'string' && jsonString) {
+                    if (jsonString === 'NotFound') return [];
                     return JSON.parse(jsonString).filter(item => 
                         !item.toLowerCase().includes('people') && 
-                        !item.toLowerCase().includes('person')
+                        !item.toLowerCase().includes('person') &&
+                        item !== 'NotFound'
                     );
                 }
             } catch (e) {
                 // If parsing fails, try splitting by comma
                 if (typeof jsonString === 'string') {
-                    return jsonString.split(',').map(s => s.trim()).filter(s => s);
+                    if (jsonString === 'NotFound') return [];
+                    return jsonString.split(',').map(s => s.trim()).filter(s => 
+                        s && s !== 'NotFound' &&
+                        !s.toLowerCase().includes('people') && 
+                        !s.toLowerCase().includes('person')
+                    );
                 }
             }
             return [];
@@ -1548,7 +1602,7 @@
                 <p><strong>New Country:</strong> ${selectedCityData.country_en} | ${selectedCityData.country_zh}</p>
                 <p><strong>New Date & Time:</strong> ${displayDateTime}</p>
                 <p><strong>Creation Time Update:</strong> ${timeUpdateMode}</p>
-                <p><strong>New GPS Coordinates:</strong> ${selectedCityData.latitude}, ${selectedCityData.longitude}</p>
+                <p><strong>New GPS Coordinates:</strong> <a href="https://maps.google.com/?q=${selectedCityData.latitude},${selectedCityData.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${selectedCityData.latitude}, ${selectedCityData.longitude} 🗺️</a></p>
                 <br>
                 <p><em>This will update both the database records and the EXIF data in the media files using exiftool.</em></p>
             `;
@@ -1867,21 +1921,21 @@
             }
         }
 
-        function formatCreationTime(timeString) {
-            if (!timeString) return 'No time set';
+        function formatCreationTime(formattedCreationTime, originalCreationTime = null) {
+            if (!formattedCreationTime) return 'No time set';
             
-            try {
-                const date = new Date(timeString);
-                return date.toLocaleString('en-US', {
-                    year: 'numeric',
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
-                });
-            } catch (e) {
-                return timeString;
-            }
+            // The backend now provides timezone-converted local time using config offsetTime
+            // In format: "YYYY-MM-DD HH:MM:SS AM/PM" already converted to the configured display timezone
+            // Display this as-is since it represents the converted local display time
+            
+            let displayTime = formattedCreationTime;
+            
+            // For debugging: show original ISO 8601 timestamp below
+            //if (originalCreationTime) {
+            //    displayTime += `<br><small style="color: #666; font-size: 0.8em;">Original: ${originalCreationTime}</small>`;
+            //}
+
+            return displayTime;
         }
 
         function showError(message) {
@@ -1951,7 +2005,7 @@
                 const isVideo = media.file_extension && 
                     ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
                 
-                const displayTime = formatCreationTime(media.creation_time);
+                const displayTime = formatCreationTime(media.formatted_creation_time, media.creation_time);
                 
                 // Parse activities and scenery arrays if they exist
                 let activities = [];
@@ -1987,7 +2041,7 @@
                         <p><strong>Filename:</strong> ${media.filename || 'N/A'}</p>
                         <p><strong>Creation Time:</strong> ${displayTime}</p>
                         <p><strong>Location:</strong> ${media.city_zh || 'N/A'} | ${media.city_en || 'N/A'}, ${media.country_zh || 'N/A'} | ${media.country_en || 'N/A'}</p>
-                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> ${media.latitude}, ${media.longitude}</p>` : ''}
+                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${media.latitude}, ${media.longitude} 🗺️</a></p>` : ''}
                         <p><strong>Talking Detected:</strong> ${media.talking_detected ? 'Yes' : 'No'}</p>
                         ${activities.length > 0 ? `<p><strong>Activities:</strong> ${activities.join(', ')}</p>` : ''}
                         ${scenery.length > 0 ? `<p><strong>Scenery:</strong> ${scenery.join(', ')}</p>` : ''}

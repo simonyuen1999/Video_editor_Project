@@ -42,6 +42,23 @@
             opacity: 0.9;
         }
 
+        .timezone-banner {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            text-align: center;
+            padding: 10px 20px;
+            margin-bottom: 10px;
+            border-radius: 10px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .timezone-info {
+            font-size: 0.9rem;
+            display: inline-block;
+            margin: 0 15px;
+        }
+
         .main-content {
             display: grid;
             grid-template-columns: 3fr 2fr;
@@ -441,6 +458,13 @@
 </head>
 <body>
     <div class="container">
+        <!-- Timezone Display Banner -->
+        <div class="timezone-banner" id="timezoneBanner">
+            <span class="timezone-info">🕐 Display Timezone: <span id="displayTimezone">Loading...</span></span>
+            <span class="timezone-info">📍 Offset: <span id="timezoneOffset">Loading...</span></span>
+            <span class="timezone-info">📝 All times shown in this timezone</span>
+        </div>
+        
         <div class="header">
             <h1>📸 Vacation Media Library</h1>
             <p>Explore your photos and videos with interactive maps and smart filtering</p>
@@ -451,7 +475,8 @@
             <a href="daily.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">📅 Daily View</a>
             <a href="city.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">🏙️ City View</a>
             <a href="special.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">🎯 Special View</a>
-            <a href="fixinfo.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">� FixInfo View</a>
+            <a href="fixinfo.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">🔧 FixInfo View</a>
+            <a href="journal.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">📔 Journal</a>
         </div>
 
         <div class="main-content">
@@ -567,20 +592,52 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        // Helper function to format creation time
-        function formatCreationTime(creationTime) {
-            if (!creationTime) return 'Unknown Date';
+        // Load timezone configuration on page load
+        async function loadTimezoneConfig() {
             try {
-                // Convert date format from "YYYY-MM-DD HH-MM-SS" to "YYYY-MM-DD HH:MM:SS"
-                let formattedTime = creationTime;
-                if (formattedTime.match && formattedTime.match(/\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}/)) {
-                    formattedTime = formattedTime.replace(/ (\d{2})-(\d{2})-(\d{2})/, ' $1:$2:$3');
+                const response = await fetch('/api/config/timezone');
+                const config = await response.json();
+                
+                if (config.offsetTime && config.displayTime) {
+                    document.getElementById('displayTimezone').textContent = config.displayTime;
+                    document.getElementById('timezoneOffset').textContent = config.offsetTime;
+                } else {
+                    document.getElementById('displayTimezone').textContent = 'ASIA Time';
+                    document.getElementById('timezoneOffset').textContent = '+08:00';
                 }
-                const date = new Date(formattedTime);
-                return date.toLocaleString();
-            } catch (e) {
-                return creationTime;
+            } catch (error) {
+                console.warn('Could not load timezone config:', error);
+                document.getElementById('displayTimezone').textContent = 'ASIA Time';
+                document.getElementById('timezoneOffset').textContent = '+08:00';
             }
+        }
+        
+        // Call timezone config loading on page load
+        document.addEventListener('DOMContentLoaded', loadTimezoneConfig);
+        
+        // Helper function to format creation time
+        function formatCreationTime(formattedCreationTime, originalCreationTime = null) {
+            if (!formattedCreationTime) return 'Unknown Date';
+            
+            // The backend now provides timezone-converted local time using config offsetTime
+            // In format: "YYYY-MM-DD HH:MM:SS AM/PM" already converted to the configured display timezone
+            // Display this as-is since it represents the converted local display time
+            
+            let displayTime = formattedCreationTime;
+            
+            // For debugging: show original ISO 8601 timestamp below
+            //if (originalCreationTime) {
+            //    displayTime += `<br><small style="color: #666; font-size: 0.8em;">Original: ${originalCreationTime}</small>`;
+            //}
+
+            return displayTime;
+        }
+
+        function formatCreationTimeClean(formattedCreationTime) {
+            if (!formattedCreationTime) return 'Unknown Date';
+            
+            // Clean display without debugging info - for map view
+            return formattedCreationTime;
         }
 
         // Global variables
@@ -988,17 +1045,21 @@
                 };
                 
                 // Format creation time for display
-                let displayTime = formatCreationTime(media.creation_time);
+                let displayTime = formatCreationTime(media.formatted_creation_time, media.creation_time);
                 
-                // Parse activities and scenery arrays and filter out people-related entries
+                // Parse activities and scenery arrays and filter out people-related entries and 'NotFound'
                 const activities = (Array.isArray(media.activities) ? media.activities : 
                     (typeof media.activities === 'string' && media.activities ? 
-                     JSON.parse(media.activities) : []))
-                    .filter(activity => !activity.toLowerCase().includes('people') && !activity.toLowerCase().includes('person'));
+                     (media.activities === 'NotFound' ? [] : JSON.parse(media.activities)) : []))
+                    .filter(activity => !activity.toLowerCase().includes('people') && 
+                                      !activity.toLowerCase().includes('person') &&
+                                      activity !== 'NotFound');
                 const scenery = (Array.isArray(media.scenery) ? media.scenery : 
                     (typeof media.scenery === 'string' && media.scenery ? 
-                     JSON.parse(media.scenery) : []))
-                    .filter(scene => !scene.toLowerCase().includes('people') && !scene.toLowerCase().includes('person'));
+                     (media.scenery === 'NotFound' ? [] : JSON.parse(media.scenery)) : []))
+                    .filter(scene => !scene.toLowerCase().includes('people') && 
+                                   !scene.toLowerCase().includes('person') &&
+                                   scene !== 'NotFound');
                 
                 if (currentViewMode === 'list') {
                     return `
@@ -1025,6 +1086,19 @@
                                     <div class="info-item">
                                         <span class="info-label">📍 Location:</span>
                                         <span class="info-value">${media.city_zh}, ${media.country_zh}</span>
+                                    </div>` : ''}
+                                    ${media.latitude != null && media.longitude != null ? `
+                                    <div class="info-item">
+                                        <span class="info-label">🌐 Coordinates:</span>
+                                        <span class="info-value">
+                                            <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" 
+                                               target="_blank" 
+                                               style="color: #667eea; text-decoration: none; cursor: pointer;"
+                                               onclick="event.stopPropagation();"
+                                               title="Open in Google Maps">
+                                                ${media.latitude.toFixed(6)}, ${media.longitude.toFixed(6)} 🗺️
+                                            </a>
+                                        </span>
                                     </div>` : ''}
                                     ${media.talking_detected ? `
                                     <div class="info-item">
@@ -1067,6 +1141,7 @@
                                 <div class="meta">📅 ${displayTime}</div>
                                 <div class="meta">📏 ${formatFileSize(media.size)}</div>
                                 ${media.city_zh && media.country_zh ? `<div class="meta">📍 ${media.city_zh}, ${media.country_zh}</div>` : ''}
+                                ${media.latitude != null && media.longitude != null ? `<div class="meta">🌐 <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" onclick="event.stopPropagation();" title="Open in Google Maps">${media.latitude.toFixed(6)}, ${media.longitude.toFixed(6)} 🗺️</a></div>` : ''}
                                 ${media.talking_detected ? `<div class="meta">🗣️ Talking detected</div>` : ''}
                                 ${tags.length > 0 ? `
                                 <div class="tags">
@@ -1115,7 +1190,7 @@
                                 ${location.media.slice(0, 3).map(media => `
                                     <div style="margin: 5px 0; padding: 5px; border: 1px solid #ddd; border-radius: 3px;">
                                         <strong>${media.filename}</strong><br>
-                                        <small>${formatCreationTime(media.creation_time)}</small><br>
+                                        <small>${formatCreationTimeClean(media.formatted_creation_time)}</small><br>
                                         <button onclick="openFileInSystem(${media.id})" style="margin-top: 5px; padding: 3px 8px; background: #667eea; color: white; border: none; border-radius: 3px; cursor: pointer;">
                                             Open File
                                         </button>
@@ -1227,7 +1302,7 @@
                 const isVideo = media.file_extension && 
                     ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
                 
-                const displayTime = formatCreationTime(media.creation_time);
+                const displayTime = formatCreationTime(media.formatted_creation_time, media.creation_time);
                 
                 body.innerHTML = `
                     ${isVideo ? 
@@ -1239,7 +1314,7 @@
                         <p><strong>Filename:</strong> ${media.filename || 'N/A'}</p>
                         <p><strong>Creation Time:</strong> ${displayTime}</p>
                         <p><strong>Location:</strong> ${media.city_zh || 'N/A'}, ${media.country_zh || 'N/A'}</p>
-                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> ${media.latitude}, ${media.longitude}</p>` : ''}
+                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${media.latitude}, ${media.longitude} 🗺️</a></p>` : ''}
                         <p><strong>Talking Detected:</strong> ${media.talking_detected ? 'Yes' : 'No'}</p>
                         ${media.activities && media.activities.length > 0 ? `<p><strong>Activities:</strong> ${media.activities.join(', ')}</p>` : ''}
                         ${media.scenery && media.scenery.length > 0 ? `<p><strong>Scenery:</strong> ${media.scenery.join(', ')}</p>` : ''}

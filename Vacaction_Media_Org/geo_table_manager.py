@@ -3,7 +3,7 @@
 Geo Table Management Utility
 
 This script provides utilities for managing the geo_data table in the media organizer database.
-It can populate the table from geo_chinese_.list file and perform various geo table operations.
+It can populate the table from geo_chinese.list file and perform various geo table operations.
 
 Usage examples:
     python geo_table_manager.py --populate                 # Populate geo table
@@ -82,8 +82,8 @@ class GeoTableManager:
             logging.error(f"Error creating geo table: {e}")
             sys.exit(1)
 
-    def populate_from_file(self, geo_file_path='geo_chinese_.list'):
-        """Populate geo table from geo_chinese_.list file."""
+    def populate_from_file(self, geo_file_path='geo_chinese.list'):
+        """Populate geo table from geo_chinese.list file."""
         if not os.path.exists(geo_file_path):
             logging.error(f"Geo file not found: {geo_file_path}")
             return False
@@ -273,8 +273,8 @@ Examples:
     
     parser.add_argument('--populate', action='store_true', 
                        help='Populate geo table from geo file')
-    parser.add_argument('--file', default='geo_chinese_.list',
-                       help='Geo file path (default: geo_chinese_.list)')
+    parser.add_argument('--file', default='geo_chinese.list',
+                       help='Geo file path (default: geo_chinese.list)')
     parser.add_argument('--count', action='store_true',
                        help='Show record count in geo table')
     parser.add_argument('--sample', type=int, metavar='N',

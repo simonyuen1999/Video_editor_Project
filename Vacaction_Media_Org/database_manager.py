@@ -14,9 +14,11 @@ def create_connection():
     return conn
 
 def create_table(conn):
-    """ Create media table if it doesn't exist """
+    """ Create media and journal tables if they don't exist """
     try:
         cursor = conn.cursor()
+        
+        # Create media table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS media (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -34,6 +36,25 @@ def create_table(conn):
                 talking_detected BOOLEAN
             );
         """)
+        
+        # Create journal table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS journal (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                date TEXT NOT NULL,
+                time_range TEXT,
+                comment TEXT,
+                city_en TEXT,
+                city_zh TEXT,
+                country_en TEXT,
+                country_zh TEXT,
+                latitude REAL,
+                longitude REAL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        
         conn.commit()
     except sqlite3.Error as e:
         print(e)
@@ -78,6 +99,123 @@ def get_all_media_records(conn):
         print(e)
     return []
 
+# Journal Table Management Functions
+
+def insert_journal_entry(conn, entry):
+    """ Insert a new journal entry into the journal table """
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO journal (date, time_range, comment, city_en, city_zh, 
+                                country_en, country_zh, latitude, longitude)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+        """, (
+            entry["date"],
+            entry.get("time_range"),
+            entry.get("comment"),
+            entry.get("city_en"),
+            entry.get("city_zh"),
+            entry.get("country_en"),
+            entry.get("country_zh"),
+            entry.get("latitude"),
+            entry.get("longitude")
+        ))
+        conn.commit()
+        return cursor.lastrowid
+    except sqlite3.Error as e:
+        print(f"Error inserting journal entry: {e}")
+    return None
+
+def get_journal_entries(conn, date_from=None, date_to=None):
+    """ Retrieve journal entries, optionally filtered by date range """
+    try:
+        cursor = conn.cursor()
+        if date_from and date_to:
+            cursor.execute("""
+                SELECT * FROM journal 
+                WHERE date >= ? AND date <= ? 
+                ORDER BY date DESC, id DESC;
+            """, (date_from, date_to))
+        elif date_from:
+            cursor.execute("""
+                SELECT * FROM journal 
+                WHERE date >= ? 
+                ORDER BY date DESC, id DESC;
+            """, (date_from,))
+        else:
+            cursor.execute("SELECT * FROM journal ORDER BY date DESC, id DESC;")
+        
+        rows = cursor.fetchall()
+        return rows
+    except sqlite3.Error as e:
+        print(f"Error retrieving journal entries: {e}")
+    return []
+
+def get_journal_entry_by_id(conn, entry_id):
+    """ Retrieve a specific journal entry by ID """
+    try:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM journal WHERE id = ?;", (entry_id,))
+        row = cursor.fetchone()
+        return row
+    except sqlite3.Error as e:
+        print(f"Error retrieving journal entry: {e}")
+    return None
+
+def update_journal_entry(conn, entry_id, entry):
+    """ Update an existing journal entry """
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE journal 
+            SET date = ?, time_range = ?, comment = ?, city_en = ?, city_zh = ?,
+                country_en = ?, country_zh = ?, latitude = ?, longitude = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?;
+        """, (
+            entry["date"],
+            entry.get("time_range"),
+            entry.get("comment"),
+            entry.get("city_en"),
+            entry.get("city_zh"),
+            entry.get("country_en"),
+            entry.get("country_zh"),
+            entry.get("latitude"),
+            entry.get("longitude"),
+            entry_id
+        ))
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        print(f"Error updating journal entry: {e}")
+    return False
+
+def delete_journal_entry(conn, entry_id):
+    """ Delete a journal entry by ID """
+    try:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM journal WHERE id = ?;", (entry_id,))
+        conn.commit()
+        return cursor.rowcount > 0
+    except sqlite3.Error as e:
+        print(f"Error deleting journal entry: {e}")
+    return False
+
+def get_journal_entries_by_date(conn, date):
+    """ Retrieve all journal entries for a specific date """
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM journal 
+            WHERE date = ? 
+            ORDER BY time_range, id;
+        """, (date,))
+        rows = cursor.fetchall()
+        return rows
+    except sqlite3.Error as e:
+        print(f"Error retrieving journal entries for date: {e}")
+    return []
+
 if __name__ == '__main__':
     conn = create_connection()
     if conn:
@@ -107,6 +245,28 @@ if __name__ == '__main__':
         records = get_all_media_records(conn)
         for record in records:
             print(record)
+
+        # Example journal usage:
+        sample_journal_entry = {
+            "date": "2023-10-27",
+            "time_range": "09:00-12:00",
+            "comment": "Morning hike in Griffith Park. Beautiful weather and great views of the city.",
+            "city_en": "Los Angeles",
+            "city_zh": "洛杉矶",
+            "country_en": "United States", 
+            "country_zh": "美国",
+            "latitude": 34.1362,
+            "longitude": -118.2942
+        }
+        
+        journal_id = insert_journal_entry(conn, sample_journal_entry)
+        if journal_id:
+            print(f"\nInserted journal entry with ID: {journal_id}")
+
+        print("\nAll journal entries:")
+        journal_entries = get_journal_entries(conn)
+        for entry in journal_entries:
+            print(entry)
 
         conn.close()
 
