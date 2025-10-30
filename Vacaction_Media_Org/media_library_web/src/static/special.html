@@ -136,6 +136,10 @@
             transform: translateY(-2px);
         }
 
+        .clear-button-container {
+            text-align: center;
+        }
+
         .view-controls {
             display: flex;
             align-items: center;
@@ -191,6 +195,10 @@
             align-items: center;
             flex-wrap: wrap;
             gap: 15px;
+        }
+
+        .media-info-header.hidden {
+            display: none;
         }
 
         .media-info-header h2 {
@@ -472,17 +480,17 @@
             <div class="selection-container">
                 <div class="selection-group">
                     <label class="selection-label">🎨 Activities</label>
-                    <select id="activities-select" class="selection-dropdown">
+                    <select id="activities-select" class="selection-dropdown" title="Select an activity to filter media">
                         <option value="">Select an activity...</option>
                     </select>
                 </div>
                 
                 <div class="selection-group">
                     <label class="selection-label">🏞️ Scenery</label>
-                    <select id="scenery-select" class="selection-dropdown">
+                    <select id="scenery-select" class="selection-dropdown" title="Select scenery type to filter media">
                         <option value="">Select scenery...</option>
-                    </select>
-                </div>
+            <div class="clear-button-container">
+                <button class="clear-button" id="clear-selections">Clear All Selections</button>
             </div>
             
             <div style="text-align: center;">
@@ -497,9 +505,9 @@
 
                 <div class="thumbnail-size-control">
                     <label for="thumbnail-size">Size:</label>
-                    <input type="range" id="thumbnail-size" class="size-slider" min="150" max="350" value="200">
+                    <input type="range" id="thumbnail-size" class="size-slider" min="150" max="350" value="200" title="Adjust thumbnail size">
                     <span id="size-display">200px</span>
-                </div>
+        <div id="media-info-header" class="media-info-header hidden">
             </div>
         </div>
 

@@ -358,6 +358,7 @@
             font-size: 14px;
             color: #555;
             cursor: pointer;
+            -webkit-user-select: none;
             user-select: none;
         }
 
@@ -856,7 +857,7 @@
             <!-- Daily Selection and Filename Pattern Section -->
             <div class="daily-pattern-container">
                 <div class="daily-section">
-                    <label>Date Navigation:</label>
+                    <label for="selected-date">Date Navigation:</label>
                     <button class="nav-button" onclick="navigateDay(-1)">◀ Previous</button>
                     <input type="date" id="selected-date" class="day-input" onchange="loadMediaForSelectedDate()">
                     <button class="nav-button" onclick="navigateDay(1)">Next ▶</button>

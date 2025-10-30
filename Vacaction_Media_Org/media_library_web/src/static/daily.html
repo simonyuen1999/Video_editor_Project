@@ -185,6 +185,10 @@
             width: 150px;
         }
 
+        .hidden-label {
+            display: none;
+        }
+
         .loading {
             text-align: center;
             padding: 40px;
@@ -495,11 +499,12 @@
             <a href="fixinfo.html">🔧 FixInfo View</a>
             <a href="journal.html">📔 Journal</a>
         </div>
-
+                <label for="selected-date" class="hidden-label">Select Date</label>
         <div class="control-panel">
             <div class="day-selector">
                 <button class="nav-button" id="prev-day">⬅️ Previous Day</button>
-                <input type="date" id="selected-date" class="day-input">
+                <label for="selected-date" style="display: none;">Select Date</label>
+                <input type="date" id="selected-date" class="day-input" title="Select a date to view media" aria-label="Select date">
                 <button class="nav-button" id="next-day">Next Day ➡️</button>
             </div>
 

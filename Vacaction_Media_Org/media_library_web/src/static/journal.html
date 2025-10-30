@@ -54,6 +54,7 @@
             text-decoration: none;
             border-radius: 25px;
             transition: all 0.3s ease;
+            -webkit-backdrop-filter: blur(10px);
             backdrop-filter: blur(10px);
         }
 
@@ -199,6 +200,7 @@
 
         .date-clickable {
             cursor: pointer;
+            -webkit-user-select: none;
             user-select: none;
             margin-right: 8px;
         }
@@ -207,9 +209,9 @@
             color: #5a6fd8;
             transform: scale(1.02);
         }
-
         .media-count-clickable {
             cursor: pointer;
+            -webkit-user-select: none;
             user-select: none;
             color: #28a745;
             font-weight: bold;
