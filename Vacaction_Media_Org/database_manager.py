@@ -1,6 +1,9 @@
 
 import sqlite3
 
+''' Database Manager for Media and Journal Entries '''
+''' PREVIOUS design without zh info in the DB '''
+
 DATABASE_NAME = "media_library.db"
 
 def create_connection():

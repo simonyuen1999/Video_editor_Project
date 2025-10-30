@@ -1,5 +1,8 @@
 '''
 Main script to orchestrate the media organization workflow.
+--------------------------------
+2025-Oct-30: This program is the PREVIOUS design by adding file system links and organizing files into a structured directory.
+--------------------------------
 '''
 
 import os
