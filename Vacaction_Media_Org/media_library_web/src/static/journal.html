@@ -81,6 +81,12 @@
             align-items: center;
         }
 
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
         .sync-btn {
             padding: 10px 20px;
             background: #667eea;
@@ -423,7 +429,10 @@
                 <button id="sync-btn" class="sync-btn">🔄 Sync with Media Dates</button>
                 <span id="sync-status" class="sync-status">Ready to sync</span>
             </div>
-            <button id="add-entry-btn" class="add-entry-btn">➕ Add Journal Entry</button>
+            <div class="action-buttons">
+                <button id="print-journal-btn" class="add-entry-btn" style="background: #6f42c1; margin-right: 10px;">🖨️ Printable Journal</button>
+                <button id="add-entry-btn" class="add-entry-btn">➕ Add Journal Entry</button>
+            </div>
         </div>
 
         <div class="journal-container">
@@ -518,6 +527,7 @@
             // Event listeners
             document.getElementById('sync-btn').addEventListener('click', syncWithMediaDates);
             document.getElementById('add-entry-btn').addEventListener('click', showAddEntryModal);
+            document.getElementById('print-journal-btn').addEventListener('click', openPrintableJournal);
             document.querySelector('.close').addEventListener('click', closeModal);
             document.querySelector('.cancel-btn').addEventListener('click', closeModal);
             document.getElementById('journal-form').addEventListener('submit', saveJournalEntry);
@@ -707,6 +717,12 @@
             // Open Daily View in new window with the selected date
             const dailyUrl = `daily.html?date=${date}`;
             window.open(dailyUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+        }
+
+        function openPrintableJournal() {
+            // Open Printable Journal in new window
+            const printableUrl = 'printable-journal.html';
+            window.open(printableUrl, '_blank', 'width=1000,height=800,scrollbars=yes,resizable=yes');
         }
 
         function showAddEntryModal() {

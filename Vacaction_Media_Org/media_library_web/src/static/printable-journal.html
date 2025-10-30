@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Printable Journal - Vacation Media Organizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Times New Roman', serif;
+            background: white;
+            color: #333;
+            line-height: 1.4;
+            padding: 15px;
+            font-size: 11pt;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 8px;
+            color: #333;
+        }
+
+        .header p {
+            font-size: 1rem;
+            color: #666;
+            font-style: italic;
+        }
+
+        .print-controls {
+            text-align: center;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .font-controls {
+            display: flex;
+            align-items: center;
+        }
+
+        .button-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .print-btn {
+            padding: 8px 16px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin: 0 8px;
+            transition: all 0.3s ease;
+        }
+
+        .print-btn:hover {
+            background: #5a6fd8;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            font-size: 1rem;
+        }
+
+        .journal-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 10pt;
+        }
+
+        .journal-table th {
+            background: #f8f9fa;
+            border: 2px solid #333;
+            padding: 8px;
+            text-align: left;
+            font-weight: bold;
+            font-size: 10pt;
+        }
+
+        .journal-table td {
+            border: 1px solid #666;
+            padding: 8px;
+            vertical-align: top;
+        }
+
+        .date-column {
+            width: 90px;
+            font-weight: bold;
+            text-align: center;
+            background: #f8f9fa;
+        }
+
+        .media-count-column {
+            width: 50px;
+            text-align: center;
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+
+        .comment-column {
+            width: calc(100% - 140px);
+            line-height: 1.4;
+        }
+
+        .entry-row {
+            page-break-inside: avoid;
+        }
+
+        .entry-row:nth-child(even) {
+            background: #fafafa;
+        }
+
+        .entry-date {
+            font-size: 0.95rem;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .entry-weekday {
+            font-size: 0.8rem;
+            color: #666;
+            font-weight: normal;
+        }
+
+        .entry-comment {
+            font-size: 0.9rem;
+            line-height: 1.4;
+        }
+
+        .media-count {
+            font-size: 1rem;
+            font-weight: bold;
+            color: #28a745;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+            font-style: italic;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                padding: 8px;
+            }
+            
+            .print-controls {
+                display: none;
+            }
+            
+            .header {
+                margin-bottom: 15px;
+                padding-bottom: 8px;
+            }
+            
+            .header h1 {
+                font-size: 1.5rem;
+            }
+            
+            .header p {
+                font-size: 0.9rem;
+            }
+            
+            .entry-row {
+                page-break-inside: avoid;
+            }
+            
+            /* Ensure table headers repeat on each page */
+            .journal-table thead {
+                display: table-header-group;
+            }
+            
+            /* Print-specific font size adjustments */
+            .font-size-default .journal-table {
+                font-size: 9pt;
+            }
+            
+            .font-size-small .journal-table {
+                font-size: 8pt;
+            }
+            
+            .font-size-smaller .journal-table {
+                font-size: 7pt;
+            }
+            
+            .font-size-tiny .journal-table {
+                font-size: 6pt;
+            }
+        }
+
+        @page {
+            margin: 0.5in;
+            size: letter;
+        }
+
+        /* Font size variations */
+        .font-size-default .journal-table {
+            font-size: 10pt;
+        }
+
+        .font-size-default .journal-table th,
+        .font-size-default .journal-table td {
+            padding: 8px;
+        }
+
+        .font-size-small .journal-table {
+            font-size: 9pt;
+        }
+
+        .font-size-small .journal-table th,
+        .font-size-small .journal-table td {
+            padding: 6px;
+        }
+
+        .font-size-smaller .journal-table {
+            font-size: 8pt;
+        }
+
+        .font-size-smaller .journal-table th,
+        .font-size-smaller .journal-table td {
+            padding: 5px;
+        }
+
+        .font-size-tiny .journal-table {
+            font-size: 7pt;
+        }
+
+        .font-size-tiny .journal-table th,
+        .font-size-tiny .journal-table td {
+            padding: 4px;
+        }
+
+        /* Adjust entry text sizes proportionally */
+        .font-size-default .entry-date {
+            font-size: 0.95rem;
+        }
+
+        .font-size-default .entry-weekday {
+            font-size: 0.8rem;
+        }
+
+        .font-size-default .entry-comment {
+            font-size: 0.9rem;
+        }
+
+        .font-size-small .entry-date {
+            font-size: 0.85rem;
+        }
+
+        .font-size-small .entry-weekday {
+            font-size: 0.7rem;
+        }
+
+        .font-size-small .entry-comment {
+            font-size: 0.8rem;
+        }
+
+        .font-size-smaller .entry-date {
+            font-size: 0.75rem;
+        }
+
+        .font-size-smaller .entry-weekday {
+            font-size: 0.6rem;
+        }
+
+        .font-size-smaller .entry-comment {
+            font-size: 0.7rem;
+        }
+
+        .font-size-tiny .entry-date {
+            font-size: 0.65rem;
+        }
+
+        .font-size-tiny .entry-weekday {
+            font-size: 0.55rem;
+        }
+
+        .font-size-tiny .entry-comment {
+            font-size: 0.6rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📔 Travel Journal</h1>
+        <p>Your vacation memories and daily experiences</p>
+    </div>
+
+    <div class="print-controls">
+        <div class="font-controls">
+            <label for="font-size-select" style="margin-right: 10px; font-weight: bold;">Font Size:</label>
+            <select id="font-size-select" style="padding: 5px; margin-right: 15px; border-radius: 4px; border: 1px solid #ccc;">
+                <option value="default">Default (10pt)</option>
+                <option value="small">Small (9pt)</option>
+                <option value="smaller">Smaller (8pt)</option>
+                <option value="tiny">Tiny (7pt)</option>
+            </select>
+        </div>
+        <div class="button-controls">
+            <button id="print-btn" class="print-btn">🖨️ Print Journal</button>
+            <button id="close-btn" class="print-btn" style="background: #6c757d;">❌ Close Window</button>
+        </div>
+    </div>
+
+    <div id="loading" class="loading">
+        Loading journal entries...
+    </div>
+
+    <div id="journal-content" style="display: none;">
+        <!-- Journal content will be loaded here -->
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Event listeners
+            document.getElementById('print-btn').addEventListener('click', printJournal);
+            document.getElementById('close-btn').addEventListener('click', closeWindow);
+            document.getElementById('font-size-select').addEventListener('change', changeFontSize);
+
+            // Load journal entries
+            loadJournalEntries();
+            
+            // Set default font size
+            changeFontSize();
+        });
+
+        function printJournal() {
+            window.print();
+        }
+
+        function closeWindow() {
+            window.close();
+        }
+
+        function changeFontSize() {
+            const fontSizeSelect = document.getElementById('font-size-select');
+            const selectedSize = fontSizeSelect.value;
+            const body = document.body;
+            
+            // Remove all font size classes
+            body.classList.remove('font-size-default', 'font-size-small', 'font-size-smaller', 'font-size-tiny');
+            
+            // Add the selected font size class
+            body.classList.add(`font-size-${selectedSize}`);
+        }
+
+        async function loadJournalEntries() {
+            const loading = document.getElementById('loading');
+            const journalContent = document.getElementById('journal-content');
+            
+            try {
+                const response = await fetch('/api/journal/entries');
+                if (response.ok) {
+                    const entries = await response.json();
+                    displayPrintableJournal(entries);
+                    loading.style.display = 'none';
+                    journalContent.style.display = 'block';
+                } else {
+                    throw new Error('Failed to load journal entries');
+                }
+            } catch (error) {
+                console.error('Error loading journal entries:', error);
+                loading.innerHTML = '<div class="empty-state">Error loading journal entries. Please try refreshing the page.</div>';
+            }
+        }
+
+        function displayPrintableJournal(entries) {
+            const journalContent = document.getElementById('journal-content');
+            
+            if (entries.length === 0) {
+                journalContent.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No journal entries found</h3>
+                        <p>Your journal is empty. Add some entries to see them here.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Create printable table
+            journalContent.innerHTML = `
+                <table class="journal-table">
+                    <thead>
+                        <tr>
+                            <th class="date-column">Date</th>
+                            <th class="media-count-column"># Media</th>
+                            <th class="comment-column">Journal Entry</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${entries.map(entry => {
+                            const formattedDate = formatDateForPrint(entry.date);
+                            const formattedComment = formatCommentForPrint(entry.comment);
+                            const mediaCount = entry.media_count || 0;
+                            
+                            return `
+                                <tr class="entry-row">
+                                    <td class="date-column">
+                                        <div class="entry-date">${formattedDate.date}</div>
+                                        <div class="entry-weekday">${formattedDate.weekday}</div>
+                                    </td>
+                                    <td class="media-count-column">
+                                        <div class="media-count">${mediaCount}</div>
+                                    </td>
+                                    <td class="comment-column">
+                                        <div class="entry-comment">${formattedComment}</div>
+                                    </td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function formatDateForPrint(dateStr) {
+            // Parse date as local date to avoid timezone issues
+            const parts = dateStr.split('-');
+            const date = new Date(parts[0], parts[1] - 1, parts[2]); // Year, Month (0-based), Day
+            
+            // Get weekday
+            const weekday = date.toLocaleDateString('en-US', { weekday: 'long' });
+            
+            // Format: 2025-03-17
+            const formattedDate = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+            
+            return {
+                date: formattedDate,
+                weekday: weekday
+            };
+        }
+
+        function formatCommentForPrint(comment) {
+            if (!comment) return '<em>No entry for this day</em>';
+            
+            // Escape HTML and convert newlines to <br> tags for print
+            const div = document.createElement('div');
+            div.textContent = comment;
+            const escapedComment = div.innerHTML;
+            
+            return escapedComment.replace(/\n/g, '<br>');
+        }
+    </script>
+</body>
+</html>
