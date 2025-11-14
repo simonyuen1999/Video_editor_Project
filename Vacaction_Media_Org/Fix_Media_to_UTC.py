@@ -343,7 +343,7 @@ with exiftool.ExifTool() as et:
                             log_print(f"   ❌ {file:<30}: {stderr_lines[0]}")  # Show only first error
                     
                     if result.returncode == 0:
-                        log_print(f"✅ {file}: Updated")
+                        log_print(f"   ✅ {file}: Updated")
                         updated_files += 1
                     else:
                         log_print(f"   ❌ {file:<30}: Failed (code {result.returncode})")
