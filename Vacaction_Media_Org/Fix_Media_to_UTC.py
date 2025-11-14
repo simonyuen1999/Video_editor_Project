@@ -21,7 +21,7 @@ with open(log_file, "w", encoding="utf-8") as f:
 dry_run = False   # Change to False after testing!
 
 # --- Configuration ---
-directory = input("Enter the directory path to process HEIC files: ").strip()
+directory = input("Enter the directory path to process media files: ").strip()
 if not directory:
     log_print("❌ No directory specified. Exiting.")
     exit(1)
@@ -68,7 +68,7 @@ def to_utc(local_time_str, offset_str):
     try:
         local_time = datetime.datetime.strptime(local_time_str, "%Y:%m:%d %H:%M:%S")
     except ValueError:
-        log_print(f"⚠️ Skipping unparsable time: {local_time_str}")
+        log_print(f"   ⚠️ Skipping unparsable time: {local_time_str}")
         return None
 
     # Apply offset if available
@@ -153,15 +153,15 @@ def check_and_rename_misnamed_files(filepath, metadata):
         
         try:
             if os.path.exists(new_filepath):
-                log_print(f"⚠️ Skip rename - target exists: {new_filename}")
+                log_print(f"   ⚠️ Skip rename - target exists: {new_filename}")
                 return filepath
             
             os.rename(filepath, new_filepath)
-            log_print(f"🔄 RENAMED: {filename} → {new_filename} ({current_ext}→{file_type})")
+            log_print(f"   🔄 RENAMED: {filename} → {new_filename} ({current_ext}→{file_type})")
             return new_filepath
             
         except Exception as e:
-            log_print(f"❌ Rename failed: {filename} - {e}")
+            log_print(f"   ❌ Rename failed: {filename} - {e}")
             return filepath
     
     # No mismatch found - file extension matches file type
@@ -172,15 +172,24 @@ renamed_files = []
 processed_files = 0
 updated_files = 0
 
+index = 0
 with exiftool.ExifTool() as et:
     for root, _, files in os.walk(directory):
         for file in files:
+            
+            # Skip hidden files (starting with '.')
+            if file.startswith('.'):
+                continue
 
             bUpdate = False
 
+            index += 1
             # DJI .MP4 is using UTC already, skip it.
             if file.lower().endswith(".mp4"):
+                log_print(f"{index:<5} {file:<30} | .MP4 files are assumed to be in UTC already. Skipping.")
                 continue
+
+            log_print(f"{index:<5} {file:<30} --- processing")
 
             date_local = ''
             offset = ''
@@ -208,22 +217,22 @@ with exiftool.ExifTool() as et:
 
                 # Some MOV files CreationDate is None
                 if crnd and crnd.endswith("Z"):
-                    log_print(f"{file} | CreationDate (used by PhotoPrism) already in UTC format {crnd}")
+                    log_print(f"     {file:<30} | CreationDate already in UTC format {crnd}")
                     continue
 
                 date_local = dtog or cred or crnd
 
                 if not date_local:
-                    log_print(f"❌ No DateTimeOriginal/CreateDate/CreationDate found for {file}")
+                    log_print(f"   ❌ No DateTimeOriginal/CreateDate/CreationDate found for {file}")
                     continue
 
                 utc_dt = parse_datetime_with_offset(date_local)
                 if not utc_dt:
-                    log_print(f"❌ Unable to parse datetime for {file}: {date_local}")
+                    log_print(f"   ❌ Unable to parse datetime for {file}: {date_local}")
                     continue
 
                 utc_time = format_exif(utc_dt)
-                log_print(f"{file} | Local: {date_local} → CreationDate to UTC: {utc_time}")
+                log_print(f"     {file:<30} | update Local: {date_local} → CreationDate to UTC: {utc_time}")
                 bUpdate = True
 
             elif file.lower().endswith((".heic",".heif",".jpeg",".jpg",".png",".tiff",".tif")):
@@ -232,8 +241,13 @@ with exiftool.ExifTool() as et:
                 offset = metadata.get("OffsetTimeOriginal") or metadata.get("OffsetTime")
 
                 if date_local is None:
-                    log_print(f"❌ No DateTimeOriginal found for {file}")
-                    continue
+                    # For JPEG files, silently skip if no DateTimeOriginal
+                    actual_file_type = metadata.get("FileType", "").upper()
+                    if actual_file_type in ["JPEG", "JPG"]:
+                        continue  # Skip silently for JPEG files
+                    else:
+                        log_print(f"   ❌ No DateTimeOriginal found for {file}")
+                        continue
 
                 # Check if already in UTC - different methods for different file types
                 actual_file_type = metadata.get("FileType", "").upper()
@@ -250,9 +264,9 @@ with exiftool.ExifTool() as et:
                 # Process the file if not already in UTC
                 utc_time = to_utc(date_local, offset)
                 if not utc_time:
-                    log_print(f"❌ Could not convert to UTC for {file}")
+                    log_print(f"   ❌ Could not convert to UTC for {file}")
                     continue
-                log_print(f"📅 {file} | {date_local} {offset or ''} → UTC: {utc_time}")
+                log_print(f"   📅 {file:<30} | update {date_local} {offset or ''} → UTC: {utc_time}")
                 bUpdate = True
 
             if not dry_run and bUpdate:
@@ -283,7 +297,7 @@ with exiftool.ExifTool() as et:
                     # Handle timezone differently for different file types
                     if actual_file_type in ["HEIC", "HEIF", "MOV", "MP4"]:
                         # These formats support Z suffix for UTC
-                        log_print(f"📋 Using Z suffix for {actual_file_type} format")
+                        log_print(f"   📋 Using Z suffix for {actual_file_type} format")
                         cmd.extend([
                             f"-DateTimeOriginal={utc_time}Z",
                             f"-CreationDate={utc_time}Z", 
@@ -292,7 +306,7 @@ with exiftool.ExifTool() as et:
                         ])
                     elif actual_file_type in ["JPEG", "JPG", "TIFF", "PNG"]:
                         # JPEG/EXIF formats don't support Z suffix, use offset fields
-                        log_print(f"📋 Using offset fields for {actual_file_type} format")
+                        log_print(f"   📋 Using offset fields for {actual_file_type} format")
                         
                         # For Reconyx files, use EXIF-specific fields
                         if has_reconyx:
@@ -326,24 +340,25 @@ with exiftool.ExifTool() as et:
                         stderr_lines = [line for line in result.stderr.split('\n') 
                                       if line.strip() and not ("Use of uninitialized value" in line and "Reconyx:DateTimeOriginal" in line)]
                         if stderr_lines:
-                            log_print(f"❌ {file}: {stderr_lines[0]}")  # Show only first error
+                            log_print(f"   ❌ {file:<30}: {stderr_lines[0]}")  # Show only first error
                     
                     if result.returncode == 0:
                         log_print(f"✅ {file}: Updated")
                         updated_files += 1
                     else:
-                        log_print(f"❌ {file}: Failed (code {result.returncode})")
+                        log_print(f"   ❌ {file:<30}: Failed (code {result.returncode})")
                         
                 except Exception as e:
-                    log_print(f"❌ {file}: Error - {e}")
+                    log_print(f"   ❌ {file:<30}: Error - {e}")
             elif dry_run and bUpdate:
-                log_print(f"🔸 DRY RUN: {file} → {utc_time}")
+                log_print(f"   🔸 DRY RUN: {file} → {utc_time}")
 
 # Log completion summary
 log_print(f"\n" + "="*60)
 log_print(f"📊 PROCESSING SUMMARY")
 log_print(f"="*60)
 log_print(f"📁 Directory: {directory}")
+log_print(f"🔢 Total files traversed: {index}")
 log_print(f"🔢 Total files processed: {processed_files}")
 log_print(f"✅ Files successfully updated: {updated_files}")
 log_print(f"🔄 Files renamed: {len(renamed_files)}")
