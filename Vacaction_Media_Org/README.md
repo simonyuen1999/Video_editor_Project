@@ -359,7 +359,8 @@ Your media library will have a structure similar to this:
 
 For further assistance, please refer to the project's source code or open an issue on the project's GitHub page.
 
-## Author
+## Keep journal table
 
-Manus AI
+* `sqlite3 media_organizer.db ".dump journal" > journal_backup.sql`
+* `sqlite3 media_organizer.db < journal_backup.sql`
 
