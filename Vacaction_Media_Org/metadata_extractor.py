@@ -909,12 +909,14 @@ class MetadataExtractor:
         gps_datetime_raw = metadata[0].get("GPSDateTime", None)
         
         # Check SubSecDateTimeOriginal first (highest priority - most precise with subseconds)
+        # This is used for HEIC, JPEG, MOV, PNG
         if subsec_datetime_original_raw and subsec_datetime_original_raw != "N/A":
             CreateDate = convert_exif_to_iso8601(subsec_datetime_original_raw)
             if CreateDate:
                 logger.debug(f"Using SubSecDateTimeOriginal as CreateDate: {CreateDate}")
         
         # If SubSecDateTimeOriginal is None, check SubSecCreateDate
+        # DJI MP4 files does not have DateTimeOriginal, but has CreateDate
         elif subsec_create_date_raw and subsec_create_date_raw != "N/A":
             CreateDate = convert_exif_to_iso8601(subsec_create_date_raw)
             if CreateDate:
@@ -981,6 +983,8 @@ class MetadataExtractor:
                         logger.debug(f"Extracted offsetTime: {saved_offset_time}")
                         break
             
+            # ---------------------------------------------
+            # For DJI files, if DateTimeOriginal or CreateDate is not available, we need to handle specially (below)
             # Since DJI file does not have correct 'Create Date', 'Modify Date', and 'File Modification Date/Time' is PC system time,
             # For DJI files, we cannot use these field, instead we use its original file name 'DJI_YYYYMMDDHHMMSS_xxxx' to determine the CreateDate.
 

@@ -7,7 +7,7 @@ db = SQLAlchemy()
 def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None, target_offset=None):
     """
     Convert ISO 8601 datetime string to consistent local display time using config offsetTime.
-    This function converts the ISO 8601 datetime to the target timezone specified in config.
+    Always returns format "YYYY-MM-DD hh:mm:ss AM/PM" for consistent display.
     
     Args:
         iso_datetime_str: ISO 8601 format datetime (e.g., "2023-12-25T14:30:45.123+08:00")
@@ -15,7 +15,7 @@ def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None, target
         target_offset: Target timezone offset for display (e.g., "+08:00") from config
         
     Returns:
-        String in format "YYYY-MM-DD HH:MM:SS" converted to target timezone for consistent display
+        String in format "YYYY-MM-DD hh:mm:ss AM/PM" converted to target timezone for consistent display
     """
     if not iso_datetime_str:
         return None
@@ -24,8 +24,10 @@ def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None, target
         from datetime import datetime, timezone, timedelta
         import re
         
+        # Default target timezone (use +08:00 if not specified)
+        target_tz = timezone(timedelta(hours=8))  # Default to +08:00
+        
         # Parse target offset if provided
-        target_tz = None
         if target_offset:
             # Parse target offset format: +HH:MM or -HH:MM
             match = re.match(r'^([+-])(\d{2}):(\d{2})$', target_offset)
@@ -36,100 +38,83 @@ def convert_iso8601_to_local_display(iso_datetime_str, timezone_str=None, target
                 total_minutes = offset_hours * 60 + offset_minutes
                 target_tz = timezone(timedelta(minutes=total_minutes))
         
+        # Clean up malformed datetime strings (e.g., "2025-03-20T05:59:12.157Z+08:00")
+        clean_datetime_str = iso_datetime_str
+        if 'Z+' in clean_datetime_str or 'Z-' in clean_datetime_str:
+            # Remove the Z and keep only the timezone offset
+            clean_datetime_str = re.sub(r'Z([+-]\d{2}:\d{2})$', r'\1', clean_datetime_str)
+        
         # Handle ISO 8601 format: YYYY-MM-DDThh:mm:ss[.###]±HH:MM
-        if 'T' in iso_datetime_str:
-            # Parse ISO 8601 datetime with timezone
-            dt_with_tz = datetime.fromisoformat(iso_datetime_str.replace('Z', '+00:00'))
+        if 'T' in clean_datetime_str:
+            # Replace Z with +00:00 for proper parsing
+            if clean_datetime_str.endswith('Z'):
+                clean_datetime_str = clean_datetime_str.replace('Z', '+00:00')
             
-            if target_tz:
-                # Convert to target timezone for consistent display with 12-hour format
-                converted_dt = dt_with_tz.astimezone(target_tz)
-                return converted_dt.strftime('%Y-%m-%d %I:%M:%S %p')
-            else:
-                # No target timezone - use original behavior
-                local_dt = dt_with_tz.replace(tzinfo=None)
-                tz_offset = dt_with_tz.utcoffset()
-                if tz_offset:
-                    total_seconds = int(tz_offset.total_seconds())
-                    hours = total_seconds // 3600
-                    minutes = abs((total_seconds % 3600) // 60)
-                    if hours >= 0:
-                        tz_display = f"UTC+{hours:02d}:{minutes:02d}"
-                    else:
-                        tz_display = f"UTC{hours:03d}:{minutes:02d}"
-                    return f"{local_dt.strftime('%Y-%m-%d %H:%M:%S')} ({tz_display})"
-                else:
-                    return f"{local_dt.strftime('%Y-%m-%d %H:%M:%S')} (Local)"
+            # Parse ISO 8601 datetime with timezone
+            dt_with_tz = datetime.fromisoformat(clean_datetime_str)
+            
+            # Always convert to target timezone and return 12-hour format
+            converted_dt = dt_with_tz.astimezone(target_tz)
+            return converted_dt.strftime('%Y-%m-%d %I:%M:%S %p')
         
         # Handle legacy formats with timezone
-        elif '+' in iso_datetime_str or iso_datetime_str.count('-') >= 3:
+        elif '+' in clean_datetime_str or clean_datetime_str.count('-') >= 3:
             # Legacy timezone format: YYYY-MM-DD hh:mm:ss±##:## or YYYY-MM-DD hh:mm:ss±##.##
             
             # Extract datetime and timezone parts
-            if '+' in iso_datetime_str:
-                datetime_part, tz_part = iso_datetime_str.rsplit('+', 1)
+            if '+' in clean_datetime_str:
+                datetime_part, tz_part = clean_datetime_str.rsplit('+', 1)
                 tz_sign = '+'
             else:
                 # Handle negative timezone (more than 2 dashes means timezone present)
-                parts = iso_datetime_str.rsplit('-', 1)
+                parts = clean_datetime_str.rsplit('-', 1)
                 datetime_part = parts[0]
                 tz_part = parts[1]
                 tz_sign = '-'
             
-            # If target_tz is provided, try to convert legacy format too
-            if target_tz:
-                try:
-                    # Create datetime with original timezone
-                    dt_str = datetime_part.replace(' ', 'T')
-                    if ':' in tz_part:
-                        tz_hours, tz_minutes = tz_part.split(':')
-                    elif '.' in tz_part:
-                        tz_hours, tz_minutes = tz_part.split('.')
-                    else:
-                        tz_hours = tz_part[:2] if len(tz_part) >= 2 else tz_part
-                        tz_minutes = tz_part[2:4] if len(tz_part) >= 4 else '00'
-                    
-                    # Create timezone offset
-                    offset_hours = int(tz_hours) if tz_sign == '+' else -int(tz_hours)
-                    offset_minutes = int(tz_minutes) if tz_sign == '+' else -int(tz_minutes)
-                    original_tz = timezone(timedelta(hours=offset_hours, minutes=offset_minutes))
-                    
-                    # Parse and convert with 12-hour format
-                    dt_naive = datetime.fromisoformat(dt_str)
-                    dt_with_tz = dt_naive.replace(tzinfo=original_tz)
-                    converted_dt = dt_with_tz.astimezone(target_tz)
-                    return converted_dt.strftime('%Y-%m-%d %I:%M:%S %p')
-                except:
-                    # Fall back to original format
-                    pass
-            
-            # Format timezone display for legacy format
-            if ':' in tz_part:
-                tz_hours, tz_minutes = tz_part.split(':')
-            elif '.' in tz_part:
-                tz_hours, tz_minutes = tz_part.split('.')
-            else:
-                if len(tz_part) >= 4:
-                    tz_hours = tz_part[:2]
-                    tz_minutes = tz_part[2:4]
+            try:
+                # Create datetime with original timezone
+                dt_str = datetime_part.replace(' ', 'T')
+                if ':' in tz_part:
+                    tz_hours, tz_minutes = tz_part.split(':')
+                elif '.' in tz_part:
+                    tz_hours, tz_minutes = tz_part.split('.')
                 else:
-                    tz_hours = tz_part
-                    tz_minutes = '00'
-            
-            tz_display = f"UTC{tz_sign}{tz_hours.zfill(2)}:{tz_minutes.zfill(2)}"
-            return f"{datetime_part} ({tz_display})"
+                    tz_hours = tz_part[:2] if len(tz_part) >= 2 else tz_part
+                    tz_minutes = tz_part[2:4] if len(tz_part) >= 4 else '00'
+                
+                # Create timezone offset
+                offset_hours = int(tz_hours) if tz_sign == '+' else -int(tz_hours)
+                offset_minutes = int(tz_minutes) if tz_sign == '+' else -int(tz_minutes)
+                original_tz = timezone(timedelta(hours=offset_hours, minutes=offset_minutes))
+                
+                # Parse and convert with 12-hour format
+                dt_naive = datetime.fromisoformat(dt_str)
+                dt_with_tz = dt_naive.replace(tzinfo=original_tz)
+                converted_dt = dt_with_tz.astimezone(target_tz)
+                return converted_dt.strftime('%Y-%m-%d %I:%M:%S %p')
+            except:
+                # Fall back to simple format conversion
+                try:
+                    dt = datetime.strptime(datetime_part, '%Y-%m-%d %H:%M:%S')
+                    return dt.strftime('%Y-%m-%d %I:%M:%S %p')
+                except:
+                    return datetime_part
         
         else:
-            # No timezone information - display as local time
+            # No timezone information - treat as local time and convert to 12-hour format
             try:
-                if ' ' in iso_datetime_str and ':' in iso_datetime_str:
+                if ' ' in clean_datetime_str and ':' in clean_datetime_str:
                     # Format: YYYY-MM-DD HH:MM:SS
-                    dt = datetime.strptime(iso_datetime_str, '%Y-%m-%d %H:%M:%S')
-                    return f"{dt.strftime('%Y-%m-%d %H:%M:%S')} (Local)"
+                    dt = datetime.strptime(clean_datetime_str, '%Y-%m-%d %H:%M:%S')
+                    return dt.strftime('%Y-%m-%d %I:%M:%S %p')
                 else:
-                    return f"{iso_datetime_str} (Local)"
+                    # Try parsing without seconds
+                    dt = datetime.strptime(clean_datetime_str, '%Y-%m-%d %H:%M')
+                    return dt.strftime('%Y-%m-%d %I:%M:%S %p')
             except ValueError:
-                return f"{iso_datetime_str} (Local)"
+                # If all parsing fails, return original with fallback formatting
+                return clean_datetime_str
             
     except Exception as e:
         return iso_datetime_str

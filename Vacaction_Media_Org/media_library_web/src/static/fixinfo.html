@@ -22,9 +22,9 @@
         }
 
         .container {
-            max-width: 1400px;
+            max-width: 100%;
             margin: 0 auto;
-            padding: 20px;
+            padding: 10px 20px;
         }
 
         .header {
@@ -121,13 +121,35 @@
 
         .fixinfo-controls {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
+            flex-direction: column;
             gap: 15px;
             margin-bottom: 20px;
-            padding-bottom: 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             border-bottom: 2px solid #f0f0f0;
+        }
+
+        .control-row {
+            display: flex;
+            align-items: end;
+            gap: 20px;
             flex-wrap: wrap;
+            justify-content: space-between;
+        }
+        
+        /* Group left controls together */
+        .left-controls-group {
+            display: flex;
+            align-items: end;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        
+        /* Align the modify button to the right */
+        .control-row .modify-button {
+            margin-left: auto;
         }
 
         .control-group {
@@ -808,10 +830,189 @@
             transition: width 0.3s ease;
         }
 
+        /* Geo Prompt Dialog Styles */
+        .geo-prompt-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 10000;
+        }
+
+        .geo-prompt-dialog {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .geo-prompt-title {
+            font-size: 1.4rem;
+            color: #333;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .geo-prompt-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            text-align: left;
+            border-left: 4px solid #667eea;
+        }
+
+        .geo-prompt-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .geo-prompt-button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .geo-prompt-button.google-maps {
+            background: linear-gradient(135deg, #4285f4, #34a853);
+            color: white;
+        }
+
+        .geo-prompt-button.google-maps:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(66, 133, 244, 0.4);
+        }
+
+        .geo-prompt-button.save-location {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+        }
+
+        .geo-prompt-button.save-location:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .geo-prompt-button.cancel {
+            background: #6c757d;
+            color: white;
+        }
+
+        .geo-prompt-button.cancel:hover {
+            background: #545b62;
+        }
+
+        /* Saved Values Display Styles */
+        .saved-values-display {
+            background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+            border: 1px solid #667eea;
+            border-radius: 12px;
+            padding: 15px;
+            margin-top: 15px;
+            margin-bottom: 20px;
+            display: block;
+            opacity: 1;
+            transition: opacity 0.3s ease;
+        }
+
+        .saved-values-title {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .saved-values-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+
+        .saved-value-item {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            border-left: 3px solid #667eea;
+            font-size: 0.9rem;
+        }
+
+        .saved-value-label {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 2px;
+        }
+
+        .saved-value-text {
+            color: #666;
+            word-break: break-word;
+        }
+
+        .clear-saved-values {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-left: auto;
+        }
+
+        .clear-saved-values:hover {
+            background: #c82333;
+        }
+
+        .saved-values-empty {
+            text-align: center;
+            color: #999;
+            font-style: italic;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 8px;
+            border: 2px dashed #ddd;
+        }
+
+        .saved-value-text.empty {
+            color: #999;
+            font-style: italic;
+        }
+
+        /* Style for empty state text */
+        .saved-value-text:has-text("No data saved") {
+            color: #999;
+            font-style: italic;
+        }
+
         @media (max-width: 768px) {
             .fixinfo-controls, .daily-pattern-container {
                 flex-direction: column;
                 align-items: stretch;
+            }
+
+            .control-row {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
             }
 
             .daily-section, .pattern-section {
@@ -827,6 +1028,16 @@
             .city-select, .modify-date, .filename-pattern-select, .modify-time {
                 min-width: auto;
                 flex: 1;
+            }
+
+            .saved-values-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .saved-values-title {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
             }
         }
     </style>
@@ -876,44 +1087,97 @@
 
             <!-- FixInfo Controls Section -->
             <div class="fixinfo-controls">
-                <div class="control-group">
-                    <label for="country-select">Country:</label>
-                    <select id="country-select" class="city-select">
-                        <option value="">Select a country...</option>
-                    </select>
-                </div>
-                <div class="control-group">
-                    <label for="city-select">City:</label>
-                    <div class="city-selection-container">
-                        <select id="city-select" class="city-select" disabled>
-                            <option value="">Select a country first...</option>
-                        </select>
-                        <button id="toggle-city-mode" class="toggle-city-btn" disabled onclick="toggleCityMode()" title="Show all cities from geo database">
-                            🌍 Show All Cities
+                <!-- First Row: Country, City, Show All Cities (left), Modify Button (rightmost) -->
+                <div class="control-row">
+                    <div class="left-controls-group">
+                        <div class="control-group">
+                            <label for="country-select">Country:</label>
+                            <select id="country-select" class="city-select">
+                                <option value="">Select a country...</option>
+                            </select>
+                        </div>
+                        <div class="control-group">
+                            <label for="city-select">City:</label>
+                            <div class="city-selection-container">
+                                <select id="city-select" class="city-select" disabled>
+                                    <option value="">Select a country first...</option>
+                                </select>
+                                <button id="toggle-city-mode" class="toggle-city-btn" disabled onclick="toggleCityMode()" title="Show all cities from geo database">
+                                    🌍 Show All Cities
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="control-group">
+                        <button id="modify-button" class="modify-button" onclick="showModifyConfirmation()" disabled>
+                            Modify Selected Files
                         </button>
                     </div>
                 </div>
-                <div class="control-group">
-                    <label for="modify-date">Modify Date:</label>
-                    <input type="date" id="modify-date" class="modify-date">
+                
+                <!-- Second Row: Date and Time (left), Force Update Checkbox (rightmost) -->
+                <div class="control-row">
+                    <div class="left-controls-group">
+                        <div class="control-group">
+                            <label for="modify-date">Modify Date:</label>
+                            <input type="date" id="modify-date" class="modify-date">
+                        </div>
+                        <div class="control-group">
+                            <label for="modify-time">Time:</label>
+                            <input type="time" id="modify-time" class="modify-date" value="12:00">
+                        </div>
+                    </div>
+                    <div class="control-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="force-update-time" class="update-time-checkbox">
+                            <span class="checkbox-label">🕒 Force Update Creation Time</span>
+                        </label>
+                        <small class="checkbox-help">
+                            When unchecked: Only update files without creation_time<br>
+                            When checked: Overwrite all selected files' creation_time
+                        </small>
+                    </div>
                 </div>
-                <div class="control-group">
-                    <label for="modify-time">Time:</label>
-                    <input type="time" id="modify-time" class="modify-date" value="12:00">
+            </div>
+
+            <!-- Saved Values Display Section -->
+            <div id="saved-values-display" class="saved-values-display">
+                <div class="saved-values-title">
+                    💾 Saved Location Values
+                    <button class="clear-saved-values" onclick="clearSavedValues()" title="Clear saved values">
+                        🗑️ Clear
+                    </button>
                 </div>
-                <div class="control-group checkbox-group">
-                    <label>
-                        <input type="checkbox" id="force-update-time" class="update-time-checkbox">
-                        <span class="checkbox-label">🕒 Force Update Creation Time</span>
-                    </label>
-                    <small class="checkbox-help">
-                        When unchecked: Only update files without creation_time<br>
-                        When checked: Overwrite all selected files' creation_time
-                    </small>
+                <div id="saved-values-content" class="saved-values-grid">
+                    <div class="saved-value-item">
+                        <div class="saved-value-label">� Source File:</div>
+                        <div class="saved-value-text">No data saved</div>
+                    </div>
+                    <div class="saved-value-item">
+                        <div class="saved-value-label">🌏 Country (EN):</div>
+                        <div class="saved-value-text">No data saved</div>
+                    </div>
+                    <div class="saved-value-item">
+                        <div class="saved-value-label">🌏 Country (中文):</div>
+                        <div class="saved-value-text">No data saved</div>
+                    </div>
+                    <div class="saved-value-item">
+                        <div class="saved-value-label">🏙️ City (EN):</div>
+                        <div class="saved-value-text">No data saved</div>
+                    </div>
+                    <div class="saved-value-item">
+                        <div class="saved-value-label">🏙️ City (中文):</div>
+                        <div class="saved-value-text">No data saved</div>
+                    </div>
+                    <div class="saved-value-item">
+                        <div class="saved-value-label">🌐 Latitude:</div>
+                        <div class="saved-value-text">No data saved</div>
+                    </div>
+                    <div class="saved-value-item">
+                        <div class="saved-value-label">🌐 Longitude:</div>
+                        <div class="saved-value-text">No data saved</div>
+                    </div>
                 </div>
-                <button id="modify-button" class="modify-button" onclick="showModifyConfirmation()" disabled>
-                    Modify Selected Files
-                </button>
             </div>
 
             <!-- View Controls Section -->
@@ -955,6 +1219,27 @@
         </div>
 
         <div id="media-container"></div>
+    </div>
+
+    <!-- Geo Prompt Dialog -->
+    <div id="geo-prompt-overlay" class="geo-prompt-overlay">
+        <div class="geo-prompt-dialog">
+            <div class="geo-prompt-title">📍 Location Options</div>
+            <div id="geo-prompt-info" class="geo-prompt-info">
+                <!-- Location info will be populated here -->
+            </div>
+            <div class="geo-prompt-buttons">
+                <button class="geo-prompt-button google-maps" onclick="openGoogleMaps()">
+                    🗺️ Open in Google Maps
+                </button>
+                <button class="geo-prompt-button save-location" onclick="saveLocationToControls()">
+                    💾 Save to Controls
+                </button>
+                <button class="geo-prompt-button cancel" onclick="closeGeoPrompt()">
+                    ❌ Cancel
+                </button>
+            </div>
+        </div>
     </div>
 
     <!-- Confirmation Modal -->
@@ -1479,7 +1764,7 @@
                             <div class="media-meta">
                                 📅 ${displayTime}<br>
                                 📍 ${location}
-                                ${mediaItem.latitude != null && mediaItem.longitude != null ? `<br>🌐 <a href="https://maps.google.com/?q=${mediaItem.latitude},${mediaItem.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" onclick="event.stopPropagation();" title="Open in Google Maps">${mediaItem.latitude.toFixed(6)}, ${mediaItem.longitude.toFixed(6)} 🗺️</a>` : ''}
+                                ${mediaItem.latitude != null && mediaItem.longitude != null ? `<br>🌐 <a href="#" style="color: #667eea; text-decoration: none;" onclick="event.stopPropagation(); showGeoPrompt(${mediaItem.latitude}, ${mediaItem.longitude}, '${mediaItem.country_en || ''}', '${mediaItem.country_zh || ''}', '${mediaItem.city_en || ''}', '${mediaItem.city_zh || ''}', '${mediaItem.filename}');" title="Location Options">${mediaItem.latitude.toFixed(6)}, ${mediaItem.longitude.toFixed(6)} 🗺️</a>` : ''}
                                 ${mediaItem.talking_detected ? '<br>🗣️ Talking detected' : ''}
                             </div>
                             ${activities.length > 0 || scenery.length > 0 ? `
@@ -1578,10 +1863,52 @@
             const modifyDate = document.getElementById('modify-date').value;
             const modifyTime = document.getElementById('modify-time').value;
             
-            if (checkedBoxes.length === 0 || !citySelect.value || !modifyDate || !modifyTime) return;
+            // Check if no files are selected
+            if (checkedBoxes.length === 0) {
+                alert('❌ Please select at least one media file to modify.');
+                return;
+            }
             
-            // Parse selected city data
-            selectedCityData = JSON.parse(citySelect.value);
+            // Check if date and time are provided
+            if (!modifyDate || !modifyTime) {
+                alert('❌ Please provide both modify date and time.');
+                return;
+            }
+
+            let locationData = null;
+            let dataSource = '';
+
+            // First priority: Check if we have saved location data
+            if (currentGeoData && currentGeoData.latitude !== null && currentGeoData.longitude !== null &&
+                (currentGeoData.country_en || currentGeoData.country_zh || currentGeoData.city_en || currentGeoData.city_zh)) {
+                locationData = {
+                    country_en: currentGeoData.country_en || '',
+                    country_zh: currentGeoData.country_zh || '',
+                    city_en: currentGeoData.city_en || '',
+                    city_zh: currentGeoData.city_zh || '',
+                    latitude: currentGeoData.latitude,
+                    longitude: currentGeoData.longitude
+                };
+                dataSource = '💾 Saved Location Values';
+            }
+            // Second priority: Check country/city selection dropdowns
+            else if (citySelect.value) {
+                try {
+                    locationData = JSON.parse(citySelect.value);
+                    dataSource = '🌍 Country/City Selection';
+                } catch (e) {
+                    alert('❌ Invalid city selection data. Please select a valid city.');
+                    return;
+                }
+            }
+            // No location data available
+            else {
+                alert('❌ Please either:\n• Click on geo coordinates to save location data, OR\n• Select a country and city from the dropdown lists');
+                return;
+            }
+
+            // Store the selected city data for execution
+            selectedCityData = locationData;
             
             // Format modify date and time (convert 24-hour to HH:MM:SS)
             const modifyDateTime = modifyDate + ' ' + modifyTime + ':00';
@@ -1594,16 +1921,22 @@
             const forceUpdateTime = document.getElementById('force-update-time').checked;
             const timeUpdateMode = forceUpdateTime ? 
                 '🕒 Force update ALL files\' creation time' : 
-                '🕒 Only update files without creation time';
+                '� Do not update the Creation Time (Only update files without creation time)';
+            
+            // Show different date/time message based on force update setting
+            const dateTimeMessage = forceUpdateTime ? 
+                `<p><strong>New Date & Time:</strong> ${displayDateTime}</p>` :
+                `<p><strong>Provided Date & Time:</strong> ${displayDateTime} <em>(Will only apply to files without existing creation time)</em></p>`;
             
             // Create confirmation details
             const detailsHtml = `
                 <p><strong>Selected Files:</strong> ${checkedBoxes.length} file${checkedBoxes.length > 1 ? 's' : ''}</p>
-                <p><strong>New City:</strong> ${selectedCityData.city_en} | ${selectedCityData.city_zh}</p>
-                <p><strong>New Country:</strong> ${selectedCityData.country_en} | ${selectedCityData.country_zh}</p>
-                <p><strong>New Date & Time:</strong> ${displayDateTime}</p>
+                <p><strong>Location Data Source:</strong> ${dataSource}</p>
+                <p><strong>New City:</strong> ${locationData.city_zh || 'N/A'} | ${locationData.city_en || 'N/A'}</p>
+                <p><strong>New Country:</strong> ${locationData.country_zh || 'N/A'} | ${locationData.country_en || 'N/A'}</p>
+                ${dateTimeMessage}
                 <p><strong>Creation Time Update:</strong> ${timeUpdateMode}</p>
-                <p><strong>New GPS Coordinates:</strong> <a href="https://maps.google.com/?q=${selectedCityData.latitude},${selectedCityData.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${selectedCityData.latitude}, ${selectedCityData.longitude} 🗺️</a></p>
+                <p><strong>New GPS Coordinates:</strong> <a href="https://maps.google.com/?q=${locationData.latitude},${locationData.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${locationData.latitude}, ${locationData.longitude} 🗺️</a></p>
                 <br>
                 <p><em>This will update both the database records and the EXIF data in the media files using exiftool.</em></p>
             `;
@@ -2042,7 +2375,7 @@
                         <p><strong>Filename:</strong> ${media.filename || 'N/A'}</p>
                         <p><strong>Creation Time:</strong> ${displayTime}</p>
                         <p><strong>Location:</strong> ${media.city_zh || 'N/A'} | ${media.city_en || 'N/A'}, ${media.country_zh || 'N/A'} | ${media.country_en || 'N/A'}</p>
-                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${media.latitude}, ${media.longitude} 🗺️</a></p>` : ''}
+                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> <a href="#" style="color: #667eea; text-decoration: none;" onclick="showGeoPrompt(${media.latitude}, ${media.longitude}, '${media.country_en || ''}', '${media.country_zh || ''}', '${media.city_en || ''}', '${media.city_zh || ''}', '${media.filename}');" title="Location Options">${media.latitude}, ${media.longitude} 🗺️</a></p>` : ''}
                         <p><strong>Talking Detected:</strong> ${media.talking_detected ? 'Yes' : 'No'}</p>
                         ${activities.length > 0 ? `<p><strong>Activities:</strong> ${activities.join(', ')}</p>` : ''}
                         ${scenery.length > 0 ? `<p><strong>Scenery:</strong> ${scenery.join(', ')}</p>` : ''}
@@ -2116,6 +2449,221 @@
             console.log('Testing modal...');
             openMediaModal(1);
         };
+
+        // Global variables for geo prompt
+        let currentGeoData = {
+            latitude: null,
+            longitude: null,
+            country_en: '',
+            country_zh: '',
+            city_en: '',
+            city_zh: '',
+            filename: ''
+        };
+
+        // Show geo prompt dialog
+        function showGeoPrompt(latitude, longitude, country_en, country_zh, city_en, city_zh, filename) {
+            currentGeoData = {
+                latitude: latitude,
+                longitude: longitude,
+                country_en: country_en || '',
+                country_zh: country_zh || '',
+                city_en: city_en || '',
+                city_zh: city_zh || '',
+                filename: filename || ''
+            };
+
+            // Create location info display
+            const locationText = [];
+            if (city_en && city_zh) {
+                locationText.push(`${city_zh} | ${city_en}`);
+            } else if (city_en) {
+                locationText.push(city_en);
+            } else if (city_zh) {
+                locationText.push(city_zh);
+            }
+
+            if (country_en && country_zh) {
+                locationText.push(`${country_zh} | ${country_en}`);
+            } else if (country_en) {
+                locationText.push(country_en);
+            } else if (country_zh) {
+                locationText.push(country_zh);
+            }
+
+            const locationDisplay = locationText.length > 0 ? locationText.join(', ') : 'Unknown Location';
+
+            document.getElementById('geo-prompt-info').innerHTML = `
+                <div><strong>📁 File:</strong> ${filename}</div>
+                <div><strong>📍 Location:</strong> ${locationDisplay}</div>
+                <div><strong>🌐 Coordinates:</strong> ${latitude.toFixed(6)}, ${longitude.toFixed(6)}</div>
+            `;
+
+            document.getElementById('geo-prompt-overlay').style.display = 'flex';
+        }
+
+        // Close geo prompt dialog
+        function closeGeoPrompt() {
+            document.getElementById('geo-prompt-overlay').style.display = 'none';
+        }
+
+        // Open location in Google Maps
+        function openGoogleMaps() {
+            const { latitude, longitude } = currentGeoData;
+            window.open(`https://maps.google.com/?q=${latitude},${longitude}`, '_blank');
+            closeGeoPrompt();
+        }
+
+        // Save location data to control panel
+        function saveLocationToControls() {
+            const { country_en, country_zh, city_en, city_zh, latitude, longitude } = currentGeoData;
+
+            // Get control elements
+            const countrySelect = document.getElementById('country-select');
+            const citySelect = document.getElementById('city-select');
+
+            // Try to find and select the country in the dropdown
+            if (country_en || country_zh) {
+                for (let option of countrySelect.options) {
+                    if (option.value) {
+                        try {
+                            const countryData = JSON.parse(option.value);
+                            if ((country_en && countryData.country_en === country_en) || 
+                                (country_zh && countryData.country_zh === country_zh)) {
+                                countrySelect.value = option.value;
+                                // Trigger the country change event to populate cities
+                                onCountryChange();
+                                break;
+                            }
+                        } catch (e) {
+                            // Skip invalid JSON options
+                        }
+                    }
+                }
+            }
+
+            // Wait a bit for cities to load, then try to select the city
+            setTimeout(() => {
+                if (city_en || city_zh) {
+                    for (let option of citySelect.options) {
+                        if (option.value) {
+                            try {
+                                const cityData = JSON.parse(option.value);
+                                if ((city_en && cityData.city_en === city_en) || 
+                                    (city_zh && cityData.city_zh === city_zh)) {
+                                    citySelect.value = option.value;
+                                    break;
+                                }
+                            } catch (e) {
+                                // Skip invalid JSON options
+                            }
+                        }
+                    }
+                }
+            }, 500);
+
+            // Display saved values in the UI
+            displaySavedValues();
+            
+            // Show success message
+            alert(`📍 Location data saved to controls!\n\nCountry: ${country_zh || country_en || 'N/A'}\nCity: ${city_zh || city_en || 'N/A'}\nCoordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+            
+            closeGeoPrompt();
+        }
+
+        // Display saved values in the saved values section
+        function displaySavedValues() {
+            const { country_en, country_zh, city_en, city_zh, latitude, longitude, filename } = currentGeoData;
+            
+            const savedValuesContent = document.getElementById('saved-values-content');
+            
+            // Create saved values HTML
+            savedValuesContent.innerHTML = `
+                <div class="saved-value-item">
+                    <div class="saved-value-label">📁 Source File:</div>
+                    <div class="saved-value-text">${filename || 'N/A'}</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🌏 Country (EN):</div>
+                    <div class="saved-value-text">${country_en || 'N/A'}</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🌏 Country (中文):</div>
+                    <div class="saved-value-text">${country_zh || 'N/A'}</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🏙️ City (EN):</div>
+                    <div class="saved-value-text">${city_en || 'N/A'}</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🏙️ City (中文):</div>
+                    <div class="saved-value-text">${city_zh || 'N/A'}</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🌐 Latitude:</div>
+                    <div class="saved-value-text">${latitude ? latitude.toFixed(6) : 'N/A'}</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🌐 Longitude:</div>
+                    <div class="saved-value-text">${longitude ? longitude.toFixed(6) : 'N/A'}</div>
+                </div>
+            `;
+        }
+
+        // Clear saved values display
+        function clearSavedValues() {
+            const savedValuesContent = document.getElementById('saved-values-content');
+            
+            // Show empty labeled boxes instead of a message
+            savedValuesContent.innerHTML = `
+                <div class="saved-value-item">
+                    <div class="saved-value-label">� Source File:</div>
+                    <div class="saved-value-text">No data saved</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🌏 Country (EN):</div>
+                    <div class="saved-value-text">No data saved</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🌏 Country (中文):</div>
+                    <div class="saved-value-text">No data saved</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🏙️ City (EN):</div>
+                    <div class="saved-value-text">No data saved</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🏙️ City (中文):</div>
+                    <div class="saved-value-text">No data saved</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🌐 Latitude:</div>
+                    <div class="saved-value-text">No data saved</div>
+                </div>
+                <div class="saved-value-item">
+                    <div class="saved-value-label">🌐 Longitude:</div>
+                    <div class="saved-value-text">No data saved</div>
+                </div>
+            `;
+            
+            // Clear the current geo data
+            currentGeoData = {
+                latitude: null,
+                longitude: null,
+                country_en: '',
+                country_zh: '',
+                city_en: '',
+                city_zh: '',
+                filename: ''
+            };
+        }
+
+        // Close geo prompt when clicking outside the dialog
+        document.getElementById('geo-prompt-overlay').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeGeoPrompt();
+            }
+        });
     </script>
 </body>
 </html>

@@ -1309,6 +1309,11 @@ def bulk_update_media():
                 if longitude is not None:
                     media.longitude = longitude
                 
+                # Update shareGPS flag when GPS coordinates are provided (user-applied location data)
+                # Note: hasGPS is only set during initial scanning and should never be modified here
+                if latitude is not None and longitude is not None:
+                    media.shareGPS = True
+                
                 # Conditional creation_time update logic
                 if creation_time is not None:
                     if force_update_time:
@@ -1319,25 +1324,73 @@ def bulk_update_media():
                         if not media.creation_time or media.creation_time.strip() == '':
                             media.creation_time = creation_time
                 
-                # Update file metadata using exiftool if any GPS or date info provided
-                if latitude is not None and longitude is not None and creation_time is not None:
-                    try:
-                        # Build exiftool command
-                        cmd = ['exiftool']
-                        cmd.extend(['-DateTimeOriginal=' + creation_time.replace(' ', ' ')])
+                # Update file metadata using exiftool
+                try:
+                    cmd = ['exiftool']
+                    exif_updates_needed = False
+                    
+                    # Add GPS coordinates if provided
+                    if latitude is not None and longitude is not None:
                         cmd.extend([f'-GPSLatitude={latitude}'])
                         cmd.extend([f'-GPSLongitude={longitude}'])
+                        exif_updates_needed = True
+                    
+                    # Add creation time only if force_update_time is True or file has no creation_time
+                    if creation_time is not None:
+                        should_update_exif_time = force_update_time or (not media.creation_time or media.creation_time.strip() == '')
+                        if should_update_exif_time:
+                            # Convert creation_time to proper UTC format
+                            utc_time = creation_time.replace(' ', 'T') if ' ' in creation_time else creation_time
+                            if 'T' not in utc_time:
+                                utc_time = utc_time.replace(' ', 'T')
+                            # Remove Z suffix if present for processing
+                            if utc_time.endswith('Z'):
+                                utc_time = utc_time[:-1]
+                            
+                            # Get file extension to determine proper datetime format
+                            file_ext = media.file_extension.lower() if media.file_extension else ''
+                            
+                            if file_ext in ['.heic', '.heif', '.mov', '.mp4']:
+                                # HEIC, HEIF, MOV, MP4 formats support Z suffix for UTC
+                                cmd.extend([
+                                    f'-DateTimeOriginal={utc_time}Z',
+                                    f'-CreationDate={utc_time}Z',
+                                    f'-CreateDate={utc_time}Z',
+                                    f'-ModifyDate={utc_time}Z'
+                                ])
+                            elif file_ext in ['.jpg', '.jpeg', '.tiff', '.png']:
+                                # JPEG, JPG, TIFF, PNG formats use EXIF-specific fields with offset
+                                cmd.extend([
+                                    f'-EXIF:DateTimeOriginal={utc_time}',
+                                    f'-EXIF:CreateDate={utc_time}',
+                                    f'-EXIF:ModifyDate={utc_time}',
+                                    '-EXIF:OffsetTimeOriginal=+00:00',
+                                    '-EXIF:OffsetTime=+00:00',
+                                    '-EXIF:OffsetTimeDigitized=+00:00',
+                                    '-ignoreMinorErrors'
+                                ])
+                            else:
+                                # Default handling for other file types
+                                cmd.extend([
+                                    f'-DateTimeOriginal={utc_time}Z',
+                                    f'-CreationDate={utc_time}Z',
+                                    f'-CreateDate={utc_time}Z',
+                                    f'-ModifyDate={utc_time}Z'
+                                ])
+                            exif_updates_needed = True
+                    
+                    # Execute exiftool command only if there are updates to make
+                    if exif_updates_needed:
                         cmd.extend(['-overwrite_original'])
                         cmd.append(get_absolute_file_path(media.filepath))
                         
-                        # Execute exiftool command
                         result = subprocess.run(cmd, capture_output=True, text=True)
                         if result.returncode != 0:
                             print(f"Exiftool warning/error for {media.filename}: {result.stderr}")
                         
-                    except Exception as exif_error:
-                        print(f"Failed to update EXIF data for {media.filename}: {exif_error}")
-                        # Continue with database update even if EXIF update fails
+                except Exception as exif_error:
+                    print(f"Failed to update EXIF data for {media.filename}: {exif_error}")
+                    # Continue with database update even if EXIF update fails
                 
                 updated_files.append({
                     'id': media.id,
@@ -1349,7 +1402,8 @@ def bulk_update_media():
                         'country_zh': country_zh,
                         'latitude': latitude,
                         'longitude': longitude,
-                        'creation_time': creation_time
+                        'creation_time': creation_time,
+                        'shareGPS': media.shareGPS if latitude is not None and longitude is not None else None
                     }
                 })
                 
