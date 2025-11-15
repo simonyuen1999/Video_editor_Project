@@ -290,6 +290,40 @@ class MediaOrganizerDB:
             # Determine hasGPS based on presence of latitude and longitude
             has_gps = bool(metadata_to_store.get('latitude') and metadata_to_store.get('longitude'))
             
+            # Normalize creation_time to always have 'Z' suffix for UTC times
+            creation_time = metadata_to_store.get('creation_time')
+            file_ext = metadata_to_store.get('file_extension', '').lower()
+            
+            # Define file types based on actual input directory content and their timestamp behavior
+            # Files that have UTC timestamps WITH 'Z' suffix
+            utc_with_z_types = {'.mp4', '.mov', '.heic'}
+            # Files that have UTC timestamps WITHOUT 'Z' suffix (need Z added for consistency)
+            utc_without_z_types = {'.png', '.jpg', '.jpeg'}
+            
+            if creation_time and not creation_time.endswith('Z'):
+                # Add Z suffix for UTC times that don't have it
+                if 'T' in creation_time and not ('+' in creation_time or creation_time.count('-') > 2):
+                    if '.' not in creation_time:
+                        creation_time += '.000Z'
+                    else:
+                        creation_time += 'Z'
+                elif ':' in creation_time and ' ' in creation_time and 'T' not in creation_time:
+                    # Convert EXIF format to ISO format with Z
+                    date_part, time_part = creation_time.split(' ', 1)
+                    iso_date = date_part.replace(':', '-')
+                    if '.' not in time_part:
+                        time_part += '.000'
+                    creation_time = f"{iso_date}T{time_part}Z"
+                metadata_to_store['creation_time'] = creation_time
+                
+                # Log info about file type and timestamp handling
+                if file_ext in utc_with_z_types:
+                    logging.info(f"UTC timestamp (already has Z) for {file_ext} file: {metadata_to_store.get('filepath')}")
+                elif file_ext in utc_without_z_types:
+                    logging.info(f"UTC timestamp (Z added for consistency) for {file_ext} file: {metadata_to_store.get('filepath')}")
+                else:
+                    logging.info(f"Timestamp normalized for unknown {file_ext} file: {metadata_to_store.get('filepath')}")
+            
             self.cursor.execute('''
                 INSERT INTO media_files (
                     filepath, filename, file_extension, file_type, size, creation_time, latitude, longitude,
@@ -325,19 +359,12 @@ class MediaOrganizerDB:
             # Generate thumbnail after successfully adding to database
             # Use original absolute path for file operations
             if original_filepath and os.path.exists(original_filepath):
-                # Check if thumbnail already exists before generating
-                file_dir = os.path.dirname(original_filepath)
-                file_name = os.path.basename(original_filepath)
-                name_without_ext = os.path.splitext(file_name)[0]
-                thumbnail_path = os.path.join(file_dir, f"{name_without_ext}_thumb.jpg")
-                
-                if not os.path.exists(thumbnail_path):
-                    # Only generate thumbnail if it doesn't exist
-                    generated_thumbnail_path = self.generate_thumbnail(original_filepath)
-                    if generated_thumbnail_path:
-                        logging.info(f"Generated new thumbnail: {generated_thumbnail_path}")
+                # Generate thumbnail using configured directories
+                generated_thumbnail_path = self.generate_thumbnail(original_filepath, base_directory=base_directory)
+                if generated_thumbnail_path:
+                    logging.info(f"Generated new thumbnail: {generated_thumbnail_path}")
                 else:
-                    logging.debug(f"Thumbnail already exists, skipping: {thumbnail_path}")
+                    logging.debug(f"Thumbnail generation skipped or failed for: {original_filepath}")
                     
         except sqlite3.IntegrityError:
             logging.debug(f"File already exists in DB, skipping: {metadata.get('filepath')}")
@@ -534,9 +561,9 @@ class MediaOrganizerDB:
         )
         return self.cursor.fetchall()
 
-    def generate_thumbnail(self, filepath, thumbnail_size=(300, 300)):
+    def generate_thumbnail(self, filepath, thumbnail_size=(300, 300), base_directory=None, thumb_directory=None):
         """
-        Generate thumbnail for image or video files.
+        Generate thumbnail for image or video files in separate thumbnail directory.
         Returns the thumbnail file path if successful, None otherwise.
         """
         if not PIL_AVAILABLE:
@@ -552,12 +579,35 @@ class MediaOrganizerDB:
             logging.error(f"generate_thumbnail: filepath is not a string, type: {type(filepath)}")
             return None
             
+        # Get thumbnail directory from config if not provided
+        if not thumb_directory:
+            thumb_directory = self.get_config('thumb_directory')
+            if not thumb_directory:
+                logging.error("No thumbnail directory configured")
+                return None
+        
+        # Get base directory from config if not provided
+        if not base_directory:
+            base_directory = self.get_config('base_directory')
+            if not base_directory:
+                logging.error("No base directory configured")
+                return None
+            
         try:
-            # Generate thumbnail filename
-            file_dir = os.path.dirname(filepath)
+            # Calculate relative path from base directory
+            relative_path = os.path.relpath(filepath, base_directory)
+            
+            # Generate thumbnail path in thumbnail directory maintaining structure
             file_name = os.path.basename(filepath)
             name_without_ext = os.path.splitext(file_name)[0]
-            thumbnail_path = os.path.join(file_dir, f"{name_without_ext}_thumb.jpg")
+            thumb_filename = f"{name_without_ext}_thumb.jpg"
+            
+            # Maintain directory structure in thumbnail directory
+            thumb_dir_path = os.path.join(thumb_directory, os.path.dirname(relative_path))
+            thumbnail_path = os.path.join(thumb_dir_path, thumb_filename)
+            
+            # Create thumbnail directory if it doesn't exist
+            os.makedirs(thumb_dir_path, exist_ok=True)
             
             # Skip if thumbnail already exists
             if os.path.exists(thumbnail_path):
@@ -901,12 +951,42 @@ def scan_directory_recursive(path):
     logging.info(f"Found {len(all_files)} files in total.")
     return all_files
 
-def cleanup_thumbnails(path):
-    """Remove all existing thumbnail files from the directory tree"""
-    logging.info(f"Cleaning up existing thumbnail files in: {path}")
+def get_thumbnail_path(media_filepath, base_directory, thumb_directory):
+    """
+    Get the thumbnail path for a given media file path.
+    Maintains the same directory structure in thumbnail directory.
+    """
+    if not media_filepath or not base_directory or not thumb_directory:
+        return None
+        
+    try:
+        # Calculate relative path from base directory
+        relative_path = os.path.relpath(media_filepath, base_directory)
+        
+        # Generate thumbnail path in thumbnail directory maintaining structure
+        file_name = os.path.basename(media_filepath)
+        name_without_ext = os.path.splitext(file_name)[0]
+        thumb_filename = f"{name_without_ext}_thumb.jpg"
+        
+        # Maintain directory structure in thumbnail directory
+        thumb_dir_path = os.path.join(thumb_directory, os.path.dirname(relative_path))
+        thumbnail_path = os.path.join(thumb_dir_path, thumb_filename)
+        
+        return thumbnail_path
+    except Exception as e:
+        logging.error(f"Error calculating thumbnail path for {media_filepath}: {e}")
+        return None
+
+def cleanup_thumbnails(thumb_directory):
+    """Remove all existing thumbnail files from the thumbnail directory tree"""
+    if not thumb_directory or not os.path.exists(thumb_directory):
+        logging.warning(f"Thumbnail directory not found or not configured: {thumb_directory}")
+        return 0
+        
+    logging.info(f"Cleaning up existing thumbnail files in: {thumb_directory}")
     thumbnail_count = 0
     
-    for root, _, files in os.walk(path):
+    for root, _, files in os.walk(thumb_directory):
         for file in files:
             if file.endswith('_thumb.jpg'):
                 thumbnail_path = os.path.join(root, file)
@@ -919,6 +999,60 @@ def cleanup_thumbnails(path):
     
     logging.info(f"Cleaned up {thumbnail_count} thumbnail files")
     return thumbnail_count
+
+def configure_thumbnail_directory(db, base_directory):
+    """Configure thumbnail directory for storing generated thumbnails."""
+    print("\n" + "="*80)
+    print("THUMBNAIL DIRECTORY CONFIGURATION")
+    print("="*80)
+    print("Configure where thumbnail files will be stored.")
+    print("Thumbnails maintain the same directory structure as the original media files.")
+    print(f"Base media directory: {base_directory}")
+    
+    # Suggest default thumbnail directory
+    default_thumb_dir = os.path.join(os.path.dirname(base_directory), "Thumbnails")
+    print(f"Default suggestion: {default_thumb_dir}")
+    print("="*80)
+    
+    while True:
+        user_input = input(f"\nEnter thumbnail directory path (or press Enter for default): ").strip()
+        
+        if user_input:
+            thumb_directory = user_input
+        else:
+            thumb_directory = default_thumb_dir
+        
+        thumb_directory = os.path.abspath(thumb_directory)
+        
+        # Check if directory exists, create if it doesn't
+        if not os.path.exists(thumb_directory):
+            try:
+                os.makedirs(thumb_directory, exist_ok=True)
+                print(f"✓ Created thumbnail directory: {thumb_directory}")
+            except Exception as e:
+                print(f"ERROR: Failed to create directory: {e}")
+                print("Please enter a different path.")
+                continue
+        
+        # Confirm with user
+        print(f"\nThumbnail directory: {thumb_directory}")
+        print("This will be saved as your permanent thumbnail directory configuration.")
+        confirm = input("Confirm and save this configuration? (y/n): ").strip().lower()
+        
+        if confirm == 'y':
+            success = db.set_config('thumb_directory', thumb_directory, 'Thumbnail directory for storing generated thumbnails (permanent)')
+            if success:
+                print("✓ Thumbnail directory saved to configuration successfully.")
+                return thumb_directory
+            else:
+                print("ERROR: Failed to save configuration. Please try again.")
+                continue
+        else:
+            print("Configuration not saved.")
+            retry = input("Do you want to try again? (y/n): ").strip().lower()
+            if retry != 'y':
+                print("Thumbnail directory configuration is required to run the program.")
+                sys.exit(1)
 
 def configure_timezone_settings(db):
     """Configure timezone offset and display settings for web server views."""
@@ -1188,9 +1322,11 @@ Option 'updateMediaInfo' is specified.
     # Handle base directory configuration
     base_directory = None
     
-    # Try to get base directory from config first
+    # Try to get base directory and thumbnail directory from config first
     base_directory = db.get_config('base_directory')
+    thumb_directory = db.get_config('thumb_directory')
     logging.info(f"Retrieved base_directory from config: {base_directory}")
+    logging.info(f"Retrieved thumb_directory from config: {thumb_directory}")
     
     if base_directory:
         # Validate the configured directory
@@ -1207,15 +1343,34 @@ Option 'updateMediaInfo' is specified.
             sys.exit(1)
         
         print(f"Using configured base directory: {base_directory}")
+        
+        # Check if thumbnail directory is configured
+        if not thumb_directory:
+            print(f"Thumbnail directory not configured. Prompting for configuration...")
+            thumb_directory = configure_thumbnail_directory(db, base_directory)
+        else:
+            # Validate the configured thumbnail directory
+            if not os.path.exists(thumb_directory):
+                print(f"WARNING: Configured thumbnail directory does not exist: {thumb_directory}")
+                print("Creating thumbnail directory...")
+                try:
+                    os.makedirs(thumb_directory, exist_ok=True)
+                    print(f"✓ Created thumbnail directory: {thumb_directory}")
+                except Exception as e:
+                    print(f"ERROR: Failed to create thumbnail directory: {e}")
+                    print("Please use --deldb to reset the configuration.")
+                    sys.exit(1)
+            print(f"Using configured thumbnail directory: {thumb_directory}")
     else:
         # No base directory configured, prompt user (first-time setup only)
         print("\n" + "="*80)
-        print("FIRST-TIME SETUP: BASE DIRECTORY CONFIGURATION")
+        print("FIRST-TIME SETUP: DIRECTORIES CONFIGURATION")
         print("="*80)
         print("This is your first time running the program.")
-        print("You need to configure the base directory for media file scanning.")
-        print(f"Default directory suggestion: {default_directory}")
-        print("\nIMPORTANT: Once configured, the base directory cannot be changed during normal operation.")
+        print("You need to configure the base directory for media file scanning")
+        print("and thumbnail directory for storing generated thumbnails.")
+        print(f"Default media directory suggestion: {default_directory}")
+        print("\nIMPORTANT: Once configured, these directories cannot be changed during normal operation.")
         print("           Use --deldb option to reset the configuration if needed.")
         print("="*80)
         
@@ -1251,6 +1406,9 @@ Option 'updateMediaInfo' is specified.
                     print("  This configuration is now permanent and cannot be changed during normal operation.")
                     print("  Use --deldb option if you need to reconfigure in the future.")
                     
+                    # Configure thumbnail directory
+                    thumb_directory = configure_thumbnail_directory(db, base_directory)
+                    
                     # Configure timezone settings
                     configure_timezone_settings(db)
                     
@@ -1268,7 +1426,15 @@ Option 'updateMediaInfo' is specified.
     # Set target_directory to the resolved base_directory
     target_directory = base_directory
     
+    # Ensure thumbnail directory is available
+    if not thumb_directory:
+        thumb_directory = db.get_config('thumb_directory')
+        if not thumb_directory:
+            print("ERROR: No thumbnail directory configured. Please use --deldb to reset configuration.")
+            sys.exit(1)
+    
     logging.info(f"Using base directory: {target_directory}")
+    logging.info(f"Using thumbnail directory: {thumb_directory}")
 
     # ==================================================================================
     # Populate geo table if requested
@@ -1333,7 +1499,7 @@ Option 'updateMediaInfo' is specified.
     # Clean up existing thumbnails if requested
     if args.cleanup_thumbnails:
         logging.info("Cleaning up existing thumbnails...")
-        cleanup_thumbnails(target_directory)
+        cleanup_thumbnails(thumb_directory)
         logging.info("Cleaned up existing thumbnails: completed.")
     else:
         logging.info("Skipping thumbnail cleanup as per user request.")
@@ -1518,20 +1684,11 @@ Option 'updateMediaInfo' is specified.
         thumbnail_count = 0
         for filepath in current_files_set:
             if os.path.exists(filepath):
-                # Check if thumbnail already exists before generating
-                file_dir = os.path.dirname(filepath)
-                file_name = os.path.basename(filepath)
-                name_without_ext = os.path.splitext(file_name)[0]
-                thumbnail_path = os.path.join(file_dir, f"{name_without_ext}_thumb.jpg")
-                
-                if not os.path.exists(thumbnail_path):
-                    # Only generate thumbnail if it doesn't exist
-                    generated_thumbnail_path = db.generate_thumbnail(filepath)
-                    if generated_thumbnail_path:
-                        thumbnail_count += 1
-                        logging.debug(f"Generated new thumbnail: {generated_thumbnail_path}")
-                else:
-                    logging.debug(f"Thumbnail already exists, skipping: {thumbnail_path}")
+                # Generate thumbnail using the new structure
+                generated_thumbnail_path = db.generate_thumbnail(filepath, base_directory=target_directory, thumb_directory=thumb_directory)
+                if generated_thumbnail_path:
+                    thumbnail_count += 1
+                    logging.debug(f"Generated new thumbnail: {generated_thumbnail_path}")
         logging.info(f"Sync FS and DB: Generated {thumbnail_count} new thumbnails")
         
         db.cursor.execute('SELECT filepath FROM media_files')

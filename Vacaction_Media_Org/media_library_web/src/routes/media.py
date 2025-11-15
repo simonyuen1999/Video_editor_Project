@@ -29,6 +29,42 @@ if os.path.exists(db_path):
 else:
     print(f"⚠️  Warning: Database not found at {db_path}")
 
+def get_thumbnail_path(original_filepath):
+    """
+    Get the thumbnail path in the configured thumb_directory, maintaining the same directory structure.
+    """
+    try:
+        base_directory = Config.get_base_directory()
+        thumb_directory = Config.get_thumb_directory()
+        
+        if not base_directory or not thumb_directory:
+            # Fallback to old behavior if configuration not available
+            file_dir = os.path.dirname(original_filepath)
+            file_name = os.path.basename(original_filepath)
+            name_without_ext = os.path.splitext(file_name)[0]
+            return os.path.join(file_dir, f"{name_without_ext}_thumb.jpg")
+        
+        # Calculate relative path from base directory
+        relative_path = os.path.relpath(original_filepath, base_directory)
+        
+        # Generate thumbnail filename
+        name_without_ext = os.path.splitext(os.path.basename(original_filepath))[0]
+        thumb_filename = f"{name_without_ext}_thumb.jpg"
+        
+        # Build thumbnail path in thumb_directory
+        thumb_dir_path = os.path.join(thumb_directory, os.path.dirname(relative_path))
+        thumbnail_path = os.path.join(thumb_dir_path, thumb_filename)
+        
+        return thumbnail_path
+        
+    except Exception as e:
+        print(f"Error getting thumbnail path: {e}")
+        # Fallback to old behavior
+        file_dir = os.path.dirname(original_filepath)
+        file_name = os.path.basename(original_filepath)
+        name_without_ext = os.path.splitext(file_name)[0]
+        return os.path.join(file_dir, f"{name_without_ext}_thumb.jpg")
+
 def get_absolute_file_path(relative_path):
     """
     Convert relative path from database to absolute path using base_directory configuration.
@@ -417,11 +453,8 @@ def serve_media_thumbnail(media_id):
         if not os.path.exists(file_path):
             return jsonify({'error': 'File not found'}), 404
         
-        # Generate thumbnail file path
-        file_dir = os.path.dirname(file_path)
-        file_name = os.path.basename(file_path)
-        name_without_ext = os.path.splitext(file_name)[0]
-        thumbnail_path = os.path.join(file_dir, f"{name_without_ext}_thumb.jpg")
+        # Generate thumbnail file path using configured thumb_directory
+        thumbnail_path = get_thumbnail_path(file_path)
         
         # Check if thumbnail exists
         if os.path.exists(thumbnail_path):

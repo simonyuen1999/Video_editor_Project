@@ -217,3 +217,8 @@ class Config(db.Model):
     def get_base_directory():
         """Get the base directory from configuration"""
         return Config.get_value('base_directory')
+    
+    @staticmethod
+    def get_thumb_directory():
+        """Get the thumbnail directory from configuration"""
+        return Config.get_value('thumb_directory')
