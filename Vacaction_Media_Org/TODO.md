@@ -20,21 +20,6 @@
   - Provides consistent timestamp storage across all media files
   - Simplifies sorting and filtering logic in all views
 
-### 2. Enhanced DJI File Timestamp Extraction
-- [ ] **ExifTool Integration**
-  - [ ] Research ExifTool commands for DJI UTC timestamp extraction
-  - [ ] Update `exif_Tool.py` to prioritize EXIF creation time over filename parsing
-  - [ ] Add fallback to filename parsing if EXIF data is unavailable
-  - [ ] Validate that DJI camera internal timer is synced with phone Mimo app
-  
-- [ ] **Implementation Steps**
-  - [ ] Test ExifTool UTC extraction on sample DJI files
-  - [ ] Compare EXIF timestamps vs filename timestamps for accuracy
-  - [ ] Update extraction priority: EXIF UTC > EXIF local > filename parsing
-  - [ ] Document DJI camera sync requirements for users
-
-## Priority 2: UTC Display with GUI Offset Conversion
-
 ### 3. Universal UTC Display System
 - [ ] **Frontend Display Updates**
   - [ ] Update all view pages (Daily, City, Map, Journal, Special) to display UTC times

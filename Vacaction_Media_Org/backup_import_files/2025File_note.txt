@@ -1,0 +1,122 @@
+SSD Keep_Media_files / Videos_Original_Inc_Simon_iPhone (3709 files: more LRF files)
+
+* File names are kept as original but move to different directory structure for classification.
+
+* Most files are moved to the right directories, but some are mis-placed.
+
+-----------------------------------------------
+
+SSD Keep_Media_files / 2025HKTrip_Organized_from_Original (3235 files)
+
+* Based on the above copy, the files are renamed to corresponding file names.
+
+*** I believe their file EXIF are not changed.
+
+-----------------------------------------------
+
+SanDisk Simon_media (3236 files, one extra output MP4 file)
+
+* SanDisk_Simon_media are same as SSD 2025HKTrip_Organized_from_Original
+
+* Since SanDisk is DOS file system, so the files are copied from Win 11.
+
+* SanDisk has June creation time, but the modify time is the original Apr time frame.
+
+-----------------------------------------------
+
+So SSD 2025HKTrip_Organized_from_Original can be used with meaning file name
+
+-----------------------------------------------
+
+*** For testing, we can copy SSD Videos_Original_Inc_Simon_iPhone to a media testing directory.
+
+-----------------------------------------------
+
+SanDisk Video (4581 files, much more HEIC files)
+
+Based on the name, Video is not original name and just move to different directory.
+
+Simon_media is after renamed some files plus clear up some files.
+
+===================================================================
+
+Convert different Media time format to UTC (Zulu) YYYY-MM-DDTHH:MM:SSZ format and save
+to creation_time column
+
+When display back, set timezone XXXXX/xxxxx
+
+-------------------------------------
+from datetime import datetime
+import pytz
+
+# Input UTC timestamp
+utc_str = "2025-11-15T21:32:00Z"
+
+# Parse the UTC time
+utc_time = datetime.fromisoformat(utc_str)
+
+# Convert to America/New_York timezone
+ny_tz = pytz.timezone("America/New_York")
+local_time = utc_time.astimezone(ny_tz)
+
+# Format as desired: 'YYYY-MM-DD hh:mm:ss AM/PM'
+formatted = local_time.strftime("%Y-%m-%d %I:%M:%S %p")
+print(formatted)
+--------------------------------------
+
+Need to figure out
+
+ 1. filetype and rename the file type
+
+    Get "FileType" is same as file extension (lower case) ?
+
+  IMG_8135.jpg
+  "FileType": "JPEG",
+  "FileTypeExtension": "JPG",
+
+  get "CreateDate": can be missing, not offset
+
+ 2. Remove LRF files and all .* files
+
+ 3. * MP4 and MOV
+
+  DJI_20250423230659_0024_D.MP4   <-- Cannot use this since no offset, we assume it is Toronto time zone
+      20250423 230659 (Tor time -04:00)
+      20250423 110669 (HK  time +08:00)
+  "CreateDate" : "2025:04:24 03:07:01"   <-- Cannot use this, it is completely incorrect time stamp.
+
+  # This two seem OK
+  "FileModifyDate":      "2025:04:23 23:07:26-04:00",
+  "FileInodeChangeDate": "2025:04:23 23:07:26-04:00",
+
+  if FileModifyDate >>> CreateDate -> fall back to assume CreateDate + offset from FileModifyDate
+
+  -----------------
+  MOV CreationDate: "2025:05:04 12:21:10+08:00"
+
+
+* HEIC and HEIF (no such extension file)
+
+  "DateTimeOriginal": "2025:03:25 15:14:42" + "OffsetTimeOriginal": "+08:00"
+
+  "FileModifyDate": "2025:03:25 03:14:44-04:00"
+
+  "FileInodeChangeDate": "2025:05:18 18:12:20-04:00"
+
+* JPEG and JPG
+
+  "FileInodeChangeDate": "2025:05:02 22:08:46-04:00",
+  "FileModifyDate": "2025:05:02 22:08:46-04:00",
+
+  if FileModifyDate >>> CreateDate -> fall back to assume CreateDate + offset from FileModifyDate
+
+* PNG, BMP and TIFF 
+
+For update media file, only update the Geo location, not the time stamp.
+
+Only use import logic to get their creation_time
+
+Some file have Geo but value 0
+
+CreationDate either is missing or not match with FileInodeChangeDate, there is no 0000:00:00
+

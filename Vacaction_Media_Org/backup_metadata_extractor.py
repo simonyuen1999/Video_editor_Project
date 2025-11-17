@@ -1,0 +1,1175 @@
+
+from importlib.metadata import metadata
+from math import radians, sin, cos, sqrt, atan2
+import os
+import subprocess
+import json
+import logging
+import sqlite3
+from datetime import datetime
+import pickle
+from pathlib import Path
+
+# Setup logger for this module
+logger = logging.getLogger('metadata_extractor')
+
+# Optional imports for media analysis
+try:
+    import cv2  # type: ignore
+    import numpy as np  # type: ignore
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+    logging.warning("OpenCV not available. Visual analysis will be limited.")
+
+try:
+    import librosa  # type: ignore
+    LIBROSA_AVAILABLE = True
+    
+    # Configure librosa to suppress audio backend warnings
+    import warnings
+    # Suppress specific librosa/audioread warnings
+    warnings.filterwarnings('ignore', message='PySoundFile failed')
+    warnings.filterwarnings('ignore', message='audioread')
+    warnings.filterwarnings('ignore', category=UserWarning, module='librosa')
+    
+except ImportError:
+    LIBROSA_AVAILABLE = False
+    logging.warning("Librosa not available. Audio analysis will be disabled.")
+
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+    
+    # Try to enable HEIC support
+    try:
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+        HEIF_AVAILABLE = True
+        logger.debug("HEIC support enabled via pillow-heif")
+    except ImportError:
+        HEIF_AVAILABLE = False
+        logger.debug("pillow-heif not available, HEIC support may be limited")
+        
+except ImportError:
+    PIL_AVAILABLE = False
+    HEIF_AVAILABLE = False
+    logging.warning("PIL/Pillow not available. Image processing will be limited.")
+
+class MetadataExtractor:
+    def __init__(self, db_path='media_organizer.db'):
+        """
+        Initialize MetadataExtractor with geo data from database.
+        
+        Args:
+            db_path: Path to the SQLite database containing geo_data table
+        """
+        self.city_dict: dict[str, str] = {}
+        self.geo_data = []
+        self.db_path = db_path
+        
+        # Load geo data from database geo_data table
+        self._load_geo_data_from_db()
+        
+        # ORIGINAL FILE-BASED GEO DATA LOADING (commented out for future reference)
+        # The following code was used to load geo data from geo_chinese.list file
+        # Search for "FILE_BASED_GEO_LOADING_DISABLED" to restore this functionality
+        #
+        # self.geo_list_path = geo_list_path
+        # if not os.path.exists(self.geo_list_path):
+        #     logging.warning(f"File {self.geo_list_path} not found. Geolocation enhancement will be disabled.")
+        #     self.geo_list_path = None
+        # else:
+        #     # Read and parse geo.list comma separator CSV file and store in memory as a list of tuples
+        #     # This is the first line of the CSV file:
+        #     #   City_en,City_zn,Region_en,Region_zn,Subregion_en,Subregion_zn,CountryCode,Country_en,Country_zn,TimeZone,Latitude,Longitude
+        #     self.geo_data = []
+        #     with open(self.geo_list_path, 'r', encoding='utf-8') as f:
+        #         # Skip header line
+        #         next(f)
+        #         for line in f:
+        #             # Each line is comma-separated values and values are
+        #             #  0:City_en,1:City_zn,2:Region_en,3:Region_zn,4:Subregion_en,5:Subregion_zn,6:CountryCode,7:Country_en,8:Country_zn,9:TimeZone,10:Latitude,11:Longitude
+        #             # logging.info(f"Parsing line in geo.list: {line.strip()}")
+        #             parts = line.strip().split(',')
+        #             try:
+        #                 city_en = parts[0]
+        #                 city_zn = parts[1]
+        #                 region_en = parts[2]
+        #                 region_zn = parts[3]
+        #                 subregion_en = parts[4]
+        #                 subregion_zn = parts[5]
+        #                 country_code = parts[6]
+        #                 country_en = parts[7]
+        #                 country_zn = parts[8]
+        #                 timezone = parts[9]
+        #                 lat = float(parts[10])
+        #                 lon = float(parts[11])
+        #                 # Save city translation mapping with country for unique identification
+        #                 # Key format: (city_en, country_en) -> city_zh
+        #                 self.city_dict[(city_en, country_en)] = city_zn
+        #                 self.geo_data.append((lat, lon, city_en, city_zn, region_en, region_zn, subregion_en, subregion_zn, country_code, country_en, country_zn, timezone))
+        #             except ValueError:
+        #                 logging.error(f"Error parsing line in geo.list: {line}")
+        #                 continue
+        #     logging.info(f"Loaded {len(self.geo_data)} entries from {self.geo_list_path}")
+        #     logging.info(f"City translation dictionary contains {len(self.city_dict)} unique (city, country) pairs")
+        #     
+        #     # Debug: Show some statistics about potential duplicates
+        #     city_counts = {}
+        #     for (city, country) in self.city_dict.keys():
+        #         if city in city_counts:
+        #             city_counts[city] += 1
+        #         else:
+        #             city_counts[city] = 1
+        #     
+        #     duplicates = {city: count for city, count in city_counts.items() if count > 1}
+        #     if duplicates:
+        #         logging.info(f"Found {len(duplicates)} city names that appear in multiple countries:")
+        #         for city, count in sorted(duplicates.items())[:10]:  # Show first 10
+        #             countries = [country for (c, country) in self.city_dict.keys() if c == city]
+        #             logging.info(f"  {city}: {count} countries ({', '.join(countries[:3])}{'...' if len(countries) > 3 else ''})")
+        #     else:
+        #         logging.info("No duplicate city names found across different countries")
+
+    def _load_geo_data_from_db(self):
+        """
+        Load geo data from database geo_data table instead of from file.
+        This method replaces the file-based geo data loading for better performance.
+        """
+        try:
+            if not os.path.exists(self.db_path):
+                logging.warning(f"Database {self.db_path} not found. Geolocation enhancement will be disabled.")
+                return
+            
+            # Connect to database and load geo data
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Check if geo_data table exists
+            cursor.execute("""
+                SELECT name FROM sqlite_master 
+                WHERE type='table' AND name='geo_data'
+            """)
+            
+            if not cursor.fetchone():
+                logging.warning("geo_data table not found in database. Geolocation enhancement will be disabled.")
+                logging.info("Run 'python Main_scan_media.py --populateGeoTable -g' to populate geo data first.")
+                conn.close()
+                return
+            
+            # Load all geo data from database
+            cursor.execute("""
+                SELECT latitude, longitude, city_en, city_zh, region_en, region_zh, 
+                       subregion_en, subregion_zh, country_code, country_en, country_zh, timezone
+                FROM geo_data
+                ORDER BY city_en, country_en
+            """)
+            
+            rows = cursor.fetchall()
+            
+            # Process loaded data into the same format as file-based loading
+            for row in rows:
+                lat, lon, city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone = row
+                
+                # Save city translation mapping with country for unique identification
+                # Key format: (city_en, country_en) -> city_zh
+                self.city_dict[(city_en, country_en)] = city_zh
+                
+                # Store geo data in same format as original: (lat, lon, city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone)
+                self.geo_data.append((lat, lon, city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone))
+            
+            conn.close()
+            
+            logging.info(f"Loaded {len(self.geo_data)} entries from database geo_data table")
+            logging.info(f"City translation dictionary contains {len(self.city_dict)} unique (city, country) pairs")
+            
+            # Debug: Show some statistics about potential duplicates
+            city_counts = {}
+            for (city, country) in self.city_dict.keys():
+                if city in city_counts:
+                    city_counts[city] += 1
+                else:
+                    city_counts[city] = 1
+            
+            duplicates = {city: count for city, count in city_counts.items() if count > 1}
+            if duplicates:
+                logging.info(f"Found {len(duplicates)} city names that appear in multiple countries:")
+                for city, count in sorted(duplicates.items())[:10]:  # Show first 10
+                    countries = [country for (c, country) in self.city_dict.keys() if c == city]
+                    logging.info(f"  {city}: {count} countries ({', '.join(countries[:3])}{'...' if len(countries) > 3 else ''})")
+            else:
+                logging.info("No duplicate city names found across different countries")
+                
+        except sqlite3.Error as e:
+            logging.error(f"Database error while loading geo data: {e}")
+            logging.warning("Geolocation enhancement will be disabled.")
+        except Exception as e:
+            logging.error(f"Unexpected error while loading geo data: {e}")
+            logging.warning("Geolocation enhancement will be disabled.")
+
+    def _get_city_translation(self, city_name: str, country_name: str = None) -> str:
+        """
+        Get Chinese translation for a city name, using country for disambiguation.
+        
+        Args:
+            city_name: English city name
+            country_name: English country name (optional, for disambiguation)
+            
+        Returns:
+            Chinese city name if found, None otherwise
+        """
+        if not city_name:
+            return None
+            
+        # Try exact match with country first (most accurate)
+        if country_name:
+            key = (city_name, country_name)
+            if key in self.city_dict:
+                rc_city_zh = self.city_dict[key]
+                logger.debug(f"City translation found (exact): {city_name}, {country_name} -> {rc_city_zh}")
+                return rc_city_zh
+        
+        # Fallback: try to find any match for the city name (less accurate)
+        # This handles cases where country might be None or not matching exactly
+        for (stored_city, stored_country), stored_translation in self.city_dict.items():
+            if stored_city == city_name:
+                logger.debug(f"City translation found (fallback): {city_name} -> {stored_translation} (from {stored_country})")
+                return stored_translation
+        
+        logger.debug(f"No city translation found for: {city_name}" + (f" in {country_name}" if country_name else ""))
+        return None
+
+    def get_city_disambiguation_stats(self):
+        """
+        Returns statistics about cities that would benefit from country disambiguation.
+        Useful for understanding the impact of the country-based lookup.
+        """
+        city_counts = {}
+        for (city, country) in self.city_dict.keys():
+            if city in city_counts:
+                city_counts[city].append(country)
+            else:
+                city_counts[city] = [country]
+        
+        duplicates = {city: countries for city, countries in city_counts.items() if len(countries) > 1}
+        
+        stats = {
+            'total_cities': len(city_counts),
+            'unique_city_names': len(city_counts),
+            'cities_with_multiple_countries': len(duplicates),
+            'duplicate_examples': dict(list(duplicates.items())[:5])  # First 5 examples
+        }
+        
+        return stats
+
+    def _analysis_mediafile(self, filepath):
+        """
+        Analyze image or video file to extract semantic information.
+        
+        Args:
+            filepath: Path to the media file to analyze
+            
+        Returns:
+            dict: Analysis results containing:
+                - people_count: Number of people detected (int)
+                - activities: List of detected activities (list of strings)
+                - scenery: Description of scenery/environment (string)
+                - talking_detected: Whether talking/speech is detected (bool)
+        """
+        if not os.path.exists(filepath):
+            logging.error(f"File not found: {filepath}")
+            return {
+                'people_count': 0,
+                'activities': [],
+                'scenery': '',
+                'talking_detected': False
+            }
+        
+        extension = os.path.splitext(filepath)[1].lower()
+        
+        # Initialize results
+        analysis_result = {
+            'people_count': 0,
+            'activities': [],
+            'scenery': '',
+            'talking_detected': False
+        }
+        
+        try:
+            if extension in ['.jpg', '.jpeg', '.png', '.heic']:
+                # Analyze image file
+                analysis_result.update(self._analyze_image(filepath))
+            elif extension in ['.mp4', '.mov', '.avi', '.mkv', '.webm']:
+                # Analyze video file
+                analysis_result.update(self._analyze_video(filepath))
+            else:
+                logging.warning(f"Unsupported file type for analysis: {extension}")
+                
+        except Exception as e:
+            logging.error(f"Error analyzing media file {filepath}: {e}\n")
+            logger.debug(f"Analysis result (partial) for {filepath}: {analysis_result}")
+
+        return analysis_result
+    
+    def _analyze_image(self, filepath):
+        """Analyze image file for people, activities, and scenery."""
+        result = {
+            'people_count': 0,
+            'activities': [],
+            'scenery': '',
+            'talking_detected': False  # Images don't have audio
+        }
+        
+        if not CV2_AVAILABLE:
+            logging.debug("OpenCV not available, skipping image analysis")
+            return result
+            
+        try:
+            # Load image using OpenCV
+            image = cv2.imread(filepath)
+            if image is None:
+                # Try loading with PIL for HEIC files and other formats OpenCV can't handle
+                if PIL_AVAILABLE:
+                    try:
+                        logging.debug(f"OpenCV failed, trying PIL for: {filepath}")
+                        pil_image = Image.open(filepath)
+                        
+                        # Convert PIL image to OpenCV format
+                        # Handle different modes (RGBA, RGB, L, etc.)
+                        if pil_image.mode == 'RGBA':
+                            # Convert RGBA to RGB with white background
+                            rgb_image = Image.new('RGB', pil_image.size, (255, 255, 255))
+                            rgb_image.paste(pil_image, mask=pil_image.split()[-1])  # Use alpha channel as mask
+                            pil_image = rgb_image
+                        elif pil_image.mode != 'RGB':
+                            pil_image = pil_image.convert('RGB')
+                        
+                        # Convert PIL RGB to OpenCV BGR
+                        image = cv2.cvtColor(np.array(pil_image), cv2.COLOR_RGB2BGR)
+                        logging.debug(f"Successfully loaded with PIL: {filepath}")
+                        
+                    except Exception as pil_error:
+                        logging.error(f"PIL also failed to load image {filepath}: {pil_error}")
+                        return result
+                else:
+                    logging.warning(f"Could not load image (OpenCV failed, PIL not available): {filepath}")
+                    return result
+            
+            # People detection using Haar Cascades (basic approach)
+            result['people_count'] = self._detect_people_in_frame(image)
+            
+            # Scene analysis
+            result['scenery'] = self._analyze_scene(image)
+            
+            # Activity detection (basic approach based on image content)
+            result['activities'] = self._detect_activities_in_image(image)
+            
+        except Exception as e:
+            logging.error(f"Error analyzing image {filepath}: {e}\n")
+            logging.debug(f"Analysis result (partial) for {filepath}: {result}")
+
+        return result
+    
+    def _analyze_video(self, filepath):
+        """Analyze video file for people, activities, scenery, and audio."""
+        result = {
+            'people_count': 0,
+            'activities': [],
+            'scenery': '',
+            'talking_detected': False
+        }
+        
+        try:
+            # Analyze video frames
+            if CV2_AVAILABLE:
+                video_result = self._analyze_video_frames(filepath)
+                result.update(video_result)
+            
+            # PERFORMANCE ENHANCEMENT: Audio analysis disabled for performance reasons
+            # Talking detection is not needed and consumes significant processing time
+            # Search for "AUDIO_ANALYSIS_DISABLED" to re-enable audio processing
+            # if LIBROSA_AVAILABLE:
+            #     audio_result = self._analyze_audio(filepath)
+            #     result['talking_detected'] = audio_result.get('talking_detected', False)
+            
+            # Set talking_detected to False since audio analysis is disabled
+            result['talking_detected'] = False  # AUDIO_ANALYSIS_DISABLED
+                
+        except Exception as e:
+            logging.error(f"Error analyzing video {filepath}: {e}\n")
+            logging.debug(f"Analysis result (partial) for {filepath}: {result}")
+
+        return result
+    
+    def _analyze_video_frames(self, filepath):
+        """Analyze video frames for visual content."""
+        result = {
+            'people_count': 0,
+            'activities': [],
+            'scenery': ''
+        }
+        
+        try:
+            cap = cv2.VideoCapture(filepath)
+            if not cap.isOpened():
+                logging.warning(f"Could not open video: {filepath}")
+                return result
+            
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            duration = frame_count / fps if fps > 0 else 0
+            
+            # Sample frames for analysis (every 2 seconds or max 10 frames)
+            sample_interval = max(1, int(fps * 2)) if fps > 0 else 30
+            max_samples = min(10, frame_count // sample_interval)
+            
+            people_counts = []
+            scenery_descriptions = []
+            activities_detected = set()
+            
+            for i in range(0, frame_count, sample_interval):
+                if len(people_counts) >= max_samples:
+                    break
+                    
+                cap.set(cv2.CAP_PROP_POS_FRAMES, i)
+                ret, frame = cap.read()
+                
+                if ret:
+                    # Analyze this frame
+                    people_count = self._detect_people_in_frame(frame)
+                    people_counts.append(people_count)
+                    
+                    scenery = self._analyze_scene(frame)
+                    if scenery:
+                        scenery_descriptions.append(scenery)
+                    
+                    activities = self._detect_activities_in_image(frame)
+                    activities_detected.update(activities)
+            
+            cap.release()
+            
+            # Aggregate results
+            result['people_count'] = max(people_counts) if people_counts else 0
+            result['activities'] = list(activities_detected)
+            result['scenery'] = self._aggregate_scenery_descriptions(scenery_descriptions)
+            
+        except Exception as e:
+            logging.error(f"Error analyzing video frames {filepath}: {e}\n")
+            logging.debug(f"Analysis result (partial) for {filepath}: {result}")
+
+        return result
+    
+    def _detect_people_in_frame(self, frame):
+        """Detect people in a single frame using Haar Cascades."""
+        
+        # PERFORMANCE ENHANCEMENT: People detection disabled for performance and accuracy reasons
+        # Return 0 immediately to skip processing. Search for "PEOPLE_DETECTION_DISABLED" to re-enable.
+        # TODO: Re-enable when more accurate people detection algorithm is available
+        return 0  # PEOPLE_DETECTION_DISABLED
+        
+        # Original people detection code (commented out for performance):
+        # try:
+        #     # Convert to grayscale for face detection
+        #     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        #     
+        #     # Use Haar Cascade for face detection (proxy for people)
+        #     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        #     faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+        #     
+        #     # Also try upper body detection
+        #     body_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_upperbody.xml')
+        #     bodies = body_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=3, minSize=(50, 50))
+        #     
+        #     # Take the maximum of face or body detection
+        #     people_count = max(len(faces), len(bodies))
+        #     
+        #     logging.debug(f"Detected {len(faces)} faces and {len(bodies)} bodies, count: {people_count}")
+        #     return people_count
+        #     
+        # except Exception as e:
+        #     logging.error(f"Error detecting people in frame: {e}\n")
+        #     return 0
+    
+    def _analyze_scene(self, frame):
+        """Analyze scene content to determine scenery type."""
+        try:
+            # Basic scene analysis based on color distribution and edges
+            height, width = frame.shape[:2]
+            
+            # Convert to HSV for better color analysis
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            
+            # Analyze color distribution
+            hist_h = cv2.calcHist([hsv], [0], None, [180], [0, 180])
+            hist_s = cv2.calcHist([hsv], [1], None, [256], [0, 256])
+            hist_v = cv2.calcHist([hsv], [2], None, [256], [0, 256])
+            
+            # Edge detection for structure analysis
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            edges = cv2.Canny(gray, 50, 150)
+            edge_density = np.sum(edges > 0) / (height * width)
+            
+            # Basic scenery classification based on color and structure
+            scenery_type = self._classify_scenery(hist_h, hist_s, hist_v, edge_density)
+            
+            return scenery_type
+            
+        except Exception as e:
+            logging.error(f"Error analyzing scene: {e}\n")
+            return ""
+    
+    def _classify_scenery(self, hist_h, hist_s, hist_v, edge_density):
+        """Classify scenery based on color histograms and edge density."""
+        try:
+            # Normalize histograms
+            hist_h = hist_h.flatten() / np.sum(hist_h)
+            hist_s = hist_s.flatten() / np.sum(hist_s)
+            hist_v = hist_v.flatten() / np.sum(hist_v)
+            
+            # Check for dominant colors
+            green_range = np.sum(hist_h[35:85])  # Green hues
+            blue_range = np.sum(hist_h[100:130])  # Blue hues
+            
+            # Check saturation and brightness
+            high_saturation = np.sum(hist_s[128:])  # High saturation
+            low_brightness = np.sum(hist_v[:64])   # Low brightness
+            high_brightness = np.sum(hist_v[192:]) # High brightness
+            
+            # Classification logic
+            if blue_range > 0.3 and high_saturation > 0.4:
+                return "waterscape"
+            elif green_range > 0.4 and high_saturation > 0.3:
+                return "nature/outdoor"
+            elif edge_density > 0.15:  # High edge density suggests buildings/urban
+                return "urban/architectural"
+            elif low_brightness > 0.5:
+                return "indoor/low-light"
+            elif high_brightness > 0.6 and high_saturation < 0.2:
+                return "bright/overexposed"
+            else:
+                return "general"
+                
+        except Exception as e:
+            logging.error(f"Error classifying scenery: {e}")
+            return "unknown"
+    
+    def _detect_activities_in_image(self, frame):
+        """Detect activities based on image content."""
+        activities = []
+        
+        try:
+            # Basic activity detection based on scene analysis
+            scenery = self._analyze_scene(frame)
+            
+            if "waterscape" in scenery:
+                activities.extend(["swimming", "boating", "beach"])
+            elif "nature" in scenery:
+                activities.extend(["hiking", "sightseeing", "outdoor"])
+            elif "urban" in scenery:
+                activities.extend(["sightseeing", "walking", "tourism"])
+            elif "indoor" in scenery:
+                activities.extend(["indoor", "dining", "visiting"])
+                
+            # Additional activity detection could be added here
+            # (e.g., object detection for specific activities)
+            
+        except Exception as e:
+            logging.error(f"Error detecting activities: {e}")
+            
+        return activities
+    
+    def _analyze_audio(self, filepath):
+        """Analyze audio content for talking detection."""
+        result = {'talking_detected': False}
+        
+        try:
+            # Check if file exists
+            if not os.path.exists(filepath):
+                logging.warning(f"Audio file not found: {filepath}")
+                return result
+            
+            # Get file extension to determine approach
+            extension = os.path.splitext(filepath)[1].lower()
+            
+            # For video files, we need to be more careful with audio loading
+            if extension in ['.mp4', '.mov', '.avi', '.mkv', '.webm']:
+                # Check if video has audio streams first
+                if not self._has_audio_stream(filepath):
+                    logging.debug(f"No audio streams detected in video: {filepath}")
+                    return result
+                
+                # Always try ffmpeg first for video files to avoid librosa warnings
+                audio_data = self._extract_audio_from_video(filepath)
+                if audio_data is None:
+                    logging.debug(f"Could not extract audio from video: {filepath}")
+                    return result
+                y, sr = audio_data
+            else:
+                # For audio files, use librosa directly with warning suppression
+                try:
+                    import warnings
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        y, sr = librosa.load(filepath, duration=30, sr=None)  # Preserve original sample rate
+                except Exception as load_error:
+                    logging.warning(f"Could not load audio file {filepath}: {load_error}")
+                    return result
+            
+            if len(y) == 0:
+                logging.debug(f"Empty audio data for: {filepath}")
+                return result
+            
+            # Voice activity detection using spectral features
+            talking_detected = self._detect_voice_activity(y, sr)
+            result['talking_detected'] = talking_detected
+            
+        except Exception as e:
+            logging.error(f"Error analyzing audio {filepath}: {e}")
+            
+        return result
+    
+    def _has_audio_stream(self, filepath):
+        """Check if video file has audio streams."""
+        try:
+            import ffmpeg
+            probe = ffmpeg.probe(filepath, v='quiet')
+            audio_streams = [stream for stream in probe['streams'] if stream['codec_type'] == 'audio']
+            return len(audio_streams) > 0
+        except Exception:
+            # If we can't probe, assume it might have audio
+            return True
+
+    def _extract_audio_from_video(self, filepath):
+        """Extract audio from video file using multiple fallback methods."""
+        try:
+            # Method 1: Use ffmpeg to extract audio first (most reliable for MP4)
+            try:
+                import ffmpeg
+                import tempfile
+                import warnings
+                
+                # Create temporary audio file
+                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_audio:
+                    temp_audio_path = temp_audio.name
+                
+                try:
+                    # Check if video has audio streams first
+                    probe = ffmpeg.probe(filepath)
+                    audio_streams = [stream for stream in probe['streams'] if stream['codec_type'] == 'audio']
+                    
+                    if not audio_streams:
+                        logging.debug(f"No audio streams found in video: {filepath}")
+                        return None
+                    
+                    # Extract audio using ffmpeg (force PCM format for compatibility)
+                    (
+                        ffmpeg
+                        .input(filepath)
+                        .output(
+                            temp_audio_path, 
+                            acodec='pcm_s16le',  # Force PCM format
+                            ac=1,                # Mono
+                            ar=22050,           # Standard sample rate
+                            t=30,               # First 30 seconds
+                            loglevel='quiet'    # Suppress ffmpeg output
+                        )
+                        .overwrite_output()
+                        .run(capture_stdout=True, capture_stderr=True, quiet=True)
+                    )
+                    
+                    # Load the extracted audio with suppressed warnings
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        y, sr = librosa.load(temp_audio_path, sr=22050)
+                    
+                    # Clean up temporary file
+                    os.unlink(temp_audio_path)
+                    
+                    if len(y) > 0:
+                        logging.debug(f"Successfully extracted audio using ffmpeg: {filepath}")
+                        return y, sr
+                    else:
+                        logging.debug(f"Empty audio extracted from: {filepath}")
+                        return None
+                        
+                except Exception as ffmpeg_error:
+                    # Clean up temporary file if it exists
+                    if os.path.exists(temp_audio_path):
+                        os.unlink(temp_audio_path)
+                    logging.debug(f"ffmpeg extraction failed for {filepath}: {ffmpeg_error}")
+                    
+            except ImportError:
+                logging.debug("ffmpeg-python not available for audio extraction")
+            
+            # Method 2: Try librosa with audioread backend (suppress warnings)
+            try:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    # Force audioread backend and suppress all warnings
+                    old_environ = os.environ.get('LIBROSA_CACHE_DIR')
+                    os.environ['LIBROSA_CACHE_DIR'] = '/tmp'  # Use tmp for cache
+                    
+                    y, sr = librosa.load(filepath, duration=30, sr=22050, res_type='kaiser_fast')
+                    
+                    # Restore environment
+                    if old_environ:
+                        os.environ['LIBROSA_CACHE_DIR'] = old_environ
+                    elif 'LIBROSA_CACHE_DIR' in os.environ:
+                        del os.environ['LIBROSA_CACHE_DIR']
+                    
+                if len(y) > 0:
+                    logging.debug(f"Successfully extracted audio using librosa+audioread: {filepath}")
+                    return y, sr
+            except Exception as e:
+                logging.debug(f"librosa+audioread failed for {filepath}: {e}")
+            
+            # Method 3: Try with different librosa parameters
+            try:
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    # Try with offset to skip potential problematic header
+                    y, sr = librosa.load(filepath, duration=25, offset=2.0, sr=22050, mono=True)
+                    
+                if len(y) > 0:
+                    logging.debug(f"Successfully extracted audio using librosa offset method: {filepath}")
+                    return y, sr
+            except Exception as e:
+                logging.debug(f"librosa offset method failed for {filepath}: {e}")
+            
+            # All methods failed
+            logging.debug(f"All audio extraction methods failed for: {filepath}")
+            return None
+            
+        except Exception as e:
+            logging.error(f"Error in audio extraction from {filepath}: {e}")
+            return None
+    
+    def _detect_voice_activity(self, audio, sample_rate):
+        """Detect voice activity in audio signal."""
+        
+        # PERFORMANCE ENHANCEMENT: Talking detection disabled for performance and accuracy reasons
+        # Return False immediately to skip processing. Search for "TALKING_DETECTION_DISABLED" to re-enable.
+        # TODO: Re-enable when more accurate voice activity detection algorithm is available
+        return False  # TALKING_DETECTION_DISABLED
+        
+        # Original voice activity detection code (commented out for performance):
+        # try:
+        #     # Compute spectral features
+        #     spectral_centroids = librosa.feature.spectral_centroid(y=audio, sr=sample_rate)[0]
+        #     spectral_rolloff = librosa.feature.spectral_rolloff(y=audio, sr=sample_rate)[0]
+        #     zero_crossing_rate = librosa.feature.zero_crossing_rate(audio)[0]
+        #     
+        #     # Compute MFCC features (useful for voice detection)
+        #     mfccs = librosa.feature.mfcc(y=audio, sr=sample_rate, n_mfcc=13)
+        #     
+        #     # Voice activity detection heuristics
+        #     # Voice typically has:
+        #     # - Moderate spectral centroid (300-3000 Hz)
+        #     # - Regular patterns in MFCCs
+        #     # - Moderate zero crossing rate
+        #     
+        #     avg_centroid = np.mean(spectral_centroids)
+        #     avg_zcr = np.mean(zero_crossing_rate)
+        #     mfcc_variance = np.var(mfccs, axis=1)
+        #     
+        #     # Heuristic thresholds for voice detection
+        #     voice_detected = (
+        #         300 < avg_centroid < 3000 and  # Typical voice frequency range
+        #         0.01 < avg_zcr < 0.3 and       # Moderate zero crossing rate
+        #         np.mean(mfcc_variance) > 50    # Sufficient MFCC variance
+        #     )
+        #     
+        #     logging.debug(f"Voice detection - Centroid: {avg_centroid:.2f}, ZCR: {avg_zcr:.4f}, Voice: {voice_detected}")
+        #     
+        #     return voice_detected
+        #     
+        # except Exception as e:
+        #     logging.error(f"Error detecting voice activity: {e}")
+        #     return False
+    
+    def _aggregate_scenery_descriptions(self, descriptions):
+        """Aggregate multiple scenery descriptions into a single description."""
+        if not descriptions:
+            return ""
+        
+        # Count occurrences of each scenery type
+        scenery_counts = {}
+        for desc in descriptions:
+            scenery_counts[desc] = scenery_counts.get(desc, 0) + 1
+        
+        # Return the most common scenery type
+        if scenery_counts:
+            return max(scenery_counts.items(), key=lambda x: x[1])[0]
+        return ""
+
+    def _run_exiftool(self, filepath):
+        result = subprocess.run(
+            ['exifTool', '-n', '-j', filepath],
+            capture_output=True, text=True
+        )
+        metadata = json.loads(result.stdout)
+        # logging.debug(f"ExifTool output for {filepath}: {metadata}")
+
+        if not metadata or 'Error' in metadata[0]:
+            logging.error(f"Error reading metadata from {filepath}: {metadata[0].get('Error', 'Unknown error')}")
+            return None
+
+        # pretty print metadata for debugging
+        # print(json.dumps(metadata, indent=3))
+        # input("Paused for debugging. Press Enter to continue...")
+
+        fileExt = os.path.splitext(filepath)[1].lstrip(".").lower()
+
+        Latitude  = metadata[0].get("GPSLatitude", "N/A") if "GPSLatitude" in metadata[0] else None
+        Longitude = metadata[0].get("GPSLongitude", "N/A") if "GPSLongitude" in metadata[0] else None
+
+        # -------- convert_exif_to_iso8601() is a method within _run_exiftool() to convert exif datetime to ISO 8601-------------
+        def convert_exif_to_iso8601(exif_datetime_str):
+            """
+            Convert exiftool datetime format to ISO 8601 format.
+            
+            Input formats:
+            - YYYY:MM:DD hh:mm:ss[.###]±HH:MM
+            - YYYY:MM:DD hh:mm:ss[.###]Z
+            - YYYY:MM:DD hh:mm:ss[.###]
+            
+            Output format: YYYY-MM-DDThh:mm:ss[.###]±HH:MM
+            """
+            if not exif_datetime_str or exif_datetime_str == "N/A":
+                return None
+                
+            # Ensure input is a string
+            if not isinstance(exif_datetime_str, str):
+                exif_datetime_str = str(exif_datetime_str)
+                
+            try:
+                # Handle timezone suffixes
+                has_timezone = False
+                timezone_part = ""
+                
+                if exif_datetime_str.endswith('Z'):
+                    # UTC timezone
+                    exif_datetime_str = exif_datetime_str[:-1]
+                    timezone_part = "+00:00"
+                    has_timezone = True
+                elif '+' in exif_datetime_str:
+                    # Positive timezone offset
+                    datetime_part, tz_part = exif_datetime_str.rsplit('+', 1)
+                    exif_datetime_str = datetime_part
+                    timezone_part = f"+{tz_part}"
+                    has_timezone = True
+                elif exif_datetime_str.count('-') > 2:
+                    # Negative timezone offset (more than 2 dashes means timezone)
+                    datetime_part, tz_part = exif_datetime_str.rsplit('-', 1)
+                    # Check if the last part looks like timezone (HH:MM or HH.MM)
+                    if ':' in tz_part or '.' in tz_part:
+                        exif_datetime_str = datetime_part
+                        timezone_part = f"-{tz_part}"
+                        has_timezone = True
+                
+                # Convert YYYY:MM:DD to YYYY-MM-DD and add T separator
+                # Format: YYYY:MM:DD hh:mm:ss[.###] -> YYYY-MM-DDThh:mm:ss[.###]
+                iso_datetime = exif_datetime_str.replace(':', '-', 2).replace(' ', 'T', 1)
+                
+                # Add timezone if present
+                if has_timezone:
+                    # Ensure timezone format is HH:MM not HH.MM
+                    timezone_part = timezone_part.replace('.', ':')
+                    iso_datetime += timezone_part
+                
+                return iso_datetime
+            # -----------------------------------------------------------------------------------------
+                
+            except Exception as e:
+                logger.debug(f"Error converting datetime '{exif_datetime_str}' to ISO 8601: {e}")
+                return None
+
+        CreateDate = None
+        
+        # New priority-based date extraction logic:
+        # 1. SubSecDateTimeOriginal (highest precision with subseconds)
+        # 2. SubSecCreateDate (high precision with subseconds)
+        # 3. CreationDate (standard creation date)
+        # 4. SubSecModifyDate (modification date with subseconds)
+        # 5. FileModifyDate (file system modification date with timezone)
+        
+        subsec_datetime_original_raw = metadata[0].get("SubSecDateTimeOriginal", None)
+        subsec_create_date_raw = metadata[0].get("SubSecCreateDate", None)
+        creation_date_raw = metadata[0].get("CreationDate", None)
+        subsec_modify_date_raw = metadata[0].get("SubSecModifyDate", None)
+        file_modify_date_raw = metadata[0].get("FileModifyDate", None)
+        
+        # Keep additional fields for fallback and debugging
+        modify_date_raw = metadata[0].get("ModifyDate", None)
+        create_date_raw = metadata[0].get("CreateDate", None)
+        datetime_original_raw = metadata[0].get("DateTimeOriginal", None)
+        gps_datetime_raw = metadata[0].get("GPSDateTime", None)
+        
+        # Check SubSecDateTimeOriginal first (highest priority - most precise with subseconds)
+        # This is used for HEIC, JPEG, MOV, PNG
+        if subsec_datetime_original_raw and subsec_datetime_original_raw != "N/A":
+            CreateDate = convert_exif_to_iso8601(subsec_datetime_original_raw)
+            if CreateDate:
+                logger.debug(f"Using SubSecDateTimeOriginal as CreateDate: {CreateDate}")
+        
+        # If SubSecDateTimeOriginal is None, check SubSecCreateDate
+        # DJI MP4 files does not have DateTimeOriginal, but has CreateDate
+        elif subsec_create_date_raw and subsec_create_date_raw != "N/A":
+            CreateDate = convert_exif_to_iso8601(subsec_create_date_raw)
+            if CreateDate:
+                logger.debug(f"Using SubSecCreateDate as CreateDate: {CreateDate}")
+        
+        # If SubSecCreateDate is None, check CreationDate
+        elif creation_date_raw and creation_date_raw != "N/A":
+            CreateDate = convert_exif_to_iso8601(creation_date_raw)
+            if CreateDate:
+                logger.debug(f"Using CreationDate as CreateDate: {CreateDate}")
+        
+        # ---------------------------------------------
+        # If CreateDate is not None, skip the raw data processing and go to line 960
+        if CreateDate is not None:
+            logger.debug(f"CreateDate already found, skipping raw data processing: {CreateDate}")
+        else:
+            # If CreateDate is None, process raw data from exiftool output
+            logger.debug(f"CreateDate is None, processing raw data from exiftool output")
+            
+            # Define the fields to check in priority order
+            raw_date_fields = [
+                'subsec_modify_date_raw',
+                'file_modify_date_raw', 
+                'datetime_original_raw',
+                'create_date_raw',
+                'modify_date_raw',
+                'gps_datetime_raw'
+            ]
+            
+            # Get raw data values from local variables (already extracted above)
+            raw_date_values = {
+                'subsec_modify_date_raw': subsec_modify_date_raw,
+                'file_modify_date_raw': file_modify_date_raw,
+                'datetime_original_raw': datetime_original_raw,
+                'create_date_raw': create_date_raw,
+                'modify_date_raw': modify_date_raw,
+                'gps_datetime_raw': gps_datetime_raw
+            }
+            
+            # Find offsetTime from any of the raw data that has it
+            saved_offset_time = None
+            for field_name, raw_value in raw_date_values.items():
+                if raw_value and raw_value != "N/A":
+                    # Ensure raw_value is a string before calling string methods
+                    raw_value_str = str(raw_value) if not isinstance(raw_value, str) else raw_value
+                    # Check if this raw value contains offsetTime (timezone info)
+                    # ExifTool format: YYYY:MM:DD hh:mm:ss[.###](+|-)##.## or ##:##
+                    # Look for + or - after the time part (after space and colon patterns)
+                    has_timezone = False
+                    if ':' in raw_value_str and ' ' in raw_value_str:
+                        time_part = raw_value_str.split(' ', 1)[-1]  # Get part after space
+                        # Check for timezone offset in the time portion
+                        if '+' in time_part or '-' in time_part:
+                            has_timezone = True
+                    
+                    if has_timezone:
+                        logger.debug(f"Found offsetTime in {field_name}: {raw_value_str}")
+                        # Extract the offset part from the time portion
+                        time_part = raw_value_str.split(' ', 1)[-1]  # Get part after space
+                        if '+' in time_part:
+                            saved_offset_time = '+' + time_part.split('+')[-1]
+                        elif '-' in time_part:
+                            saved_offset_time = '-' + time_part.split('-')[-1]
+                        logger.debug(f"Extracted offsetTime: {saved_offset_time}")
+                        break
+            
+            # ---------------------------------------------
+            # For DJI files, if DateTimeOriginal or CreateDate is not available, we need to handle specially (below)
+            # Since DJI file does not have correct 'Create Date', 'Modify Date', and 'File Modification Date/Time' is PC system time,
+            # For DJI files, we cannot use these field, instead we use its original file name 'DJI_YYYYMMDDHHMMSS_xxxx' to determine the CreateDate.
+
+            # If this filepath is DJI_YYYYMMDDHHMMSS_xxxx format, try to extract date from the origianl filename
+            import re
+            dji_filename_pattern = r'DJI_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})_'
+            filename = os.path.basename(filepath)
+            dji_match = re.search(dji_filename_pattern, filename)
+            if dji_match:
+                # Extract date components from the filename
+                year = dji_match.group(1)
+                month = dji_match.group(2)
+                day = dji_match.group(3)
+                hour = dji_match.group(4)
+                minute = dji_match.group(5)
+                second = dji_match.group(6)
+                # Construct the CreateDate from the extracted components
+                CreateDate = f"{year}-{month}-{day}T{hour}:{minute}:{second}.000"+saved_offset_time if saved_offset_time else ""
+                logger.debug(f"Extracted CreateDate {CreateDate} from DJI {filename}")
+            else:
+                # If not DJI file, proceed with normal raw data processing as logic below.
+                # Process non-empty raw data and convert to ISO 8601
+                candidate_dates = []
+                for field_name in raw_date_fields:
+                    raw_value = raw_date_values.get(field_name)
+                    if raw_value and raw_value != "N/A":
+                        # Ensure raw_value is a string before calling string methods
+                        raw_value_str = str(raw_value) if not isinstance(raw_value, str) else raw_value
+                        # If raw data doesn't have offsetTime but we found one, add it
+                        processed_value = raw_value_str
+                        
+                        # Check if this value already has timezone info
+                        has_existing_timezone = False
+                        if ':' in raw_value_str and ' ' in raw_value_str:
+                            time_part = raw_value_str.split(' ', 1)[-1]  # Get part after space
+                            # Check for timezone offset in the time portion
+                            if '+' in time_part or '-' in time_part:
+                                has_existing_timezone = True
+                        
+                        # Add saved offset time if this value doesn't have timezone and we found one
+                        if saved_offset_time and not has_existing_timezone:
+                            processed_value = raw_value_str + saved_offset_time
+                            logger.debug(f"Added offsetTime to {field_name}: {processed_value}")
+                        
+                        # Convert to ISO 8601
+                        iso_date = convert_exif_to_iso8601(processed_value)
+                        if iso_date:
+                            candidate_dates.append((field_name, iso_date, processed_value))
+                            logger.debug(f"Converted {field_name} to ISO 8601: {iso_date}")
+                
+                # Find the oldest (earliest) date as CreateDate
+                if candidate_dates:
+                    # Sort by ISO 8601 date string (chronologically)
+                    candidate_dates.sort(key=lambda x: x[1])
+                    earliest_field, earliest_date, earliest_raw = candidate_dates[0]
+                    CreateDate = earliest_date
+                    logger.debug(f"Selected earliest date from {earliest_field}: {CreateDate} (raw: {earliest_raw})")
+                else:
+                    logger.debug("No valid dates found in raw data processing")
+
+        # ---------------------------------------------
+        
+        # If no date found, log all available date fields for debugging and stop
+        if not CreateDate:
+            available_dates = {
+                field: metadata[0].get(field, 'N/A') 
+                for field in ['SubSecDateTimeOriginal', 'SubSecCreateDate', 'CreationDate', 'SubSecModifyDate', 'FileModifyDate']
+                if field in metadata[0]
+            }
+            # Display debug statement and stop for user to check the problem
+            logger.error(f"FATAL: No usable creation date found for {filepath}. Please check the problem!")
+            logger.error(f"Available date fields: {available_dates}")
+            logger.error(f"Raw date values checked: subsec_modify_date_raw={subsec_modify_date_raw}, file_modify_date_raw={file_modify_date_raw}, datetime_original_raw={datetime_original_raw}, create_date_raw={create_date_raw}, modify_date_raw={modify_date_raw}, gps_datetime_raw={gps_datetime_raw}")
+
+            # Only for debugging, uncomment below to pause execution
+            # Stop execution and let user check the problem
+            # os.exit(0)
+            return None
+
+        # Store individual date fields for debugging analysis
+        SubSecDateTimeOriginal = subsec_datetime_original_raw if subsec_datetime_original_raw else None
+        SubSecCreateDate = subsec_create_date_raw if subsec_create_date_raw else None
+        CreationDate = creation_date_raw if creation_date_raw else None
+        SubSecModifyDate = subsec_modify_date_raw if subsec_modify_date_raw else None
+        FileModifyDate = file_modify_date_raw if file_modify_date_raw else None
+        ModifyDate = modify_date_raw if modify_date_raw else None
+        GPSDateTime = gps_datetime_raw if gps_datetime_raw else None
+        DateTimeOriginal = datetime_original_raw if datetime_original_raw else None
+
+        # Log all date fields for analysis (new priority-based extraction with SubSec fields first)
+        logger.debug(f"File: {filepath}\n"
+                    f"  Final CreateDate (ISO 8601): {CreateDate}\n\n"
+                    f"  Priority order - SubSecDateTimeOriginal: {SubSecDateTimeOriginal},\n"
+                    f"  SubSecCreateDate: {SubSecCreateDate},\n"
+                    f"  CreationDate: {CreationDate},\n"
+                    f"  SubSecModifyDate: {SubSecModifyDate},\n"
+                    f"  FileModifyDate: {FileModifyDate},\n"
+                    f"  ModifyDate: {ModifyDate},\n"
+                    f"  CreateDate: {create_date_raw},\n"
+                    f"  DateTimeOriginal: {DateTimeOriginal},\n"
+                    f"  GPSDateTime: {GPSDateTime}\n")
+
+        dummy_exif_data = {
+            "SourceFile": filepath,
+            "FileName": os.path.basename(filepath),
+            "FileTypeExtension": os.path.splitext(filepath)[1].lstrip(".").lower(),
+            "Latitude": Latitude,
+            "Longitude": Longitude,
+            "CreateDate": CreateDate,
+        }
+
+        #logger.debug(f"dummy_exif_data: {dummy_exif_data}\n")
+        #input("Paused for debugging. Press Enter to continue...")
+
+        return dummy_exif_data
+
+    def extract_metadata(self, filepath):
+        fileType = 'Undefined'
+        extension = os.path.splitext(filepath)[1].lower()
+        if extension in [".jpg", ".jpeg", ".png", ".heic"]:
+            fileType = 'Image'
+        elif extension in [".mp4", ".mov"]:
+            fileType = 'Video'
+        else:
+            logging.warning(f"Unsupported file type for {filepath}. Skipping.")
+            return None
+        
+        exif_data = self._run_exiftool(filepath)
+        if not exif_data:
+            return None
+
+        stat_info = os.stat(filepath)
+        base_metadata = {
+            "filepath": os.path.abspath(filepath),   # exif_data.get("SourceFile", filepath),
+            "filename": os.path.basename(filepath),  # exif_data.get("FileName", os.path.basename(filepath)),
+            "file_extension": exif_data.get("FileTypeExtension", extension),
+            "file_type": fileType,
+            "size": stat_info.st_size,
+            "creation_time": exif_data.get("CreateDate", None),
+            "latitude": exif_data.get("Latitude", None),
+            "longitude": exif_data.get("Longitude", None),
+        }
+        return base_metadata
+
+    def haversine(self, lat1, lon1, lat2, lon2):
+        R = 6371  # Earth radius in km
+        dlat = radians(lat2 - lat1)
+        dlon = radians(lon2 - lon1)
+        a = sin(dlat/2)**2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon/2)**2
+        c = 2 * atan2(sqrt(a), sqrt(1 - a))
+        return R * c
+
+    def get_geo_from_coordinates(self, latitude, longitude):
+        if not self.geo_data:
+            return None
+        try:
+            # Use ExifTool to reverse-geocode using the geo.list file
+            # This requires a properly formatted geo.list file.
+            # The command is hypothetical and depends on ExifTool's capabilities with custom geo files.
+            # A more direct approach might be to parse geo.list in Python and do a nearest-neighbor search.
+            # For this example, we simulate the expected output.
+            # In a real scenario, one would parse geo.list and find the closest location.
+
+            # This is a placeholder for what would be a call to a geo lookup function.
+            # e.g., return self._find_location_in_geolist(latitude, longitude)
+            logging.debug(f"Looking up geo data for lat={latitude}, lon={longitude}")
+            closest = min(self.geo_data, key=lambda g: self.haversine(latitude, longitude, g[0], g[1]))
+            logging.debug(f"Closest geo data found: {closest}")
+
+            # 0:lat, 1:lon, 2:city_en, 3:city_zn, 4:region_en, 5:region_zn, 6:subregion_en, 7:subregion_zn, 8:country_code, 9:country_en, 10:country_zn, 11:timezone
+            return {
+                "latitude": latitude,   # closest[0],
+                "longitude": longitude, # closest[1],
+                "city_en": closest[2],
+                "city_zh": closest[3],
+                "region_en": closest[4],
+                "region_zh": closest[5],
+                "subregion_en": closest[6],
+                "subregion_zh": closest[7],
+                "country_code": closest[8],
+                "country_en": closest[9],
+                "country_zh": closest[10],
+                "timezone": closest[11],
+                "distance_km": round(self.haversine(latitude, longitude, closest[0], closest[1]), 2)
+            }
+        except Exception as e:
+            logging.error(f"Error getting geo from coordinates: {e}")
+            return None
