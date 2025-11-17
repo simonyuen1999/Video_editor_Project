@@ -141,7 +141,7 @@ class Media(db.Model):
     filepath = db.Column(db.String(500), unique=True, nullable=False)
     filename = db.Column(db.String(200), nullable=False)
     file_extension = db.Column(db.String(10), nullable=False)
-    file_type = db.Column(db.String(50))
+    media_type = db.Column(db.String(50))
     size = db.Column(db.Integer)
     creation_time = db.Column(db.String(50))
     latitude = db.Column(db.Float)
@@ -164,7 +164,7 @@ class Media(db.Model):
             'filepath': self.filepath,
             'filename': self.filename,
             'file_extension': self.file_extension,
-            'file_type': self.file_type,
+            'media_type': self.media_type,
             'size': self.size,
             'creation_time': self.creation_time,
             'latitude': self.latitude,

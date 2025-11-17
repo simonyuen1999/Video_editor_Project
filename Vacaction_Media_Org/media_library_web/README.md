@@ -41,7 +41,7 @@ CREATE TABLE media_files (
     filepath TEXT UNIQUE NOT NULL,
     filename TEXT NOT NULL,
     file_extension TEXT NOT NULL,
-    file_type TEXT,
+    media_type TEXT,
     size INTEGER,
     creation_time TEXT,
     latitude REAL,

@@ -806,308 +806,228 @@ class MetadataExtractor:
         return ""
 
     def _run_exiftool(self, filepath):
-        result = subprocess.run(
-            ['exifTool', '-n', '-j', filepath],
-            capture_output=True, text=True
-        )
-        metadata = json.loads(result.stdout)
-        # logging.debug(f"ExifTool output for {filepath}: {metadata}")
-
-        if not metadata or 'Error' in metadata[0]:
-            logging.error(f"Error reading metadata from {filepath}: {metadata[0].get('Error', 'Unknown error')}")
-            return None
-
-        # pretty print metadata for debugging
-        # print(json.dumps(metadata, indent=3))
-        # input("Paused for debugging. Press Enter to continue...")
-
-        fileExt = os.path.splitext(filepath)[1].lstrip(".").lower()
-
-        Latitude  = metadata[0].get("GPSLatitude", "N/A") if "GPSLatitude" in metadata[0] else None
-        Longitude = metadata[0].get("GPSLongitude", "N/A") if "GPSLongitude" in metadata[0] else None
-
-        # -------- convert_exif_to_iso8601() is a method within _run_exiftool() to convert exif datetime to ISO 8601-------------
-        def convert_exif_to_iso8601(exif_datetime_str):
-            """
-            Convert exiftool datetime format to ISO 8601 format.
+        """Run ExifTool to extract EXIF metadata from a file."""
+        try:
+            cmd = ['exiftool', '-j', '-n',
+                   '-CreateDate', '-FileInodeChangeDate', 
+                   '-GPSAltitude', '-GPSLatitude', str(filepath)]
             
-            Input formats:
-            - YYYY:MM:DD hh:mm:ss[.###]±HH:MM
-            - YYYY:MM:DD hh:mm:ss[.###]Z
-            - YYYY:MM:DD hh:mm:ss[.###]
+            result = subprocess.run(cmd, capture_output=True, text=True)
             
-            Output format: YYYY-MM-DDThh:mm:ss[.###]±HH:MM
-            """
-            if not exif_datetime_str or exif_datetime_str == "N/A":
-                return None
-                
-            # Ensure input is a string
-            if not isinstance(exif_datetime_str, str):
-                exif_datetime_str = str(exif_datetime_str)
-                
-            try:
-                # Handle timezone suffixes
-                has_timezone = False
-                timezone_part = ""
-                
-                if exif_datetime_str.endswith('Z'):
-                    # UTC timezone
-                    exif_datetime_str = exif_datetime_str[:-1]
-                    timezone_part = "+00:00"
-                    has_timezone = True
-                elif '+' in exif_datetime_str:
-                    # Positive timezone offset
-                    datetime_part, tz_part = exif_datetime_str.rsplit('+', 1)
-                    exif_datetime_str = datetime_part
-                    timezone_part = f"+{tz_part}"
-                    has_timezone = True
-                elif exif_datetime_str.count('-') > 2:
-                    # Negative timezone offset (more than 2 dashes means timezone)
-                    datetime_part, tz_part = exif_datetime_str.rsplit('-', 1)
-                    # Check if the last part looks like timezone (HH:MM or HH.MM)
-                    if ':' in tz_part or '.' in tz_part:
-                        exif_datetime_str = datetime_part
-                        timezone_part = f"-{tz_part}"
-                        has_timezone = True
-                
-                # Convert YYYY:MM:DD to YYYY-MM-DD and add T separator
-                # Format: YYYY:MM:DD hh:mm:ss[.###] -> YYYY-MM-DDThh:mm:ss[.###]
-                iso_datetime = exif_datetime_str.replace(':', '-', 2).replace(' ', 'T', 1)
-                
-                # Add timezone if present
-                if has_timezone:
-                    # Ensure timezone format is HH:MM not HH.MM
-                    timezone_part = timezone_part.replace('.', ':')
-                    iso_datetime += timezone_part
-                
-                return iso_datetime
-            # -----------------------------------------------------------------------------------------
-                
-            except Exception as e:
-                logger.debug(f"Error converting datetime '{exif_datetime_str}' to ISO 8601: {e}")
-                return None
-
-        CreateDate = None
-        
-        # New priority-based date extraction logic:
-        # 1. SubSecDateTimeOriginal (highest precision with subseconds)
-        # 2. SubSecCreateDate (high precision with subseconds)
-        # 3. CreationDate (standard creation date)
-        # 4. SubSecModifyDate (modification date with subseconds)
-        # 5. FileModifyDate (file system modification date with timezone)
-        
-        subsec_datetime_original_raw = metadata[0].get("SubSecDateTimeOriginal", None)
-        subsec_create_date_raw = metadata[0].get("SubSecCreateDate", None)
-        creation_date_raw = metadata[0].get("CreationDate", None)
-        subsec_modify_date_raw = metadata[0].get("SubSecModifyDate", None)
-        file_modify_date_raw = metadata[0].get("FileModifyDate", None)
-        
-        # Keep additional fields for fallback and debugging
-        modify_date_raw = metadata[0].get("ModifyDate", None)
-        create_date_raw = metadata[0].get("CreateDate", None)
-        datetime_original_raw = metadata[0].get("DateTimeOriginal", None)
-        gps_datetime_raw = metadata[0].get("GPSDateTime", None)
-        
-        # Check SubSecDateTimeOriginal first (highest priority - most precise with subseconds)
-        # This is used for HEIC, JPEG, MOV, PNG
-        if subsec_datetime_original_raw and subsec_datetime_original_raw != "N/A":
-            CreateDate = convert_exif_to_iso8601(subsec_datetime_original_raw)
-            if CreateDate:
-                logger.debug(f"Using SubSecDateTimeOriginal as CreateDate: {CreateDate}")
-        
-        # If SubSecDateTimeOriginal is None, check SubSecCreateDate
-        # DJI MP4 files does not have DateTimeOriginal, but has CreateDate
-        elif subsec_create_date_raw and subsec_create_date_raw != "N/A":
-            CreateDate = convert_exif_to_iso8601(subsec_create_date_raw)
-            if CreateDate:
-                logger.debug(f"Using SubSecCreateDate as CreateDate: {CreateDate}")
-        
-        # If SubSecCreateDate is None, check CreationDate
-        elif creation_date_raw and creation_date_raw != "N/A":
-            CreateDate = convert_exif_to_iso8601(creation_date_raw)
-            if CreateDate:
-                logger.debug(f"Using CreationDate as CreateDate: {CreateDate}")
-        
-        # ---------------------------------------------
-        # If CreateDate is not None, skip the raw data processing and go to line 960
-        if CreateDate is not None:
-            logger.debug(f"CreateDate already found, skipping raw data processing: {CreateDate}")
-        else:
-            # If CreateDate is None, process raw data from exiftool output
-            logger.debug(f"CreateDate is None, processing raw data from exiftool output")
-            
-            # Define the fields to check in priority order
-            raw_date_fields = [
-                'subsec_modify_date_raw',
-                'file_modify_date_raw', 
-                'datetime_original_raw',
-                'create_date_raw',
-                'modify_date_raw',
-                'gps_datetime_raw'
-            ]
-            
-            # Get raw data values from local variables (already extracted above)
-            raw_date_values = {
-                'subsec_modify_date_raw': subsec_modify_date_raw,
-                'file_modify_date_raw': file_modify_date_raw,
-                'datetime_original_raw': datetime_original_raw,
-                'create_date_raw': create_date_raw,
-                'modify_date_raw': modify_date_raw,
-                'gps_datetime_raw': gps_datetime_raw
-            }
-            
-            # Find offsetTime from any of the raw data that has it
-            saved_offset_time = None
-            for field_name, raw_value in raw_date_values.items():
-                if raw_value and raw_value != "N/A":
-                    # Ensure raw_value is a string before calling string methods
-                    raw_value_str = str(raw_value) if not isinstance(raw_value, str) else raw_value
-                    # Check if this raw value contains offsetTime (timezone info)
-                    # ExifTool format: YYYY:MM:DD hh:mm:ss[.###](+|-)##.## or ##:##
-                    # Look for + or - after the time part (after space and colon patterns)
-                    has_timezone = False
-                    if ':' in raw_value_str and ' ' in raw_value_str:
-                        time_part = raw_value_str.split(' ', 1)[-1]  # Get part after space
-                        # Check for timezone offset in the time portion
-                        if '+' in time_part or '-' in time_part:
-                            has_timezone = True
-                    
-                    if has_timezone:
-                        logger.debug(f"Found offsetTime in {field_name}: {raw_value_str}")
-                        # Extract the offset part from the time portion
-                        time_part = raw_value_str.split(' ', 1)[-1]  # Get part after space
-                        if '+' in time_part:
-                            saved_offset_time = '+' + time_part.split('+')[-1]
-                        elif '-' in time_part:
-                            saved_offset_time = '-' + time_part.split('-')[-1]
-                        logger.debug(f"Extracted offsetTime: {saved_offset_time}")
-                        break
-            
-            # ---------------------------------------------
-            # For DJI files, if DateTimeOriginal or CreateDate is not available, we need to handle specially (below)
-            # Since DJI file does not have correct 'Create Date', 'Modify Date', and 'File Modification Date/Time' is PC system time,
-            # For DJI files, we cannot use these field, instead we use its original file name 'DJI_YYYYMMDDHHMMSS_xxxx' to determine the CreateDate.
-
-            # If this filepath is DJI_YYYYMMDDHHMMSS_xxxx format, try to extract date from the origianl filename
-            import re
-            dji_filename_pattern = r'DJI_(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})_'
-            filename = os.path.basename(filepath)
-            dji_match = re.search(dji_filename_pattern, filename)
-            if dji_match:
-                # Extract date components from the filename
-                year = dji_match.group(1)
-                month = dji_match.group(2)
-                day = dji_match.group(3)
-                hour = dji_match.group(4)
-                minute = dji_match.group(5)
-                second = dji_match.group(6)
-                # Construct the CreateDate from the extracted components
-                CreateDate = f"{year}-{month}-{day}T{hour}:{minute}:{second}.000"+saved_offset_time if saved_offset_time else ""
-                logger.debug(f"Extracted CreateDate {CreateDate} from DJI {filename}")
-            else:
-                # If not DJI file, proceed with normal raw data processing as logic below.
-                # Process non-empty raw data and convert to ISO 8601
-                candidate_dates = []
-                for field_name in raw_date_fields:
-                    raw_value = raw_date_values.get(field_name)
-                    if raw_value and raw_value != "N/A":
-                        # Ensure raw_value is a string before calling string methods
-                        raw_value_str = str(raw_value) if not isinstance(raw_value, str) else raw_value
-                        # If raw data doesn't have offsetTime but we found one, add it
-                        processed_value = raw_value_str
-                        
-                        # Check if this value already has timezone info
-                        has_existing_timezone = False
-                        if ':' in raw_value_str and ' ' in raw_value_str:
-                            time_part = raw_value_str.split(' ', 1)[-1]  # Get part after space
-                            # Check for timezone offset in the time portion
-                            if '+' in time_part or '-' in time_part:
-                                has_existing_timezone = True
-                        
-                        # Add saved offset time if this value doesn't have timezone and we found one
-                        if saved_offset_time and not has_existing_timezone:
-                            processed_value = raw_value_str + saved_offset_time
-                            logger.debug(f"Added offsetTime to {field_name}: {processed_value}")
-                        
-                        # Convert to ISO 8601
-                        iso_date = convert_exif_to_iso8601(processed_value)
-                        if iso_date:
-                            candidate_dates.append((field_name, iso_date, processed_value))
-                            logger.debug(f"Converted {field_name} to ISO 8601: {iso_date}")
-                
-                # Find the oldest (earliest) date as CreateDate
-                if candidate_dates:
-                    # Sort by ISO 8601 date string (chronologically)
-                    candidate_dates.sort(key=lambda x: x[1])
-                    earliest_field, earliest_date, earliest_raw = candidate_dates[0]
-                    CreateDate = earliest_date
-                    logger.debug(f"Selected earliest date from {earliest_field}: {CreateDate} (raw: {earliest_raw})")
+            if result.stdout:
+                metadata_list = json.loads(result.stdout)
+                if metadata_list:
+                    metadata = metadata_list[0]
+                    logger.debug(f"EXIF extracted for {filepath}: {metadata}")
                 else:
-                    logger.debug("No valid dates found in raw data processing")
+                    logger.debug(f"No EXIF metadata found for {filepath}")
+                    return {}
+            else:
+                logger.error(f"No Stdout from ExifTool for {filepath}")
+                return {}
+            
+        except subprocess.CalledProcessError as e:
+            logger.error(f"ExifTool error for {filepath}: {e}")
+            return {}
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error for {filepath}: {e}")
+            return {}
+        except Exception as e:
+            logger.error(f"Unexpected error extracting EXIF from {filepath}: {e}")
+            return {}
+       
+        exif_data = metadata[0]
+        Latitude  = exif_data.get("GPSLatitude", "N/A")  if "GPSLatitude" in exif_data else None
+        Longitude = exif_data.get("GPSLongitude", "N/A") if "GPSLongitude" in exif_data else None
+        create_date = exif_data.get('CreateDate', '')
+        inode_change_date = exif_data.get('FileInodeChangeDate', '')
 
-        # ---------------------------------------------
-        
-        # If no date found, log all available date fields for debugging and stop
-        if not CreateDate:
-            available_dates = {
-                field: metadata[0].get(field, 'N/A') 
-                for field in ['SubSecDateTimeOriginal', 'SubSecCreateDate', 'CreationDate', 'SubSecModifyDate', 'FileModifyDate']
-                if field in metadata[0]
-            }
-            # Display debug statement and stop for user to check the problem
-            logger.error(f"FATAL: No usable creation date found for {filepath}. Please check the problem!")
-            logger.error(f"Available date fields: {available_dates}")
-            logger.error(f"Raw date values checked: subsec_modify_date_raw={subsec_modify_date_raw}, file_modify_date_raw={file_modify_date_raw}, datetime_original_raw={datetime_original_raw}, create_date_raw={create_date_raw}, modify_date_raw={modify_date_raw}, gps_datetime_raw={gps_datetime_raw}")
+        # Extract creation_time (UTC Zulu format) logic is from exif_file_processor.py
+        creation_time = self.calculate_creation_time(create_date, inode_change_date)
 
-            # Only for debugging, uncomment below to pause execution
-            # Stop execution and let user check the problem
-            # os.exit(0)
-            return None
-
-        # Store individual date fields for debugging analysis
-        SubSecDateTimeOriginal = subsec_datetime_original_raw if subsec_datetime_original_raw else None
-        SubSecCreateDate = subsec_create_date_raw if subsec_create_date_raw else None
-        CreationDate = creation_date_raw if creation_date_raw else None
-        SubSecModifyDate = subsec_modify_date_raw if subsec_modify_date_raw else None
-        FileModifyDate = file_modify_date_raw if file_modify_date_raw else None
-        ModifyDate = modify_date_raw if modify_date_raw else None
-        GPSDateTime = gps_datetime_raw if gps_datetime_raw else None
-        DateTimeOriginal = datetime_original_raw if datetime_original_raw else None
-
-        # Log all date fields for analysis (new priority-based extraction with SubSec fields first)
-        logger.debug(f"File: {filepath}\n"
-                    f"  Final CreateDate (ISO 8601): {CreateDate}\n\n"
-                    f"  Priority order - SubSecDateTimeOriginal: {SubSecDateTimeOriginal},\n"
-                    f"  SubSecCreateDate: {SubSecCreateDate},\n"
-                    f"  CreationDate: {CreationDate},\n"
-                    f"  SubSecModifyDate: {SubSecModifyDate},\n"
-                    f"  FileModifyDate: {FileModifyDate},\n"
-                    f"  ModifyDate: {ModifyDate},\n"
-                    f"  CreateDate: {create_date_raw},\n"
-                    f"  DateTimeOriginal: {DateTimeOriginal},\n"
-                    f"  GPSDateTime: {GPSDateTime}\n")
-
-        dummy_exif_data = {
-            "SourceFile": filepath,
-            "FileName": os.path.basename(filepath),
-            "FileTypeExtension": os.path.splitext(filepath)[1].lstrip(".").lower(),
+        rc_exif_data = {
             "Latitude": Latitude,
             "Longitude": Longitude,
-            "CreateDate": CreateDate,
+            "Creation_time": creation_time,
         }
 
-        #logger.debug(f"dummy_exif_data: {dummy_exif_data}\n")
-        #input("Paused for debugging. Press Enter to continue...")
+        return rc_exif_data
 
-        return dummy_exif_data
+    def calculate_creation_time(self, create_date_str, inode_change_date_str):
+        """Calculate creation time using sophisticated logic - all timezone-naive.
+        Returns: creation_time_str (in UTC Zulu format)
+        """
+        create_date = self.parse_exif_date(create_date_str) if create_date_str else None
+        inode_date = self.parse_exif_date(inode_change_date_str) if inode_change_date_str else None
+               
+        # Case 2.0: CreateDate is missing (N/A case)
+        if not create_date_str or create_date_str.strip() == '':
+            # If FileInodeChangeDate has timezone offset, use it
+            if inode_change_date_str and ('+' in inode_change_date_str or (len(inode_change_date_str) > 6 and '-' in inode_change_date_str[-6:])):
+                return inode_change_date_str
+            elif inode_date:
+                return inode_change_date_str
+            return 'N/A'
+        
+        # Case 2.1: CreateDate is 0000:00:00 (zero case)
+        if create_date_str.startswith('0000:00:00'):
+            # If FileInodeChangeDate has timezone offset, use it
+            if inode_change_date_str and ('+' in inode_change_date_str or (len(inode_change_date_str) > 6 and '-' in inode_change_date_str[-6:])):
+                return inode_change_date_str
+            elif inode_date:
+                return inode_change_date_str
+            return '0000:00:00'
+        
+        # If no inode date, use create date
+        if not inode_date:
+            return create_date_str
+        
+        try:
+            # Ensure both dates are timezone-naive before comparison
+            if create_date.tzinfo is not None:
+                create_date = create_date.replace(tzinfo=None)
+            if inode_date.tzinfo is not None:
+                inode_date = inode_date.replace(tzinfo=None)
+            
+            # Get date components (YYYY:MM:DD)
+            create_date_only = create_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            inode_date_only = inode_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            
+            # Calculate difference in days
+            date_diff = (inode_date_only - create_date_only).days
+            
+        except Exception as e:
+            return create_date_str # Fallback to original create date
+        
+        # Case 2.1: FileInodeChangeDate is few days younger than CreateDate
+        if date_diff > 1:
+            try:
+                # Use CreateDate YYYY:MM:DD hh:mm:ss but add timezone offset from FileInodeChangeDate
+                creation_time_str = create_date.strftime('%Y:%m:%d %H:%M:%S')
+                
+                # Extract and append timezone offset from FileInodeChangeDate if it exists
+                tz_offset = self.extract_timezone_offset(inode_change_date_str)
+                if tz_offset:
+                    creation_time_str += tz_offset
+                
+                return creation_time_str
+            except Exception as e:
+                return create_date_str
+        
+        # Case 2.2: Same day or one day difference - use FileInodeChangeDate
+        elif abs(date_diff) <= 1:
+            return inode_change_date_str
+        
+        # Fallback to CreateDate
+        else:
+            return create_date_str
 
+    # ------------------------------ #
+    def parse_exif_date(self, date_string):
+        """Parse EXIF date string to timezone-naive datetime object."""
+        if not date_string or date_string.strip() == '':
+            return None
+        
+        # Clean the date string first to remove timezone info
+        clean_date = date_string.strip()
+        
+        # Remove timezone information to ensure all datetimes are timezone-naive
+        import re
+        
+        # Handle positive timezone (e.g., "2024:03:15 14:23:45+08:00")
+        if '+' in clean_date:
+            clean_date = clean_date.split('+')[0].strip()
+        
+        # Handle negative timezone (e.g., "2024:03:15 14:23:45-05:00")
+        timezone_pattern = r'-\d{2}:\d{2}$'
+        if re.search(timezone_pattern, clean_date):
+            clean_date = re.sub(timezone_pattern, '', clean_date).strip()
+        
+        # Remove 'Z' timezone indicator if present
+        if clean_date.endswith('Z'):
+            clean_date = clean_date[:-1].strip()
+        
+        # Handle various EXIF date formats (all timezone-naive now)
+        formats = [
+            '%Y:%m:%d %H:%M:%S',
+            '%Y:%m:%d %H:%M:%S.%f',
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d %H:%M:%S.%f',
+            '%Y-%m-%dT%H:%M:%S',
+            '%Y-%m-%dT%H:%M:%S.%f',
+            '%Y:%m:%d',
+            '%Y-%m-%d'
+        ]
+        
+        for fmt in formats:
+            try:
+                parsed_date = datetime.strptime(clean_date, fmt)
+                # Ensure the result is timezone-naive
+                if parsed_date.tzinfo is not None:
+                    parsed_date = parsed_date.replace(tzinfo=None)
+                return parsed_date
+            except ValueError:
+                continue
+        
+        self.logger.warning(f"Could not parse date: {date_string}")
+        return None
+    
+    def convert_to_utc_zulu(self, datetime_str):
+        """Convert datetime string to UTC Zulu format (%Y-%m-%dT%H:%M:%SZ)."""
+        if not datetime_str or datetime_str in ['N/A', '0000:00:00']:
+            return 'N/A'
+        
+        # Extract timezone offset if present
+        tz_offset = self.extract_timezone_offset(datetime_str)
+        
+        # Parse the datetime string (timezone-naive for calculations)
+        parsed_date = self.parse_exif_date(datetime_str)
+        if parsed_date:
+            # If there was a timezone offset, adjust to UTC
+            if tz_offset:
+                try:
+                    from datetime import timedelta
+                    # Parse offset (e.g., "+08:00" or "-05:00")
+                    sign = 1 if tz_offset.startswith('+') else -1
+                    hours, minutes = map(int, tz_offset[1:].split(':'))
+                    offset_minutes = sign * (hours * 60 + minutes)
+                    
+                    # Subtract offset to get UTC (if local time is +08:00, subtract 8 hours to get UTC)
+                    utc_date = parsed_date - timedelta(minutes=offset_minutes)
+                    return utc_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+                except Exception as e:
+                    self.logger.warning(f"Error converting timezone offset {tz_offset}: {e}")
+            
+            # No timezone offset, assume already UTC
+            return parsed_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+        
+        return 'N/A'
+    
+    def extract_timezone_offset(self, datetime_str):
+        """Extract timezone offset from datetime string."""
+        if not datetime_str:
+            return ''
+        
+        import re
+        # Look for timezone patterns like +08:00 or -05:00
+        positive_tz = re.search(r'\+\d{2}:\d{2}$', datetime_str)
+        if positive_tz:
+            return positive_tz.group()
+        
+        negative_tz = re.search(r'-\d{2}:\d{2}$', datetime_str)
+        if negative_tz:
+            return negative_tz.group()
+        
+        return ''
+    
+    # ------------------------------ #
     def extract_metadata(self, filepath):
-        fileType = 'Undefined'
-        extension = os.path.splitext(filepath)[1].lower()
-        if extension in [".jpg", ".jpeg", ".png", ".heic"]:
-            fileType = 'Image'
-        elif extension in [".mp4", ".mov"]:
-            fileType = 'Video'
+        mediaType = 'Undefined'
+        extension = os.path.splitext(filepath)[1].upper()
+        if extension in [".JPG", ".JPEG", ".PNG", ".HEIC"]:
+            mediaType = 'Image'
+        elif extension in [".MP4", ".MOV"]:
+            mediaType = 'Video'
         else:
             logging.warning(f"Unsupported file type for {filepath}. Skipping.")
             return None
@@ -1118,14 +1038,14 @@ class MetadataExtractor:
 
         stat_info = os.stat(filepath)
         base_metadata = {
-            "filepath": os.path.abspath(filepath),   # exif_data.get("SourceFile", filepath),
-            "filename": os.path.basename(filepath),  # exif_data.get("FileName", os.path.basename(filepath)),
-            "file_extension": exif_data.get("FileTypeExtension", extension),
-            "file_type": fileType,
+            "filepath": os.path.abspath(filepath),
+            "filename": os.path.basename(filepath),
+            "file_extension": os.path.splitext(filepath)[1].lstrip("."),
             "size": stat_info.st_size,
-            "creation_time": exif_data.get("CreateDate", None),
+            "media_type": mediaType,
             "latitude": exif_data.get("Latitude", None),
             "longitude": exif_data.get("Longitude", None),
+            "creation_time": exif_data.get("Creation_time", None),
         }
         return base_metadata
 

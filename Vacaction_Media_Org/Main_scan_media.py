@@ -137,7 +137,7 @@ class MediaOrganizerDB:
                     filepath TEXT UNIQUE NOT NULL,
                     filename TEXT NOT NULL,
                     file_extension TEXT NOT NULL,
-                    file_type TEXT,
+                    media_type TEXT,
                     size INTEGER,
                     creation_time TEXT,
                     latitude REAL,
@@ -326,7 +326,7 @@ class MediaOrganizerDB:
             
             self.cursor.execute('''
                 INSERT INTO media_files (
-                    filepath, filename, file_extension, file_type, size, creation_time, latitude, longitude,
+                    filepath, filename, file_extension, media_type, size, creation_time, latitude, longitude,
                     city_en, city_zh, region_en, region_zh, subregion_en, subregion_zh, country_code, country_en, country_zh, timezone,
                     hasGPS, shareGPS
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -334,7 +334,7 @@ class MediaOrganizerDB:
                 metadata_to_store.get('filepath'),
                 metadata_to_store.get('filename'),
                 metadata_to_store.get('file_extension'),
-                metadata_to_store.get('file_type'),
+                metadata_to_store.get('media_type'),
                 metadata_to_store.get('size'),
                 metadata_to_store.get('creation_time'),
                 metadata_to_store.get('latitude'),
@@ -544,7 +544,7 @@ class MediaOrganizerDB:
         # For demonstration, we'll just return files within a time window.
         # Real implementation would need to calculate distance from lat/lon.
         self.cursor.execute(
-            """SELECT filepath, file_type, latitude, longitude, creation_time FROM media_files
+            """SELECT filepath, media_type, latitude, longitude, creation_time FROM media_files
             WHERE ABS(strftime('%s', creation_time) - strftime('%s', ?)) < ? * 60
             AND latitude IS NOT NULL AND longitude IS NOT NULL
             """, (timestamp, time_window_minutes)
