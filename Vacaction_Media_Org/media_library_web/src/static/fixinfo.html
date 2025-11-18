@@ -267,17 +267,12 @@
         /* Checkbox styling */
         .checkbox-group {
             margin: 15px 0;
-            padding: 12px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            border: 1px solid #e1e5e9;
         }
 
         .checkbox-group label {
             display: flex;
             align-items: center;
             cursor: pointer;
-            margin-bottom: 5px;
         }
 
         .update-time-checkbox {
@@ -290,11 +285,103 @@
             color: #495057;
         }
 
-        .checkbox-help {
-            color: #6c757d;
-            font-size: 0.85em;
-            line-height: 1.4;
-            margin-left: 24px;
+        .clickable-help {
+            cursor: pointer;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+
+        .clickable-help:hover {
+            color: #667eea;
+        }
+
+        .help-icon {
+            font-size: 0.9em;
+            opacity: 0.7;
+            margin-left: 4px;
+        }
+
+        .help-modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .help-modal-content {
+            background-color: #fefefe;
+            margin: 5% auto;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .help-modal-header {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            padding: 20px;
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .help-modal-header h3 {
+            margin: 0;
+            font-size: 1.3rem;
+        }
+
+        .help-modal-close {
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            line-height: 1;
+            opacity: 0.8;
+        }
+
+        .help-modal-close:hover {
+            opacity: 1;
+        }
+
+        .help-modal-body {
+            padding: 20px;
+        }
+
+        .help-section {
+            margin-bottom: 20px;
+        }
+
+        .help-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .help-section h4 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+            border-bottom: 2px solid #667eea;
+            padding-bottom: 5px;
+        }
+
+        .help-section ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .help-section li {
+            margin-bottom: 8px;
+            line-height: 1.5;
+        }
+
+        .help-section li strong {
+            color: #495057;
         }
 
         .info-message {
@@ -419,7 +506,7 @@
 
         .filter-controls {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 10px;
         }
 
@@ -437,6 +524,30 @@
         .filter-checkbox input[type="checkbox"] {
             width: 16px;
             height: 16px;
+            cursor: pointer;
+        }
+
+        .location-filter-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .filter-radio {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+            color: #555;
+            cursor: pointer;
+            -webkit-user-select: none;
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        .filter-radio input[type="radio"] {
+            width: 14px;
+            height: 14px;
             cursor: pointer;
         }
 
@@ -1012,6 +1123,10 @@
             transition: opacity 0.3s ease;
         }
 
+        .saved-values-display.hidden {
+            display: none;
+        }
+
         .saved-values-title {
             font-weight: 600;
             color: #667eea;
@@ -1215,19 +1330,14 @@
                     <div class="control-group checkbox-group">
                         <label>
                             <input type="checkbox" id="force-update-time" class="update-time-checkbox">
-                            <span class="checkbox-label">🕒 Force Update Database Creation Time</span>
+                            <span class="checkbox-label clickable-help" onclick="showForceUpdateHelp()">🕒 Force Update Database Creation Time <span class="help-icon">ℹ️</span></span>
                         </label>
-                        <small class="checkbox-help">
-                            When unchecked: Database creation_time will NOT be modified<br>
-                            When checked: Update database creation_time to UTC Zulu format<br>
-                            <strong>Note:</strong> EXIF date/time fields are NEVER modified - only GPS coordinates
-                        </small>
                     </div>
                 </div>
             </div>
 
             <!-- Saved Values Display Section -->
-            <div id="saved-values-display" class="saved-values-display">
+            <div id="saved-values-display" class="saved-values-display hidden">
                 <div class="saved-values-title">
                     💾 Saved Location Values
                     <button class="clear-saved-values" onclick="clearSavedValues()" title="Clear saved values">
@@ -1273,10 +1383,20 @@
                     <button class="view-mode-btn" data-mode="list" onclick="setViewMode('list')">📋 List</button>
                 </div>
                 <div class="filter-controls">
-                    <label class="filter-checkbox">
-                        <input type="checkbox" id="unknown-filter" onchange="onUnknownFilterChange()">
-                        📍 Show Unknown Location Only
-                    </label>
+                    <div class="location-filter-group">
+                        <label class="filter-radio">
+                            <input type="radio" name="location-filter" value="known" checked onchange="onLocationFilterChange()">
+                            📍 Show Known Locations
+                        </label>
+                        <label class="filter-radio">
+                            <input type="radio" name="location-filter" value="unknown" onchange="onLocationFilterChange()">
+                            📍 Show Unknown Locations
+                        </label>
+                        <label class="filter-radio">
+                            <input type="radio" name="location-filter" value="all" onchange="onLocationFilterChange()">
+                            📍 Show All Locations
+                        </label>
+                    </div>
                 </div>
                 <div class="selection-buttons">
                     <button class="select-btn" id="select-all-btn" onclick="selectAllMedia()" disabled>☑️ Select All</button>
@@ -2162,12 +2282,12 @@
                 document.getElementById('modify-time').value = '12:00'; // Reset to default 12:00 PM
                 updateModifyButton();
                 
-                // Uncheck the unknown location filter and refresh the view
-                const unknownCheckbox = document.getElementById('unknown-filter');
-                if (unknownCheckbox && unknownCheckbox.checked) {
-                    unknownCheckbox.checked = false;
+                // Reset the location filter to default (known) and refresh the view
+                const knownRadio = document.querySelector('input[name="location-filter"][value="known"]');
+                if (knownRadio) {
+                    knownRadio.checked = true;
                     // Trigger the filter change to refresh the display
-                    onUnknownFilterChange();
+                    onLocationFilterChange();
                 }
                 
             } else {
@@ -2226,22 +2346,31 @@
             updateSelectionButtons();
         }
 
-        function onUnknownFilterChange() {
+        function onLocationFilterChange() {
             // Clear all selections before applying filter
             unselectAllMedia();
             
-            // Get checkbox state
-            const unknownCheckbox = document.getElementById('unknown-filter');
-            const showUnknownOnly = unknownCheckbox.checked;
+            // Get selected radio button value
+            const selectedRadio = document.querySelector('input[name="location-filter"]:checked');
+            const filterValue = selectedRadio ? selectedRadio.value : 'known';
             
             // Apply filter to current media data
             let filteredMedia = mediaData;
-            if (showUnknownOnly) {
+            
+            if (filterValue === 'unknown') {
+                // Show only items with unknown location
                 filteredMedia = mediaData.filter(item => 
                     !item.city_en || item.city_en.trim() === '' || 
                     !item.country_en || item.country_en.trim() === ''
                 );
+            } else if (filterValue === 'known') {
+                // Show only items with known location
+                filteredMedia = mediaData.filter(item => 
+                    item.city_en && item.city_en.trim() !== '' && 
+                    item.country_en && item.country_en.trim() !== ''
+                );
             }
+            // If filterValue === 'all', show all media (no filtering)
             
             // Re-display media with filter applied
             displayMedia(filteredMedia);
@@ -2369,12 +2498,13 @@
 
             // Store original media data and filter state to restore later
             const originalMediaData = [...mediaData];
-            const unknownFilter = document.getElementById('unknown-filter');
-            const originalFilterState = unknownFilter.checked;
+            const selectedRadio = document.querySelector('input[name="location-filter"]:checked');
+            const originalFilterState = selectedRadio ? selectedRadio.value : 'known';
             
-            // Disable unknown filter during delete operation (without triggering events)
-            if (originalFilterState) {
-                unknownFilter.checked = false;
+            // Set to show all during delete operation (without triggering events)
+            const allRadio = document.querySelector('input[name="location-filter"][value="all"]');
+            if (allRadio && originalFilterState !== 'all') {
+                allRadio.checked = true;
                 // Don't trigger the change event that would clear selections
             }
 
@@ -2421,12 +2551,14 @@
         }
 
         function handleDeleteConfirmation(firstConfirm, selectedMedia, originalMediaData, originalSelections, originalFilterState) {
-            const unknownFilter = document.getElementById('unknown-filter');
 
             if (!firstConfirm) {
                 // Restore original display and filter state if user cancels
                 mediaData = originalMediaData;
-                unknownFilter.checked = originalFilterState;
+                const originalRadio = document.querySelector(`input[name="location-filter"][value="${originalFilterState}"]`);
+                if (originalRadio) {
+                    originalRadio.checked = true;
+                }
                 displayMedia(mediaData);
                 
                 // Restore original selections
@@ -2534,11 +2666,12 @@
                 }
             });
 
-            // Uncheck the unknown location filter when switching view modes
-            const unknownFilter = document.getElementById('unknown-filter');
-            if (unknownFilter && unknownFilter.checked) {
-                unknownFilter.checked = false;
-                onUnknownFilterChange(); // Trigger the filter change to refresh the display
+            // Reset to known location filter when switching view modes
+            const knownRadio = document.querySelector('input[name="location-filter"][value="known"]');
+            const currentSelected = document.querySelector('input[name="location-filter"]:checked');
+            if (knownRadio && currentSelected && currentSelected.value !== 'known') {
+                knownRadio.checked = true;
+                onLocationFilterChange(); // Trigger the filter change to refresh the display
             }
 
             // Update thumbnail size control visibility
@@ -2886,11 +3019,26 @@
             closeGeoPrompt();
         }
 
+        // Helper function to check if there are actual saved values (not just defaults)
+        function hasSavedValues() {
+            const { country_en, country_zh, city_en, city_zh, latitude, longitude, filename } = currentGeoData;
+            return filename || country_en || country_zh || city_en || city_zh || latitude || longitude;
+        }
+
         // Display saved values in the saved values section
         function displaySavedValues() {
             const { country_en, country_zh, city_en, city_zh, latitude, longitude, filename } = currentGeoData;
             
+            const savedValuesDisplay = document.getElementById('saved-values-display');
             const savedValuesContent = document.getElementById('saved-values-content');
+            
+            // Show the panel only if there are actual saved values
+            if (hasSavedValues()) {
+                savedValuesDisplay.classList.remove('hidden');
+            } else {
+                savedValuesDisplay.classList.add('hidden');
+                return; // Don't update content if no data
+            }
             
             // Create saved values HTML
             savedValuesContent.innerHTML = `
@@ -2927,9 +3075,13 @@
 
         // Clear saved values display
         function clearSavedValues() {
+            const savedValuesDisplay = document.getElementById('saved-values-display');
             const savedValuesContent = document.getElementById('saved-values-content');
             
-            // Show empty labeled boxes instead of a message
+            // Hide the entire panel
+            savedValuesDisplay.classList.add('hidden');
+            
+            // Clear the content for consistency
             savedValuesContent.innerHTML = `
                 <div class="saved-value-item">
                     <div class="saved-value-label">� Source File:</div>
@@ -2982,6 +3134,59 @@
                 closeGeoPrompt();
             }
         });
+
+        // Force Update Help Modal functions
+        function showForceUpdateHelp() {
+            document.getElementById('force-update-help-modal').style.display = 'block';
+        }
+
+        function closeForceUpdateHelp() {
+            document.getElementById('force-update-help-modal').style.display = 'none';
+        }
+
+        // Close modal when clicking outside of it
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('force-update-help-modal');
+            if (event.target === modal) {
+                closeForceUpdateHelp();
+            }
+        });
     </script>
+
+    <!-- Force Update Help Modal -->
+    <div id="force-update-help-modal" class="help-modal">
+        <div class="help-modal-content">
+            <div class="help-modal-header">
+                <h3>🕒 Force Update Database Creation Time</h3>
+                <span class="help-modal-close" onclick="closeForceUpdateHelp()">&times;</span>
+            </div>
+            <div class="help-modal-body">
+                <div class="help-section">
+                    <h4>📋 What this option does:</h4>
+                    <ul>
+                        <li><strong>When unchecked:</strong> Database creation_time will NOT be modified</li>
+                        <li><strong>When checked:</strong> Update database creation_time to UTC Zulu format</li>
+                    </ul>
+                </div>
+                <div class="help-section">
+                    <h4>⚠️ Important Notes:</h4>
+                    <ul>
+                        <li><strong>EXIF date/time fields are NEVER modified</strong> - only GPS coordinates and database timestamps</li>
+                        <li>This only affects the database record, not the actual media file metadata</li>
+                        <li>Use this when you need to standardize creation times in the database</li>
+                    </ul>
+                </div>
+                <div class="help-section">
+                    <h4>🔧 When to use:</h4>
+                    <ul>
+                        <li>Media files have incorrect database timestamps</li>
+                        <li>Need to synchronize database time with EXIF data</li>
+                        <li>Fixing timezone-related time discrepancies</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>

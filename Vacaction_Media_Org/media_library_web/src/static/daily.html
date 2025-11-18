@@ -515,6 +515,27 @@
             background-color: rgba(218, 165, 32, 0.4) !important;
             border: 1px solid rgba(218, 165, 32, 0.7) !important;
         }
+
+        /* Location filter controls styling - horizontal layout */
+        .location-filter-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .filter-radio {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+            color: #333;
+            cursor: pointer;
+        }
+
+        .filter-radio input[type="radio"] {
+            margin: 0;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -553,6 +574,23 @@
                 <div class="view-mode-buttons">
                     <button class="view-mode-btn active" data-mode="thumbnail">🖼️ Thumbnail</button>
                     <button class="view-mode-btn" data-mode="list">📋 List</button>
+                </div>
+
+                <div class="filter-controls">
+                    <div class="location-filter-group">
+                        <label class="filter-radio">
+                            <input type="radio" name="daily-location-filter" value="known" checked onchange="onDailyLocationFilterChange()">
+                            📍 Show Known Locations
+                        </label>
+                        <label class="filter-radio">
+                            <input type="radio" name="daily-location-filter" value="unknown" onchange="onDailyLocationFilterChange()">
+                            📍 Show Unknown Locations
+                        </label>
+                        <label class="filter-radio">
+                            <input type="radio" name="daily-location-filter" value="all" onchange="onDailyLocationFilterChange()">
+                            📍 Show All Locations
+                        </label>
+                    </div>
                 </div>
 
                 <div class="day-group-controls">
@@ -665,6 +703,11 @@
             document.getElementById('show-previous-day').addEventListener('change', refreshThreeDaysDisplay);
             document.getElementById('show-selected-day').addEventListener('change', refreshThreeDaysDisplay);
             document.getElementById('show-next-day').addEventListener('change', refreshThreeDaysDisplay);
+            
+            // Location filter radio buttons
+            document.querySelectorAll('input[name="daily-location-filter"]').forEach(radio => {
+                radio.addEventListener('change', onDailyLocationFilterChange);
+            });
         }
 
         async function loadStatsAndSetDefaultDate() {
@@ -788,6 +831,9 @@
                 
                 document.getElementById('loading').style.display = 'none';
                 displayThreeDaysMedia(threeDaysData);
+                
+                // Apply current location filter after displaying media
+                onDailyLocationFilterChange();
 
             } catch (error) {
                 console.error('Error loading media:', error);
@@ -800,6 +846,8 @@
         function refreshThreeDaysDisplay() {
             if (threeDaysMediaData) {
                 displayThreeDaysMedia(threeDaysMediaData);
+                // Apply current location filter after refreshing display
+                onDailyLocationFilterChange();
             }
         }
 
@@ -884,6 +932,8 @@
                         const location = media.city_zh && media.city_en ? 
                             `${media.city_zh} | ${media.city_en}` : 
                             (media.city_zh || media.city_en || 'Unknown location');
+                        
+                        const hasLocation = location !== 'Unknown location';
 
                         // Parse activities and scenery arrays and filter out people-related entries and 'NotFound'
                         const activities = (Array.isArray(media.activities) ? media.activities : 
@@ -920,7 +970,7 @@
                             });
                             
                             return `
-                                <div class="media-card list-view ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                                <div class="media-card list-view media-item ${location === 'Unknown location' ? 'unknown-location' : ''}" data-has-location="${hasLocation}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
                                     ${isVideo ? 
                                         `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
                                                 style="pointer-events: none;"></video>` :
@@ -980,7 +1030,7 @@
                         } else {
                             // Thumbnail view
                             return `
-                                <div class="media-item ${currentViewMode}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                                <div class="media-item ${currentViewMode} ${location === 'Unknown location' ? 'unknown-location' : ''}" data-has-location="${hasLocation}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
                                     ${isVideo ? 
                                         `<video class="media-thumbnail" muted preload="none">
                                             <source src="/api/media/${media.id}/thumbnail" type="video/${media.file_extension?.substring(1) || 'mp4'}">
@@ -1062,6 +1112,8 @@
                 const location = media.city_zh && media.city_en ? 
                     `${media.city_zh} | ${media.city_en}` : 
                     (media.city_zh || media.city_en || 'Unknown location');
+                
+                const hasLocation = location !== 'Unknown location';
 
                 // Parse activities and scenery arrays and filter out people-related entries and 'NotFound'
                 const activities = (Array.isArray(media.activities) ? media.activities : 
@@ -1090,7 +1142,7 @@
                     });
                     
                     return `
-                        <div class="media-card list-view" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                        <div class="media-card list-view media-item" data-has-location="${hasLocation}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
                             ${isVideo ? 
                                 `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
                                         style="pointer-events: none;"></video>` :
@@ -1150,7 +1202,7 @@
                 } else {
                     // Thumbnail view
                     return `
-                        <div class="media-item thumbnail ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                        <div class="media-item thumbnail ${location === 'Unknown location' ? 'unknown-location' : ''}" data-has-location="${hasLocation}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
                             ${isVideo ? 
                                 `<video class="media-thumbnail" muted preload="none">
                                     <source src="/api/media/${media.id}/thumbnail" type="video/${media.file_extension?.substring(1) || 'mp4'}">
@@ -1181,6 +1233,9 @@
 
             container.innerHTML = '';
             container.appendChild(mediaGrid);
+            
+            // Apply current location filter after displaying media
+            onDailyLocationFilterChange();
         }
 
         function setViewMode(mode) {
@@ -1201,7 +1256,46 @@
             // Re-render media if we have data - use cached data to avoid reloading
             if (threeDaysMediaData.length > 0) {
                 displayThreeDaysMedia(threeDaysMediaData);
+                // Apply current location filter after changing view mode
+                onDailyLocationFilterChange();
             }
+        }
+
+        function onDailyLocationFilterChange() {
+            const selectedFilter = document.querySelector('input[name="daily-location-filter"]:checked').value;
+            
+            // Get all media items
+            const mediaItems = document.querySelectorAll('.media-item');
+            
+            mediaItems.forEach(item => {
+                const hasLocation = item.dataset.hasLocation === 'true';
+                let shouldShow = false;
+                
+                switch(selectedFilter) {
+                    case 'known':
+                        shouldShow = hasLocation;
+                        break;
+                    case 'unknown':
+                        shouldShow = !hasLocation;
+                        break;
+                    case 'all':
+                        shouldShow = true;
+                        break;
+                }
+                
+                if (shouldShow) {
+                    item.style.display = '';
+                    // Add unknown location styling
+                    if (!hasLocation && (selectedFilter === 'unknown' || selectedFilter === 'all')) {
+                        item.classList.add('unknown-location');
+                    } else {
+                        item.classList.remove('unknown-location');
+                    }
+                } else {
+                    item.style.display = 'none';
+                    item.classList.remove('unknown-location');
+                }
+            });
         }
 
         function updateThumbnailSize() {
