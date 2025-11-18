@@ -6,6 +6,10 @@
     <title>Media Library - Vacation Photos & Videos</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-fullscreen@1.4.2/dist/leaflet.fullscreen.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js" />
     <style>
         * {
             margin: 0;
@@ -25,45 +29,86 @@
             padding: 10px 20px;
         }
 
-        .header {
-            text-align: center;
+        .header-compact {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             color: white;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+            padding: 10px 0;
         }
 
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
+        .header-left {
+            display: flex;
+            align-items: baseline;
+            gap: 15px;
+        }
+
+        .header-left h1 {
+            font-size: 2rem;
+            margin: 0;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
-        .header p {
-            font-size: 1.1rem;
+        .header-left p {
+            font-size: 0.9rem;
             opacity: 0.9;
+            margin: 0;
         }
 
-        .timezone-banner {
+        .header-right {
+            text-align: right;
+        }
+
+        .timezone-display {
             background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-            text-align: center;
-            padding: 10px 20px;
-            margin-bottom: 10px;
+            padding: 8px 15px;
             border-radius: 10px;
             font-weight: bold;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
 
-        .timezone-info {
-            font-size: 0.9rem;
+        .timezone-item {
+            font-size: 0.85rem;
             display: inline-block;
-            margin: 0 15px;
+            margin: 0 8px 0 0;
+        }
+
+        @media (max-width: 768px) {
+            .header-compact {
+                flex-direction: column;
+                text-align: center;
+                gap: 15px;
+            }
+            
+            .header-left {
+                flex-direction: column;
+                gap: 5px;
+            }
+            
+            .header-right {
+                text-align: center;
+            }
         }
 
         .main-content {
             display: grid;
-            grid-template-columns: 3fr 2fr;
+            grid-template-rows: auto auto auto;
             gap: 20px;
             margin-bottom: 30px;
+            width: 100%;
+        }
+        
+        .filters-row {
+            width: 100%;
+        }
+        
+        .map-row {
+            width: 100%;
+        }
+        
+        .gallery-row {
+            width: 100%;
         }
 
         .panel {
@@ -87,16 +132,265 @@
         }
 
         #map {
-            height: 400px;
+            height: 900px;
             border-radius: 10px;
             border: 2px solid #ddd;
         }
 
         .filters {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(3, 1fr);
             gap: 15px;
             margin-bottom: 20px;
+        }
+        
+        .filters-top-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .filters-bottom-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .search-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .stats-compact {
+            display: flex;
+            gap: 20px;
+            font-size: 0.85rem;
+            color: #666;
+            align-items: center;
+        }
+        
+        .stats-compact .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Enhanced Map Controls */
+        .map-controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .map-control-btn {
+            padding: 8px 12px;
+            background: white;
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+        }
+
+        .map-control-btn:hover {
+            background: #f0f0f0;
+            border-color: #667eea;
+        }
+
+        .map-control-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        #map-container {
+            position: relative;
+        }
+
+        /* Timeline Slider */
+        .timeline-control {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            z-index: 1000;
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            display: none;
+        }
+
+        .timeline-slider {
+            width: 100%;
+            margin: 10px 0;
+        }
+
+        .timeline-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #666;
+        }
+
+        /* True Fullscreen Styles */
+        #map-container.fullscreen-active {
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            width: 100vw !important;
+            height: 100vh !important;
+            z-index: 10000 !important;
+            background: white !important;
+        }
+
+        #map-container.fullscreen-active #map {
+            width: 100vw !important;
+            height: 100vh !important;
+            border-radius: 0 !important;
+            border: none !important;
+            position: relative !important;
+            z-index: 1 !important;
+        }
+
+        /* Ensure fullscreen map is visible */
+        #map-container.fullscreen-active .panel {
+            margin: 0 !important;
+            padding: 0 !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            height: 100vh !important;
+            width: 100vw !important;
+        }
+
+        #map-container.fullscreen-active .panel h2 {
+            display: none !important;
+        }
+
+        #map-container.fullscreen-active .map-controls {
+            position: fixed !important;
+            top: 20px !important;
+            right: 20px !important;
+            z-index: 10001 !important;
+        }
+
+        #map-container.fullscreen-active .timeline-control {
+            bottom: 20px !important;
+            left: 20px !important;
+            right: 20px !important;
+            z-index: 10001 !important;
+        }
+
+        /* Hide other page elements in fullscreen */
+        body.map-fullscreen .container > *:not(.map-row) {
+            display: none !important;
+        }
+        
+        body.map-fullscreen {
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        /* Fullscreen button highlight */
+        .map-control-btn.active {
+            background: #667eea !important;
+            color: white !important;
+            border-color: #667eea !important;
+            box-shadow: 0 0 10px rgba(102, 126, 234, 0.5) !important;
+        }
+
+        /* Map coordinates display */
+        .map-coordinates {
+            font-size: 0.75rem !important;
+            font-weight: normal !important;
+            color: #666 !important;
+            margin-left: 10px !important;
+            padding: 4px 8px !important;
+            background: rgba(102, 126, 234, 0.1) !important;
+            border-radius: 15px !important;
+            border: 1px solid rgba(102, 126, 234, 0.3) !important;
+            display: inline-block !important;
+            font-family: 'Courier New', monospace !important;
+        }
+
+        .map-coordinates.has-coordinates {
+            background: rgba(40, 167, 69, 0.1) !important;
+            border-color: rgba(40, 167, 69, 0.3) !important;
+            color: #28a745 !important;
+        }
+
+        /* Compact search results */
+        #search-results {
+            margin: 10px 0 !important;
+            padding: 10px 15px !important;
+            background: #e8f4f8 !important;
+            border-radius: 8px !important;
+            border-left: 4px solid #667eea !important;
+            display: none;
+        }
+
+        #search-results h4 {
+            font-size: 0.9rem !important;
+            margin: 0 0 8px 0 !important;
+            color: #333 !important;
+        }
+
+        .results-content {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            flex-wrap: wrap !important;
+            gap: 10px !important;
+        }
+
+        .results-stats {
+            display: flex !important;
+            flex-wrap: wrap !important;
+            gap: 15px !important;
+            font-size: 0.8rem !important;
+            color: #555 !important;
+        }
+
+        .stat-item {
+            white-space: nowrap !important;
+        }
+
+        .results-buttons {
+            display: flex !important;
+            gap: 8px !important;
+            flex-shrink: 0 !important;
+        }
+
+        .results-buttons button {
+            padding: 6px 12px !important;
+            font-size: 0.8rem !important;
+            border: none !important;
+            border-radius: 5px !important;
+            cursor: pointer !important;
+            font-weight: 500 !important;
+        }
+
+        .load-btn {
+            background: #28a745 !important;
+            color: white !important;
+        }
+
+        .new-search-btn {
+            background: #6c757d !important;
+            color: white !important;
+        }
+
+        .results-buttons button:hover {
+            opacity: 0.9 !important;
+            transform: translateY(-1px) !important;
         }
 
         .filter-group {
@@ -464,16 +758,17 @@
 </head>
 <body>
     <div class="container">
-        <!-- Timezone Display Banner -->
-        <div class="timezone-banner" id="timezoneBanner">
-            <span class="timezone-info">🕐 Display Timezone: <span id="displayTimezone">Loading...</span></span>
-            <span class="timezone-info">📍 Offset: <span id="timezoneOffset">Loading...</span></span>
-            <span class="timezone-info">📝 All times shown in this timezone</span>
-        </div>
-        
-        <div class="header">
-            <h1>📸 Vacation Media Library</h1>
-            <p>Explore your photos and videos with interactive maps and smart filtering</p>
+        <div class="header-compact">
+            <div class="header-left">
+                <h1>📸 Vacation Media Library</h1>
+                <p>Explore your photos and videos with interactive maps and smart filtering</p>
+            </div>
+            <div class="header-right">
+                <div class="timezone-display">
+                    <span class="timezone-item">🕐 <span id="displayTimezone">Loading...</span></span>
+                    <span class="timezone-item">📍 <span id="timezoneOffset">Loading...</span></span>
+                </div>
+            </div>
         </div>
 
         <div class="nav-links" style="text-align: center; margin-bottom: 20px;">
@@ -481,77 +776,107 @@
             <a href="daily.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">📅 Daily View</a>
             <a href="city.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">🏙️ City View</a>
             <a href="special.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">🎯 Special View</a>
-            <a href="fixinfo.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">� GPS Editor</a>
+            <a href="fixinfo.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">� FixInfo</a>
             <a href="journal.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">📔 Journal</a>
         </div>
 
         <div class="main-content">
-            <div class="panel">
-                <h2>🗺️ Interactive Map</h2>
-                <div id="map"></div>
-            </div>
-
-            <div class="panel">
-                <h2>🔍 Filters & Search</h2>
-                <div class="filters">
-                    <div class="filter-group">
-                        <label for="country-filter">Country</label>
-                        <select id="country-filter">
-                            <option value="">Select a country...</option>
-                        </select>
+            <!-- Row 1: Filters & Search (Full Width) -->
+            <div class="filters-row">
+                <div class="panel">
+                    <h2>🔍 Filters & Search</h2>
+                    <div class="filters-top-row">
+                        <div class="filter-group">
+                            <label for="country-filter">Country</label>
+                            <select id="country-filter">
+                                <option value="">Select a country...</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="city-filter">City</label>
+                            <select id="city-filter" disabled>
+                                <option value="">Select a country first...</option>
+                            </select>
+                        </div>
                     </div>
-                    <div class="filter-group">
-                        <label for="city-filter">City</label>
-                        <select id="city-filter" disabled>
-                            <option value="">Select a country first...</option>
-                        </select>
+                    <div class="filters-top-row">
+                        <div class="filter-group">
+                            <label for="date-from">Date From</label>
+                            <input type="datetime-local" id="date-from">
+                        </div>
+                        <div class="filter-group">
+                            <label for="date-to">Date To</label>
+                            <input type="datetime-local" id="date-to">
+                        </div>
+                        <div class="search-buttons">
+                            <button id="search-btn" onclick="searchMedia()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                                🔍 Search Media
+                            </button>
+                            <button id="sort-toggle-btn" onclick="toggleSortOrder()" style="padding: 10px 15px; background: #fd7e14; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                                📅 Oldest First
+                            </button>
+                        </div>
                     </div>
-                    <div class="filter-group">
-                        <label for="date-from">Date From</label>
-                        <input type="datetime-local" id="date-from">
+                    
+                    <!-- Compact Stats Display -->
+                    <div class="stats-compact" id="stats">
+                        <!-- Compact stats will be loaded here -->
                     </div>
-                    <div class="filter-group">
-                        <label for="date-to">Date To</label>
-                        <input type="datetime-local" id="date-to">
+                    
+                    <!-- Search Results Summary -->
+                    <div id="search-results">
+                        <h4>Search Results Found</h4>
+                        <div class="results-content">
+                            <div class="results-stats" id="results-summary">
+                                <!-- Stats will be loaded here -->
+                            </div>
+                            <div class="results-buttons">
+                                <button id="load-images-btn" onclick="loadImages()" class="load-btn">
+                                    📷 Load
+                                </button>
+                                <button onclick="clearResults()" class="new-search-btn">
+                                    🔄 New
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="filter-group">
-                        <label for="talking">Talking Detected</label>
-                        <select id="talking">
-                            <option value="">All</option>
-                            <option value="true">Yes</option>
-                            <option value="false">No</option>
-                        </select>
-                    </div>
-                    <div class="filter-group">
-                        <button id="search-btn" onclick="searchMedia()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; margin-top: 20px;">
-                            🔍 Search Media
-                        </button>
-                        <button id="sort-toggle-btn" onclick="toggleSortOrder()" style="padding: 10px 15px; background: #fd7e14; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; margin-top: 20px; margin-left: 10px;">
-                            📅 Oldest First
-                        </button>
-                    </div>
-                </div>
-                
-                <!-- Search Results Summary -->
-                <div id="search-results" style="display: none; margin: 20px 0; padding: 15px; background: #e8f4f8; border-radius: 8px; border-left: 4px solid #667eea;">
-                    <div id="results-summary"></div>
-                    <div style="margin-top: 10px;">
-                        <button id="load-images-btn" onclick="loadImages()" style="padding: 8px 16px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
-                            📷 Load Images
-                        </button>
-                        <button onclick="clearResults()" style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                            🔄 New Search
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="stats" id="stats">
-                    <!-- Stats will be loaded here -->
                 </div>
             </div>
-        </div>
-
-        <div class="panel">
+            
+            <!-- Row 2: Interactive Map (Full Width) -->
+            <div class="map-row">
+                <div class="panel">
+                    <h2>🗺️ Interactive Map <span id="map-coordinates" class="map-coordinates">Click on map to see coordinates</span></h2>
+                    <div id="map-container">
+                        <div id="map"></div>
+                        <div class="map-controls">
+                            <button class="map-control-btn" onclick="toggleFullscreen()" id="fullscreen-btn" title="Toggle Fullscreen">🖥️ Fullscreen</button>
+                            <button class="map-control-btn active" onclick="toggleMapMode('markers')" id="markers-btn">📍 Markers</button>
+                            <button class="map-control-btn" onclick="toggleMapMode('clusters')" id="clusters-btn">🧮 Clusters</button>
+                            <button class="map-control-btn" onclick="toggleMapMode('heatmap')" id="heatmap-btn">🔥 Heatmap</button>
+                            <button class="map-control-btn" onclick="toggleMapMode('routes')" id="routes-btn">🛤️ Routes</button>
+                            <button class="map-control-btn" onclick="toggleMapLayer('satellite')" id="satellite-btn">🛰️ Satellite</button>
+                            <button class="map-control-btn" onclick="toggleTimeline()" id="timeline-btn">⏱️ Timeline</button>
+                        </div>
+                        <div class="timeline-control" id="timeline-control">
+                            <div class="timeline-info">
+                                <span id="timeline-start">Start Date</span>
+                                <span id="timeline-current">Current: All</span>
+                                <span id="timeline-end">End Date</span>
+                            </div>
+                            <input type="range" class="timeline-slider" id="timeline-slider" min="0" max="100" value="100" onchange="updateTimeline(this.value)">
+                            <div style="text-align: center; margin-top: 10px;">
+                                <button onclick="playTimeline()" id="play-btn" style="padding: 5px 15px; background: #28a745; color: white; border: none; border-radius: 5px; margin-right: 10px;">▶️ Play</button>
+                                <button onclick="resetTimeline()" style="padding: 5px 15px; background: #6c757d; color: white; border: none; border-radius: 5px;">🔄 Reset</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Row 3: Media Gallery (Full Width) -->
+            <div class="gallery-row">
+                <div class="panel">
             <h2>📱 Media Gallery</h2>
             
             <!-- View Controls -->
@@ -580,8 +905,9 @@
             <div id="media-grid" class="media-grid thumbnail" style="display: none;">
                 <!-- Media cards will be loaded here -->
             </div>
+                </div>
+            </div>
         </div>
-    </div>
 
     <!-- Modal for media preview -->
     <div id="media-modal" class="modal">
@@ -597,29 +923,26 @@
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <script src="https://unpkg.com/leaflet-fullscreen@1.4.2/dist/Leaflet.fullscreen.min.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
     <script>
-        // Load timezone configuration on page load
+        console.log('🚀 JavaScript section starting to load...');
+        
+        // Load timezone configuration
         async function loadTimezoneConfig() {
             try {
                 const response = await fetch('/api/config/timezone');
                 const config = await response.json();
                 
-                if (config.OffsetTime && config.TimeZone) {
-                    document.getElementById('displayTimezone').textContent = config.TimeZone;
-                    document.getElementById('timezoneOffset').textContent = config.OffsetTime;
-                } else {
-                    document.getElementById('displayTimezone').textContent = 'ASIA Time';
-                    document.getElementById('timezoneOffset').textContent = '+08:00';
-                }
+                document.getElementById('timezoneOffset').textContent = config.OffsetTime;
+                document.getElementById('displayTimezone').textContent = config.TimeZone;
             } catch (error) {
-                console.warn('Could not load timezone config:', error);
-                document.getElementById('displayTimezone').textContent = 'ASIA Time';
+                console.error('Error loading timezone config:', error);
                 document.getElementById('timezoneOffset').textContent = '+08:00';
+                document.getElementById('displayTimezone').textContent = 'ASIA Time';
             }
         }
-        
-        // Call timezone config loading on page load
-        document.addEventListener('DOMContentLoaded', loadTimezoneConfig);
         
         // Helper function to format creation time
         function formatCreationTime(formattedCreationTime, originalCreationTime = null) {
@@ -646,41 +969,182 @@
             return formattedCreationTime;
         }
 
-        // Global variables
+        // Enhanced Global variables
         let map;
         let searchResults = [];
         let loadedMediaData = [];
         let markers = [];
         let currentSortOrder = 'asc';  // Default to ASC (oldest first)
+        
+        // Enhanced Map variables
+        let markerClusterGroup;
+        let heatmapLayer;
+        let routeLayer;
+        let currentMapMode = 'markers';
+        let currentTileLayer = 'street';
+        let streetTileLayer, satelliteTileLayer;
+        let timelineData = [];
+        let timelineActive = false;
+        let playInterval;
 
         // Initialize the application
         document.addEventListener('DOMContentLoaded', function() {
-            initializeMap();
-            loadStats();
-            loadCountries();
-            setupEventListeners();
+            console.log('DOM Content Loaded - Initializing application');
             
-            // Add country selection change handler
-            document.getElementById('country-filter').addEventListener('change', function() {
-                const selectedCountry = this.value;
-                loadCitiesByCountry(selectedCountry);
+            try {
+                loadTimezoneConfig();
+                initializeMap();
+                loadStats();
+                loadCountries();
+                setupEventListeners();
                 
-                // Clear any existing search results when country changes
-                document.getElementById('search-results').style.display = 'none';
-                document.getElementById('initial-message').style.display = 'block';
-            });
-            // Initialize view mode to thumbnail by default
-            setViewMode('thumbnail');
+                // Add country selection change handler
+                const countryFilter = document.getElementById('country-filter');
+                if (countryFilter) {
+                    countryFilter.addEventListener('change', function() {
+                        const selectedCountry = this.value;
+                        console.log('Country changed to:', selectedCountry);
+                        loadCitiesByCountry(selectedCountry);
+                        
+                        // Clear any existing search results when country changes
+                        const searchResults = document.getElementById('search-results');
+                        const initialMessage = document.getElementById('initial-message');
+                        if (searchResults) searchResults.style.display = 'none';
+                        if (initialMessage) initialMessage.style.display = 'block';
+                    });
+                    console.log('Country filter event listener added successfully');
+                } else {
+                    console.error('country-filter element not found!');
+                }
+                
+                // Initialize view mode to thumbnail by default
+                setViewMode('thumbnail');
+                console.log('Application initialization complete');
+                
+                // Add fullscreen change event listeners
+                document.addEventListener('fullscreenchange', handleFullscreenChange);
+                document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+                document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+                document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+                
+                // Add escape key listener for fullscreen
+                document.addEventListener('keydown', function(event) {
+                    if (event.key === 'Escape' && document.fullscreenElement) {
+                        resetFullscreenUI();
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Error during application initialization:', error);
+                console.error('Error stack:', error.stack);
+            }
+            
             // Don't load media automatically - wait for user search
         });
 
-        // Initialize Leaflet map
+        // CSS-only fullscreen (fallback)
+        function enterCSSFullscreen(mapContainer, fullscreenBtn) {
+            console.log('Entering CSS-only fullscreen mode');
+            
+            // Update button state
+            fullscreenBtn.classList.add('active');
+            fullscreenBtn.innerHTML = '📱 Exit Full';
+            fullscreenBtn.title = 'Exit Fullscreen';
+            
+            // Add fullscreen styles
+            mapContainer.classList.add('fullscreen-active');
+            document.body.classList.add('map-fullscreen');
+            
+            // Force map to resize
+            setTimeout(() => {
+                if (map) {
+                    console.log('CSS fullscreen - resizing map');
+                    map.invalidateSize(true);
+                    
+                    setTimeout(() => {
+                        map.invalidateSize(true);
+                        if (searchResults && searchResults.length > 0) {
+                            clearMapLayers();
+                            addMarkersToMap(searchResults, currentMapMode);
+                        }
+                    }, 200);
+                }
+            }, 100);
+        }
+
+        // Handle fullscreen change events
+        function handleFullscreenChange() {
+            if (!document.fullscreenElement && 
+                !document.webkitFullscreenElement && 
+                !document.mozFullScreenElement && 
+                !document.msFullscreenElement) {
+                // Exited fullscreen
+                console.log('Fullscreen exited via browser/Esc key');
+                resetFullscreenUI();
+            }
+        }
+
+        // Initialize Enhanced Leaflet map
         function initializeMap() {
+            // Initialize map without built-in fullscreen (we use our custom one)
             map = L.map('map').setView([40.7128, -74.0060], 2); // Default to New York
             
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            // Initialize tile layers
+            streetTileLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '© OpenStreetMap contributors'
+            });
+            
+            satelliteTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            });
+            
+            // Add default street layer
+            streetTileLayer.addTo(map);
+            
+            // Initialize marker cluster group
+            markerClusterGroup = L.markerClusterGroup({
+                spiderfyOnMaxZoom: true,
+                showCoverageOnHover: false,
+                zoomToBoundsOnClick: true
+            });
+            
+            // Add scale control
+            L.control.scale({
+                position: 'bottomleft'
             }).addTo(map);
+            
+            // Add click handler for coordinates
+            map.on('click', function(e) {
+                console.log('Clicked at: ' + e.latlng.lat + ', ' + e.latlng.lng);
+                const coordsEl = document.getElementById('map-coordinates');
+                if (coordsEl) {
+                    const lat = e.latlng.lat.toFixed(6);
+                    const lng = e.latlng.lng.toFixed(6);
+                    coordsEl.textContent = `Lat: ${lat}, Lng: ${lng}`;
+                    coordsEl.classList.add('has-coordinates');
+                }
+            });
+            
+            // Add fullscreen event listeners
+            map.on('enterFullscreen', function() {
+                console.log('Map entered fullscreen mode');
+                const fullscreenBtn = document.getElementById('fullscreen-btn');
+                if (fullscreenBtn) {
+                    fullscreenBtn.classList.add('active');
+                    fullscreenBtn.innerHTML = '📱 Exit Full';
+                    fullscreenBtn.title = 'Exit Fullscreen';
+                }
+            });
+            
+            map.on('exitFullscreen', function() {
+                console.log('Map exited fullscreen mode');
+                const fullscreenBtn = document.getElementById('fullscreen-btn');
+                if (fullscreenBtn) {
+                    fullscreenBtn.classList.remove('active');
+                    fullscreenBtn.innerHTML = '🖥️ Fullscreen';
+                    fullscreenBtn.title = 'Enter Fullscreen';
+                }
+            });
         }
 
         // Load statistics
@@ -691,17 +1155,8 @@
                 
                 const statsContainer = document.getElementById('stats');
                 statsContainer.innerHTML = `
-                    <div class="stat-card">
-                        <span class="number">${stats.total_media}</span>
-                        <span class="label">Total Media</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="number">${stats.total_with_location}</span>
-                        <span class="label">With Location</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="number">${stats.total_with_talking}</span>
-                        <span class="label">With Talking</span>
+                    <div class="stats-compact">
+                        Total Media: ${stats.total_media} | With Location: ${stats.total_with_location} | With Talking: ${stats.total_with_talking}
                     </div>
                 `;
 
@@ -795,19 +1250,30 @@
         // Load cities by selected country
         async function loadCitiesByCountry(country) {
             try {
+                console.log('loadCitiesByCountry called with:', country);
                 const citySelect = document.getElementById('city-filter');
                 
                 if (!country) {
+                    console.log('No country selected, disabling city select');
                     citySelect.innerHTML = '<option value="">Select a country first...</option>';
                     citySelect.disabled = true;
                     return;
                 }
                 
+                console.log('Loading cities for country:', country);
                 citySelect.disabled = false;
                 citySelect.innerHTML = '<option value="">Loading cities...</option>';
                 
-                const response = await fetch(`/api/media/cities-by-country?country=${encodeURIComponent(country)}`);
+                const url = `/api/media/cities-by-country?country=${encodeURIComponent(country)}`;
+                console.log('Fetching from URL:', url);
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const cities = await response.json();
+                console.log('Received cities:', cities.length, cities);
                 
                 citySelect.innerHTML = '<option value="">Select a city...</option>';
                 
@@ -819,10 +1285,15 @@
                     option.dataset.countryEn = cityData.country_en;
                     citySelect.appendChild(option);
                 });
+                
+                console.log('Successfully loaded', cities.length, 'cities');
+                
             } catch (error) {
                 console.error('Error loading cities:', error);
+                console.error('Error details:', error.stack);
                 const citySelect = document.getElementById('city-filter');
                 citySelect.innerHTML = '<option value="">Error loading cities</option>';
+                citySelect.disabled = false; // Enable it so user can see the error message
             }
         }
 
@@ -919,7 +1390,6 @@
             const country = document.getElementById('country-filter').value;
             const dateFrom = document.getElementById('date-from').value;
             const dateTo = document.getElementById('date-to').value;
-            const talking = document.getElementById('talking').value;
             
             const params = {};
             
@@ -934,7 +1404,6 @@
             
             if (dateFrom) params.date_from = dateFrom;
             if (dateTo) params.date_to = dateTo;
-            if (talking) params.talking = talking;
             
             return params;
         }
@@ -959,17 +1428,11 @@
             const estimatedSize = (imageCount * avgImageSize + videoCount * avgVideoSize).toFixed(1);
             
             summaryDiv.innerHTML = `
-                <h3>🔍 Search Results Found</h3>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin: 10px 0;">
-                    <div><strong>${totalCount}</strong> files total</div>
-                    <div><strong>${imageCount}</strong> images</div>
-                    <div><strong>${videoCount}</strong> videos</div>
-                    <div><strong>${withLocationCount}</strong> with GPS</div>
-                </div>
-                <p style="margin: 10px 0; color: #666;">
-                    📊 Estimated size: ~${estimatedSize} MB
-                    ${totalCount > 100 ? '<br>⚠️ Large number of files - loading may take time' : ''}
-                </p>
+                <span class="stat-item"><strong>${totalCount}</strong> files</span>
+                <span class="stat-item"><strong>${imageCount}</strong> images</span>
+                <span class="stat-item"><strong>${videoCount}</strong> videos</span>
+                <span class="stat-item"><strong>${withLocationCount}</strong> GPS</span>
+                <span class="stat-item">~${estimatedSize} MB</span>
             `;
             
             resultsDiv.style.display = 'block';
@@ -1018,7 +1481,6 @@
             document.getElementById('country-filter').value = '';
             document.getElementById('date-from').value = '';
             document.getElementById('date-to').value = '';
-            document.getElementById('talking').value = '';
         }
 
         // Display media in grid
@@ -1160,23 +1622,43 @@
             }).join('');
         }
 
-                // Update map with search results (lightweight - no image loading)
-        function updateMapWithResults(data) {
-            // Clear existing markers
-            markers.forEach(marker => map.removeLayer(marker));
-            markers = [];
+        // Enhanced function to add markers to map with multiple display modes
+        function addMarkersToMap(data, mode = 'markers') {
+            if (!data || data.length === 0) return;
             
-            // Add new markers
+            // Process location data
             const locations = {};
+            const heatmapPoints = [];
+            const routePoints = [];
+            
             data.forEach(media => {
                 if (media.latitude && media.longitude) {
-                    const key = `${media.latitude},${media.longitude}`;
+                    const lat = parseFloat(media.latitude);
+                    const lng = parseFloat(media.longitude);
+                    
+                    // For heatmap
+                    heatmapPoints.push([lat, lng, 1]);
+                    
+                    // For route (sorted by time)
+                    if (media.creation_time) {
+                        routePoints.push({
+                            lat: lat,
+                            lng: lng,
+                            time: new Date(media.creation_time),
+                            media: media
+                        });
+                    }
+                    
+                    // For markers/clusters
+                    const key = `${lat},${lng}`;
                     if (!locations[key]) {
                         locations[key] = {
-                            lat: media.latitude,
-                            lng: media.longitude,
-                            city: media.city_zh,
-                            country: media.country_zh,
+                            lat: lat,
+                            lng: lng,
+                            city: media.city_zh || media.city_en || 'Unknown',
+                            country: media.country_zh || media.country_en || 'Unknown',
+                            city_en: media.city_en || media.city_zh || 'Unknown',
+                            country_en: media.country_en || media.country_zh || 'Unknown',
                             count: 0,
                             media: []
                         };
@@ -1186,55 +1668,566 @@
                 }
             });
             
+            // Display based on mode
+            switch (mode) {
+                case 'markers':
+                    addRegularMarkers(locations);
+                    break;
+                case 'clusters':
+                    addClusteredMarkers(locations);
+                    break;
+                case 'heatmap':
+                    addHeatmap(heatmapPoints);
+                    break;
+                case 'routes':
+                    addRouteLayer(routePoints);
+                    break;
+            }
+            
+            // Fit map to show all points
+            if (Object.keys(locations).length > 0 || heatmapPoints.length > 0) {
+                fitMapToData(locations, heatmapPoints);
+            }
+        }
+
+        function addRegularMarkers(locations) {
             Object.values(locations).forEach(location => {
-                const marker = L.marker([location.lat, location.lng])
-                    .bindPopup(`
-                        <div>
-                            <h3>${location.city || 'Unknown'}, ${location.country || 'Unknown'}</h3>
-                            <p>${location.count} media file(s)</p>
-                            <div style="margin-top: 10px;">
-                                ${location.media.slice(0, 3).map(media => `
-                                    <div style="margin: 5px 0; padding: 5px; border: 1px solid #ddd; border-radius: 3px;">
-                                        <strong>${media.filename}</strong><br>
-                                        <small>${formatCreationTimeClean(media.formatted_creation_time)}</small><br>
-                                        <button onclick="openFileInSystem(${media.id})" style="margin-top: 5px; padding: 3px 8px; background: #667eea; color: white; border: none; border-radius: 3px; cursor: pointer;">
-                                            Open File
-                                        </button>
-                                    </div>
-                                `).join('')}
-                                ${location.media.length > 3 ? `<p><small>... and ${location.media.length - 3} more</small></p>` : ''}
-                            </div>
-                            <button onclick="filterByLocation('${location.city}', '${location.country}')" style="margin-top: 10px; padding: 8px 12px; background: #764ba2; color: white; border: none; border-radius: 5px; cursor: pointer;">
-                                Filter by this location
-                            </button>
-                        </div>
-                    `)
+                // Custom icon based on media count
+                const iconColor = location.count > 10 ? '#FF5722' : location.count > 5 ? '#FF9800' : '#4CAF50';
+                
+                const customIcon = L.divIcon({
+                    className: 'custom-marker',
+                    html: `<div style="background: ${iconColor}; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 2px solid white; font-weight: bold; font-size: 12px;">${location.count}</div>`,
+                    iconSize: [30, 30],
+                    iconAnchor: [15, 15]
+                });
+                
+                const marker = L.marker([location.lat, location.lng], { icon: customIcon })
+                    .bindPopup(createPopupContent(location))
                     .addTo(map);
+                    
                 markers.push(marker);
             });
+        }
+
+        function addClusteredMarkers(locations) {
+            markerClusterGroup.clearLayers();
             
-            // Fit map to markers if any exist
-            if (markers.length > 0) {
-                const group = new L.featureGroup(markers);
+            Object.values(locations).forEach(location => {
+                // Different icons for different media types
+                location.media.forEach(media => {
+                    const isVideo = media.filename && (
+                        media.filename.toLowerCase().endsWith('.mp4') ||
+                        media.filename.toLowerCase().endsWith('.mov') ||
+                        media.filename.toLowerCase().endsWith('.avi')
+                    );
+                    
+                    const iconColor = isVideo ? '#FF5722' : '#4CAF50';
+                    const iconSymbol = isVideo ? '🎥' : '📷';
+                    
+                    const customIcon = L.divIcon({
+                        className: 'media-marker',
+                        html: `<div style="background: ${iconColor}; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; border: 2px solid white;">${iconSymbol}</div>`,
+                        iconSize: [25, 25],
+                        iconAnchor: [12, 12]
+                    });
+                    
+                    const marker = L.marker([location.lat, location.lng], { icon: customIcon })
+                        .bindPopup(createIndividualPopupContent(media));
+                        
+                    markerClusterGroup.addLayer(marker);
+                });
+            });
+            
+            map.addLayer(markerClusterGroup);
+        }
+
+        function addHeatmap(heatmapPoints) {
+            if (heatmapPoints.length > 0) {
+                heatmapLayer = L.heatLayer(heatmapPoints, {
+                    radius: 20,
+                    blur: 15,
+                    maxZoom: 17,
+                    gradient: {0.4: 'blue', 0.65: 'lime', 1: 'red'}
+                }).addTo(map);
+            }
+        }
+
+        function addRouteLayer(routePoints) {
+            if (routePoints.length < 2) return;
+            
+            // Sort by time
+            routePoints.sort((a, b) => a.time - b.time);
+            
+            // Create polyline
+            const latlngs = routePoints.map(point => [point.lat, point.lng]);
+            
+            routeLayer = L.polyline(latlngs, {
+                color: '#667eea',
+                weight: 3,
+                opacity: 0.8
+            }).addTo(map);
+            
+            // Add markers for start and end points
+            const startIcon = L.divIcon({
+                className: 'route-marker',
+                html: '<div style="background: #28a745; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border: 2px solid white; font-size: 12px;">🚩</div>',
+                iconSize: [20, 20]
+            });
+            
+            const endIcon = L.divIcon({
+                className: 'route-marker',
+                html: '<div style="background: #dc3545; color: white; border-radius: 50%; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; border: 2px solid white; font-size: 12px;">🏁</div>',
+                iconSize: [20, 20]
+            });
+            
+            L.marker([routePoints[0].lat, routePoints[0].lng], { icon: startIcon })
+                .bindPopup(`<b>Journey Start</b><br>${routePoints[0].time.toLocaleDateString()}`)
+                .addTo(map);
+                
+            L.marker([routePoints[routePoints.length - 1].lat, routePoints[routePoints.length - 1].lng], { icon: endIcon })
+                .bindPopup(`<b>Journey End</b><br>${routePoints[routePoints.length - 1].time.toLocaleDateString()}`)
+                .addTo(map);
+        }
+
+        function createPopupContent(location) {
+            return `
+                <div style="max-width: 300px;">
+                    <h3>${location.city}, ${location.country}</h3>
+                    <p><strong>${location.count}</strong> media file(s)</p>
+                    <div style="margin-top: 10px; max-height: 200px; overflow-y: auto;">
+                        ${location.media.slice(0, 5).map(media => `
+                            <div style="margin: 5px 0; padding: 8px; border: 1px solid #ddd; border-radius: 5px; background: #f9f9f9;">
+                                <div style="font-weight: bold; font-size: 14px;">${media.filename}</div>
+                                <div style="font-size: 12px; color: #666; margin: 2px 0;">${formatCreationTimeClean(media.formatted_creation_time)}</div>
+                                <button onclick="openFileInSystem(${media.id})" style="margin-top: 5px; padding: 4px 8px; background: #667eea; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 11px;">
+                                    📂 Open File
+                                </button>
+                            </div>
+                        `).join('')}
+                        ${location.media.length > 5 ? `<p style="text-align: center; margin: 10px 0; color: #666;"><small>... and ${location.media.length - 5} more files</small></p>` : ''}
+                    </div>
+                    <div style="text-align: center; margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
+                        <button onclick="window.filterByLocationSafe('${(location.city_en || '').replace(/'/g, "\\'")}', '${(location.country_en || '').replace(/'/g, "\\'")}'); return false;" style="padding: 8px 15px; background: #764ba2; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                            🔍 Filter by this location
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function createIndividualPopupContent(media) {
+            const isVideo = media.filename && (
+                media.filename.toLowerCase().endsWith('.mp4') ||
+                media.filename.toLowerCase().endsWith('.mov') ||
+                media.filename.toLowerCase().endsWith('.avi')
+            );
+            
+            return `
+                <div style="max-width: 250px;">
+                    <div style="font-weight: bold; margin-bottom: 8px;">${isVideo ? '🎥' : '📷'} ${media.filename}</div>
+                    <div style="font-size: 12px; color: #666; margin-bottom: 8px;">${formatCreationTimeClean(media.formatted_creation_time)}</div>
+                    <div style="font-size: 11px; color: #888; margin-bottom: 10px;">
+                        📍 ${media.city_zh || media.city_en || 'Unknown'}, ${media.country_zh || media.country_en || 'Unknown'}
+                    </div>
+                    <button onclick="openFileInSystem(${media.id})" style="padding: 6px 12px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%;">
+                        📂 Open File
+                    </button>
+                </div>
+            `;
+        }
+
+        function fitMapToData(locations, heatmapPoints) {
+            const points = [];
+            
+            // Add marker points
+            Object.values(locations).forEach(location => {
+                points.push([location.lat, location.lng]);
+            });
+            
+            // Add heatmap points if no markers
+            if (points.length === 0 && heatmapPoints.length > 0) {
+                heatmapPoints.forEach(point => {
+                    points.push([point[0], point[1]]);
+                });
+            }
+            
+            if (points.length > 0) {
+                const group = new L.featureGroup(points.map(point => L.marker(point)));
                 map.fitBounds(group.getBounds().pad(0.1));
             }
         }
 
-        // Filter by location (fill form fields)
-        function filterByLocation(city, country) {
-            document.getElementById('city-filter').value = city || '';
-            document.getElementById('country-filter').value = country || '';
-            // Don't auto-search, let user click search button
+        // Legacy function for backward compatibility
+        function updateMapWithResults(data) {
+            clearMapLayers();
+            addMarkersToMap(data, currentMapMode);
+        }
+
+        // Safe wrapper for filterByLocation to handle special characters
+        window.filterByLocationSafe = function(city, country) {
+            try {
+                console.log('filterByLocationSafe called with:', city, country);
+                filterByLocation(city, country);
+            } catch (error) {
+                console.error('Error in filterByLocationSafe:', error);
+            }
+        };
+
+        // Enhanced Map Control Functions
+        function toggleMapMode(mode) {
+            // Update button states
+            document.querySelectorAll('.map-control-btn').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(mode + '-btn').classList.add('active');
+            
+            currentMapMode = mode;
+            
+            // Clear current markers/layers
+            clearMapLayers();
+            
+            // Re-add markers in new mode
+            if (searchResults && searchResults.length > 0) {
+                addMarkersToMap(searchResults, mode);
+            }
+        }
+
+        function toggleMapLayer(layer) {
+            if (layer === 'satellite') {
+                if (currentTileLayer === 'street') {
+                    map.removeLayer(streetTileLayer);
+                    map.addLayer(satelliteTileLayer);
+                    currentTileLayer = 'satellite';
+                    document.getElementById('satellite-btn').classList.add('active');
+                    document.getElementById('satellite-btn').textContent = '🗺️ Street';
+                } else {
+                    map.removeLayer(satelliteTileLayer);
+                    map.addLayer(streetTileLayer);
+                    currentTileLayer = 'street';
+                    document.getElementById('satellite-btn').classList.remove('active');
+                    document.getElementById('satellite-btn').textContent = '🛰️ Satellite';
+                }
+            }
+        }
+
+        function clearMapLayers() {
+            // Clear regular markers
+            markers.forEach(marker => map.removeLayer(marker));
+            markers = [];
+            
+            // Clear cluster group
+            if (markerClusterGroup) {
+                map.removeLayer(markerClusterGroup);
+                markerClusterGroup.clearLayers();
+            }
+            
+            // Clear heatmap
+            if (heatmapLayer) {
+                map.removeLayer(heatmapLayer);
+            }
+            
+            // Clear routes
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+            }
+        }
+
+        function toggleTimeline() {
+            const timelineControl = document.getElementById('timeline-control');
+            timelineActive = !timelineActive;
+            
+            if (timelineActive) {
+                timelineControl.style.display = 'block';
+                document.getElementById('timeline-btn').classList.add('active');
+                initializeTimeline();
+            } else {
+                timelineControl.style.display = 'none';
+                document.getElementById('timeline-btn').classList.remove('active');
+                resetTimeline();
+            }
+        }
+
+        function initializeTimeline() {
+            if (!searchResults || searchResults.length === 0) return;
+            
+            // Sort results by date
+            timelineData = [...searchResults].sort((a, b) => 
+                new Date(a.creation_time) - new Date(b.creation_time)
+            );
+            
+            if (timelineData.length > 0) {
+                const startDate = new Date(timelineData[0].creation_time);
+                const endDate = new Date(timelineData[timelineData.length - 1].creation_time);
+                
+                document.getElementById('timeline-start').textContent = startDate.toLocaleDateString();
+                document.getElementById('timeline-end').textContent = endDate.toLocaleDateString();
+                
+                // Reset slider
+                document.getElementById('timeline-slider').value = 100;
+                updateTimeline(100);
+            }
+        }
+
+        function updateTimeline(percentage) {
+            if (!timelineData || timelineData.length === 0) return;
+            
+            const index = Math.floor((percentage / 100) * timelineData.length);
+            const filteredData = timelineData.slice(0, index + 1);
+            
+            // Update display
+            if (filteredData.length > 0) {
+                const currentDate = new Date(filteredData[filteredData.length - 1].creation_time);
+                document.getElementById('timeline-current').textContent = 
+                    `Current: ${currentDate.toLocaleDateString()} (${filteredData.length}/${timelineData.length})`;
+            }
+            
+            // Clear and re-add markers
+            clearMapLayers();
+            if (filteredData.length > 0) {
+                addMarkersToMap(filteredData, currentMapMode);
+            }
+        }
+
+        function playTimeline() {
+            const slider = document.getElementById('timeline-slider');
+            const playBtn = document.getElementById('play-btn');
+            
+            if (playInterval) {
+                clearInterval(playInterval);
+                playInterval = null;
+                playBtn.textContent = '▶️ Play';
+                return;
+            }
+            
+            playBtn.textContent = '⏸️ Pause';
+            let currentValue = 0;
+            
+            playInterval = setInterval(() => {
+                currentValue += 2;
+                if (currentValue > 100) {
+                    currentValue = 100;
+                    clearInterval(playInterval);
+                    playInterval = null;
+                    playBtn.textContent = '▶️ Play';
+                }
+                slider.value = currentValue;
+                updateTimeline(currentValue);
+            }, 200);
+        }
+
+        function resetTimeline() {
+            if (playInterval) {
+                clearInterval(playInterval);
+                playInterval = null;
+                document.getElementById('play-btn').textContent = '▶️ Play';
+            }
+            
+            document.getElementById('timeline-slider').value = 100;
+            document.getElementById('timeline-current').textContent = 'Current: All';
+            
+            if (searchResults && searchResults.length > 0) {
+                clearMapLayers();
+                addMarkersToMap(searchResults, currentMapMode);
+            }
+        }
+
+        // True fullscreen toggle function
+        function toggleFullscreen() {
+            const mapContainer = document.getElementById('map-container');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            
+            if (document.fullscreenElement || mapContainer.classList.contains('fullscreen-active')) {
+                // Exit fullscreen
+                exitFullscreen();
+            } else {
+                // Enter fullscreen
+                enterFullscreen(mapContainer, fullscreenBtn);
+            }
+        }
+
+        // Enter true fullscreen mode
+        function enterFullscreen(mapContainer, fullscreenBtn) {
+            try {
+                // Use different methods for different browsers
+                const requestFullscreen = mapContainer.requestFullscreen || 
+                                        mapContainer.mozRequestFullScreen || 
+                                        mapContainer.webkitRequestFullscreen || 
+                                        mapContainer.msRequestFullscreen;
+                
+                if (requestFullscreen) {
+                    requestFullscreen.call(mapContainer).then(() => {
+                        console.log('Entered true fullscreen mode');
+                        console.log('Map container:', mapContainer);
+                        console.log('Map object:', map);
+                        
+                        // Update button state
+                        fullscreenBtn.classList.add('active');
+                        fullscreenBtn.innerHTML = '📱 Exit Full';
+                        fullscreenBtn.title = 'Exit Fullscreen (Press Esc)';
+                        
+                        // Add fullscreen styles
+                        mapContainer.classList.add('fullscreen-active');
+                        console.log('Added fullscreen-active class');
+                        
+                        // Force map to resize to new dimensions with multiple attempts
+                        setTimeout(() => {
+                            if (map) {
+                                console.log('First map resize attempt');
+                                map.invalidateSize(true);
+                                
+                                // Second attempt after a short delay
+                                setTimeout(() => {
+                                    console.log('Second map resize attempt');
+                                    map.invalidateSize(true);
+                                    
+                                    // Force refresh of all layers
+                                    if (searchResults && searchResults.length > 0) {
+                                        console.log('Refreshing map layers in fullscreen');
+                                        clearMapLayers();
+                                        addMarkersToMap(searchResults, currentMapMode);
+                                    }
+                                }, 200);
+                            }
+                        }, 100);
+                        
+                    }).catch(err => {
+                        console.error('Error entering fullscreen:', err);
+                        alert('Fullscreen mode not supported in this browser');
+                    });
+                } else {
+                    console.warn('Fullscreen API not supported, using CSS fullscreen');
+                    // Fallback to CSS-only fullscreen
+                    enterCSSFullscreen(mapContainer, fullscreenBtn);
+                }
+            } catch (error) {
+                console.error('Fullscreen error:', error);
+            }
+        }
+
+        // Exit fullscreen mode
+        function exitFullscreen() {
+            try {
+                const exitFullscreen = document.exitFullscreen || 
+                                     document.mozCancelFullScreen || 
+                                     document.webkitExitFullscreen || 
+                                     document.msExitFullscreen;
+                
+                if (exitFullscreen) {
+                    exitFullscreen.call(document).then(() => {
+                        console.log('Exited fullscreen mode');
+                        resetFullscreenUI();
+                    });
+                }
+            } catch (error) {
+                console.error('Error exiting fullscreen:', error);
+                resetFullscreenUI();
+            }
+        }
+
+        // Reset UI after exiting fullscreen
+        function resetFullscreenUI() {
+            const mapContainer = document.getElementById('map-container');
+            const fullscreenBtn = document.getElementById('fullscreen-btn');
+            
+            // Update button state
+            fullscreenBtn.classList.remove('active');
+            fullscreenBtn.innerHTML = '�️ Fullscreen';
+            fullscreenBtn.title = 'Enter Fullscreen';
+            
+            // Remove fullscreen styles
+            mapContainer.classList.remove('fullscreen-active');
+            document.body.classList.remove('map-fullscreen');
+            
+            // Force map to resize back to normal with multiple attempts
+            setTimeout(() => {
+                if (map) {
+                    console.log('First map resize back to normal');
+                    map.invalidateSize(true);
+                    
+                    // Second attempt after a short delay
+                    setTimeout(() => {
+                        console.log('Second map resize back to normal');
+                        map.invalidateSize(true);
+                        
+                        // Force refresh of all layers
+                        if (searchResults && searchResults.length > 0) {
+                            console.log('Refreshing map layers after fullscreen exit');
+                            clearMapLayers();
+                            addMarkersToMap(searchResults, currentMapMode);
+                        }
+                    }, 200);
+                }
+            }, 100);
         }
 
         // Display media in grid (only called after user confirms loading)
         // This function is defined above and handles both thumbnail and list views
 
-        // Filter by location
-        function filterByLocation(city, country) {
-            document.getElementById('city-filter').value = city || '';
-            document.getElementById('country-filter').value = country || '';
-            applyFilters();
+        // Filter by location (fill form fields and trigger search)
+        async function filterByLocation(city, country) {
+            console.log('filterByLocation called with city:', city, 'country:', country);
+            
+            try {
+                const countrySelect = document.getElementById('country-filter');
+                const citySelect = document.getElementById('city-filter');
+                
+                // First, try to find and set the country
+                let countryFound = false;
+                for (let option of countrySelect.options) {
+                    // Try to match by display text (which might be Chinese) or value
+                    if (option.textContent.includes(country) || 
+                        option.value === country ||
+                        option.dataset.countryEn === country ||
+                        option.dataset.countryZh === country) {
+                        countrySelect.value = option.value;
+                        countryFound = true;
+                        console.log('Found matching country option:', option.textContent, 'value:', option.value);
+                        break;
+                    }
+                }
+                
+                if (!countryFound) {
+                    console.log('Country not found, clearing selections');
+                    countrySelect.value = '';
+                    citySelect.value = '';
+                    citySelect.innerHTML = '<option value="">Select a country first...</option>';
+                    citySelect.disabled = true;
+                    return;
+                }
+                
+                // Load cities for the selected country
+                const selectedCountry = countrySelect.value;
+                if (selectedCountry) {
+                    await loadCitiesByCountry(selectedCountry);
+                    
+                    // Now try to find and set the city
+                    let cityFound = false;
+                    for (let option of citySelect.options) {
+                        // Try to match by display text, city name, or value
+                        if (option.textContent.includes(city) ||
+                            option.dataset.cityEn === city ||
+                            option.dataset.cityZh === city ||
+                            option.value.includes(city)) {
+                            citySelect.value = option.value;
+                            cityFound = true;
+                            console.log('Found matching city option:', option.textContent, 'value:', option.value);
+                            break;
+                        }
+                    }
+                    
+                    if (!cityFound) {
+                        console.log('City not found in dropdown, leaving city selection empty');
+                    }
+                }
+                
+                // Automatically trigger search
+                console.log('Triggering search with country:', countrySelect.value, 'city:', citySelect.value);
+                searchMedia();
+                
+            } catch (error) {
+                console.error('Error in filterByLocation:', error);
+                console.log('Error details:', error.stack);
+                alert('Error filtering by location. Check console for details.');
+            }
         }
 
         // Open file in system default application
@@ -1257,41 +2250,8 @@
             }
         }
 
-        // Apply filters
-        function applyFilters() {
-            const city = document.getElementById('city-filter').value.toLowerCase();
-            const country = document.getElementById('country-filter').value.toLowerCase();
-            const dateFrom = document.getElementById('date-from').value;
-            const dateTo = document.getElementById('date-to').value;
-            const talking = document.getElementById('talking').value;
-            
-            filteredData = mediaData.filter(media => {
-                if (city && (!media.city_zh || !media.city_zh.toLowerCase().includes(city))) return false;
-                if (country && (!media.country_zh || !media.country_zh.toLowerCase().includes(country))) return false;
-                
-                if (dateFrom || dateTo) {
-                    // Convert creation_time to proper date format for comparison
-                    let mediaTime = null;
-                    if (media.creation_time) {
-                        let formattedTime = media.creation_time;
-                        if (formattedTime.match && formattedTime.match(/\d{4}-\d{2}-\d{2} \d{2}-\d{2}-\d{2}/)) {
-                            formattedTime = formattedTime.replace(/ (\d{2})-(\d{2})-(\d{2})/, ' $1:$2:$3');
-                        }
-                        mediaTime = new Date(formattedTime);
-                    }
-                    if (dateFrom && mediaTime && mediaTime < new Date(dateFrom)) return false;
-                    if (dateTo && mediaTime && mediaTime > new Date(dateTo)) return false;
-                }
-                
-                if (talking === 'true' && !media.talking_detected) return false;
-                if (talking === 'false' && media.talking_detected) return false;
-                
-                return true;
-            });
-            
-            displayMedia(filteredData);
-            updateMap(filteredData);
-        }
+        // This function is no longer needed - we use searchMedia() instead
+        // All filtering is now done server-side through the search API
 
         // Open media modal
         async function openMediaModal(mediaId) {
@@ -1361,11 +2321,7 @@
 
         // Setup event listeners
         function setupEventListeners() {
-            // Filter inputs (excluding city and country filters which are handled separately)
-            ['date-from', 'date-to', 'talking'].forEach(id => {
-                document.getElementById(id).addEventListener('input', applyFilters);
-                document.getElementById(id).addEventListener('change', applyFilters);
-            });
+            // Note: Filter inputs are now handled by the search button - no auto-filtering on input changes
             
             // City filter change handler (triggers search automatically when city is selected)
             document.getElementById('city-filter').addEventListener('change', function() {
@@ -1397,11 +2353,7 @@
             document.getElementById('loading').style.display = 'none';
         }
 
-        // Initialize the application
-        document.addEventListener('DOMContentLoaded', function() {
-            initMap();
-            setupEventListeners();
-        });
+        // Note: Main DOMContentLoaded event listener is defined earlier in the code
     </script>
 </body>
 </html>

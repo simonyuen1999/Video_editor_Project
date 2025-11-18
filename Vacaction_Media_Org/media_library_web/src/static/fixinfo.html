@@ -27,31 +27,66 @@
             padding: 10px 20px;
         }
 
-        .header {
-            text-align: center;
+        .header-compact {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             color: white;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+            padding: 10px 0;
         }
 
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
+        .header-left {
+            display: flex;
+            align-items: baseline;
+            gap: 15px;
+        }
+
+        .header-left h1 {
+            font-size: 2rem;
+            margin: 0;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
-        .timezone-banner {
-            background: #2c3e50;
-            color: white;
-            padding: 8px 0;
-            text-align: center;
+        .header-left p {
             font-size: 0.9rem;
-            border-bottom: 2px solid #34495e;
+            opacity: 0.9;
+            margin: 0;
         }
 
-        .timezone-info {
-            font-size: 0.9rem;
+        .header-right {
+            text-align: right;
+        }
+
+        .timezone-display {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            padding: 8px 15px;
+            border-radius: 10px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+        }
+
+        .timezone-item {
+            font-size: 0.85rem;
             display: inline-block;
-            margin: 0 15px;
+            margin: 0 8px 0 0;
+        }
+
+        @media (max-width: 768px) {
+            .header-compact {
+                flex-direction: column;
+                text-align: center;
+                gap: 15px;
+            }
+            
+            .header-left {
+                flex-direction: column;
+                gap: 5px;
+            }
+            
+            .header-right {
+                text-align: center;
+            }
         }
 
         .nav-links {
@@ -476,6 +511,35 @@
         #unselect-unknown-btn:hover:not(:disabled) {
             background: #6f42c1;
             color: white;
+        }
+
+        /* Delete button styling */
+        .delete-button {
+            padding: 10px 20px;
+            background: #6c757d; /* Grey when disabled */
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: not-allowed;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            margin-left: 10px;
+        }
+
+        .delete-button:not(:disabled) {
+            background: linear-gradient(135deg, #dc3545, #c82333); /* Light red when enabled */
+            cursor: pointer;
+        }
+
+        .delete-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            background: linear-gradient(135deg, #c82333, #a71e2a); /* Darker red on hover */
+        }
+
+        .delete-button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
         }
 
         /* Visual indicator for items with unknown location */
@@ -1059,16 +1123,18 @@
     </style>
 </head>
 <body>
-    <!-- Timezone Display Banner -->
-    <div class="timezone-banner" id="timezoneBanner">
-        <span class="timezone-info">Display Timezone: <strong id="displayTime">Loading...</strong></span>
-        <span class="timezone-info">Offset: <strong id="offsetTime">Loading...</strong></span>
-    </div>
-    
     <div class="container">
-        <div class="header">
-            <h1>FixInfo View</h1>
-            <p>Modify media location, GPS coordinates, and optionally database creation time</p>
+        <div class="header-compact">
+            <div class="header-left">
+                <h1>� FixInfo View</h1>
+                <p>Modify media location, GPS coordinates, and optionally database creation time</p>
+            </div>
+            <div class="header-right">
+                <div class="timezone-display">
+                    <span class="timezone-item">🕐 <span id="displayTimezone">Loading...</span></span>
+                    <span class="timezone-item">📍 <span id="timezoneOffset">Loading...</span></span>
+                </div>
+            </div>
         </div>
 
         <div class="nav-links">
@@ -1076,7 +1142,7 @@
             <a href="city.html">🏙️ City View</a>
             <a href="daily.html">📅 Daily View</a>
             <a href="special.html">⭐ Special View</a>
-            <a href="fixinfo.html" class="active">� GPS Editor</a>
+            <a href="fixinfo.html" class="active">� FixInfo</a>
             <a href="journal.html">📔 Journal</a>
         </div>
 
@@ -1127,6 +1193,9 @@
                     <div class="control-group">
                         <button id="modify-button" class="modify-button" onclick="showModifyConfirmation()" disabled>
                             Modify Selected Files
+                        </button>
+                        <button id="delete-selected-btn" class="delete-button" onclick="deleteSelectedMedia()" disabled title="Delete selected media files from database and move to delete directory">
+                            🗑️ Delete Selected
                         </button>
                     </div>
                 </div>
@@ -1317,15 +1386,15 @@
         // Load timezone configuration
         async function loadTimezoneConfig() {
             try {
-                const response = await fetch('/config/timezone');
+                const response = await fetch('/api/config/timezone');
                 const config = await response.json();
                 
-                document.getElementById('offsetTime').textContent = config.OffsetTime;
-                document.getElementById('displayTime').textContent = config.TimeZone;
+                document.getElementById('timezoneOffset').textContent = config.OffsetTime;
+                document.getElementById('displayTimezone').textContent = config.TimeZone;
             } catch (error) {
                 console.error('Error loading timezone config:', error);
-                document.getElementById('offsetTime').textContent = '+08:00';
-                document.getElementById('displayTime').textContent = 'ASIA Time';
+                document.getElementById('timezoneOffset').textContent = '+08:00';
+                document.getElementById('displayTimezone').textContent = 'ASIA Time';
             }
         }
 
@@ -1742,6 +1811,8 @@
         function displayMedia(media, savedSelections = null) {
             const container = document.getElementById('media-container');
             
+            console.log(`displayMedia called with ${media.length} items, viewMode: ${currentViewMode}`);
+            
             if (media.length === 0) {
                 container.innerHTML = `
                     <div class="no-media">
@@ -1801,6 +1872,8 @@
 
             container.innerHTML = '';
             container.appendChild(mediaGrid);
+            
+            console.log(`displayMedia completed: container now has ${container.children.length} children, mediaGrid has ${mediaGrid.children.length} items`);
             
             // Add click event delegation for thumbnails
             setupThumbnailClickHandlers(mediaGrid);
@@ -2144,6 +2217,7 @@
         }
 
         function unselectAllMedia() {
+            console.log('unselectAllMedia called - clearing all selections');
             const checkboxes = document.querySelectorAll('.media-checkbox');
             checkboxes.forEach(checkbox => {
                 checkbox.checked = false;
@@ -2249,6 +2323,202 @@
                 } else {
                     unselectUnknownBtn.disabled = false;
                     unselectUnknownBtn.textContent = `📍 Unselect Unknown (${unknownLocationSelected})`;
+                }
+            }
+            
+            // Update Delete Selected button
+            const deleteBtn = document.getElementById('delete-selected-btn');
+            if (checkedBoxes.length === 0) {
+                deleteBtn.disabled = true;
+                deleteBtn.textContent = '🗑️ Delete Selected';
+            } else {
+                deleteBtn.disabled = false;
+                deleteBtn.textContent = `🗑️ Delete Selected (${checkedBoxes.length})`;
+            }
+        }
+
+        function updateMediaCounter(displayedCount, totalCount, statusText = null) {
+            document.getElementById('media-count').textContent = `${displayedCount} files ${displayedCount === totalCount ? 'found' : 'displayed'}`;
+            if (statusText) {
+                document.getElementById('status-text').textContent = statusText;
+            }
+        }
+
+        function getCurrentStatusText() {
+            // Get the current status text to restore it properly
+            const statusElement = document.getElementById('status-text');
+            return statusElement ? statusElement.textContent : '';
+        }
+
+        function deleteSelectedMedia() {
+            const checkedBoxes = document.querySelectorAll('.media-checkbox:checked');
+            if (checkedBoxes.length === 0) {
+                alert('No media files selected for deletion.');
+                return;
+            }
+
+            // Get selected media info for confirmation
+            const selectedMedia = [];
+            checkedBoxes.forEach(checkbox => {
+                const mediaId = checkbox.dataset.mediaId;
+                const mediaItem = mediaData.find(item => item.id == mediaId);
+                if (mediaItem) {
+                    selectedMedia.push(mediaItem);
+                }
+            });
+
+            // Store original media data and filter state to restore later
+            const originalMediaData = [...mediaData];
+            const unknownFilter = document.getElementById('unknown-filter');
+            const originalFilterState = unknownFilter.checked;
+            
+            // Disable unknown filter during delete operation (without triggering events)
+            if (originalFilterState) {
+                unknownFilter.checked = false;
+                // Don't trigger the change event that would clear selections
+            }
+
+            // Store the original selections to preserve user's choice
+            const originalSelections = {};
+            document.querySelectorAll('.media-checkbox:checked').forEach(checkbox => {
+                originalSelections[checkbox.dataset.mediaId] = true;
+            });
+
+            // Update global mediaData to show only selected media
+            mediaData = selectedMedia;
+            
+            console.log(`Filtering view: showing ${selectedMedia.length} selected files out of ${originalMediaData.length} total`);
+            
+            // Show only selected media immediately when delete button is clicked
+            displayMedia(mediaData);
+            
+            // Restore the original selections (preserve user's checkboxes)
+            setTimeout(() => {
+                document.querySelectorAll('.media-checkbox').forEach(checkbox => {
+                    const mediaId = checkbox.dataset.mediaId;
+                    checkbox.checked = originalSelections[mediaId] || false;
+                });
+                updateMediaCounter(mediaData.length, originalMediaData.length, `Selected ${selectedMedia.length} files for deletion`);
+                updateSelectionButtons();
+                
+                // Wait for UI to update before showing confirmation dialog
+                setTimeout(() => {
+                    // First confirmation - now shown after view has updated
+                    const firstConfirm = confirm(
+                        `⚠️ WARNING: You are about to DELETE ${selectedMedia.length} media file${selectedMedia.length > 1 ? 's' : ''}.\n\n` +
+                        `This will:\n` +
+                        `• Remove entries from the database\n` +
+                        `• Move media files to delete directory\n` +
+                        `• Move thumbnail files to delete directory\n\n` +
+                        `Files to be deleted:\n${selectedMedia.slice(0, 5).map(m => `• ${m.filename}`).join('\n')}` +
+                        `${selectedMedia.length > 5 ? `\n• ... and ${selectedMedia.length - 5} more files` : ''}\n\n` +
+                        `Do you want to continue?`
+                    );
+                    
+                    handleDeleteConfirmation(firstConfirm, selectedMedia, originalMediaData, originalSelections, originalFilterState);
+                }, 300); // Allow time for DOM to update
+            }, 100);
+        }
+
+        function handleDeleteConfirmation(firstConfirm, selectedMedia, originalMediaData, originalSelections, originalFilterState) {
+            const unknownFilter = document.getElementById('unknown-filter');
+
+            if (!firstConfirm) {
+                // Restore original display and filter state if user cancels
+                mediaData = originalMediaData;
+                unknownFilter.checked = originalFilterState;
+                displayMedia(mediaData);
+                
+                // Restore original selections
+                setTimeout(() => {
+                    document.querySelectorAll('.media-checkbox').forEach(checkbox => {
+                        const mediaId = checkbox.dataset.mediaId;
+                        checkbox.checked = originalSelections[mediaId] || false;
+                    });
+                    updateMediaCounter(mediaData.length, mediaData.length, getCurrentStatusText());
+                    updateSelectionButtons();
+                }, 100);
+                return;
+            }
+            
+            // Second confirmation
+            const secondConfirm = confirm(
+                `🚨 FINAL CONFIRMATION 🚨\n\n` +
+                `You are about to PERMANENTLY DELETE ${selectedMedia.length} media file${selectedMedia.length > 1 ? 's' : ''}.\n\n` +
+                `The selected files are now displayed above for your review.\n\n` +
+                `This action cannot be easily undone.\n\n` +
+                `Are you absolutely sure you want to proceed?`
+            );
+
+            if (!secondConfirm) {
+                // Restore original display and filter state if user cancels
+                mediaData = originalMediaData;
+                unknownFilter.checked = originalFilterState;
+                displayMedia(mediaData);
+                
+                // Restore original selections
+                setTimeout(() => {
+                    document.querySelectorAll('.media-checkbox').forEach(checkbox => {
+                        const mediaId = checkbox.dataset.mediaId;
+                        checkbox.checked = originalSelections[mediaId] || false;
+                    });
+                    updateMediaCounter(mediaData.length, mediaData.length, getCurrentStatusText());
+                    updateSelectionButtons();
+                }, 100);
+                return;
+            }
+
+            // Proceed with deletion
+            executeMediaDeletion(selectedMedia.map(m => m.id));
+        }
+
+        async function executeMediaDeletion(mediaIds) {
+            try {
+                const response = await fetch('/api/media/bulk-delete', {
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        media_ids: mediaIds
+                    })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    let message = `Successfully deleted ${result.deleted_count} media file${result.deleted_count > 1 ? 's' : ''}`;
+                    if (result.failed_count > 0) {
+                        message += `\n${result.failed_count} file${result.failed_count > 1 ? 's' : ''} failed to delete`;
+                    }
+                    if (result.delete_directory) {
+                        message += `\n\nFiles moved to: ${result.delete_directory}`;
+                    }
+                    alert(message);
+                    
+                    // Refresh the media display
+                    if (currentFilenamePattern) {
+                        loadMediaByFilenamePattern();
+                    } else {
+                        loadMediaForSelectedDate();
+                    }
+                } else {
+                    alert(`Delete operation failed: ${result.error || 'Unknown error'}`);
+                    // Restore original display on failure
+                    if (currentFilenamePattern) {
+                        loadMediaByFilenamePattern();
+                    } else {
+                        loadMediaForSelectedDate();
+                    }
+                }
+            } catch (error) {
+                console.error('Delete operation error:', error);
+                alert(`Error during delete operation: ${error.message}`);
+                // Restore original display on error
+                if (currentFilenamePattern) {
+                    loadMediaByFilenamePattern();
+                } else {
+                    loadMediaForSelectedDate();
                 }
             }
         }

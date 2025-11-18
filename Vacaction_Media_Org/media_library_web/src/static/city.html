@@ -24,33 +24,66 @@
             padding: 10px 20px;
         }
 
-        .header {
-            text-align: center;
+        .header-compact {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             color: white;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
+            padding: 10px 0;
         }
 
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
+        .header-left {
+            display: flex;
+            align-items: baseline;
+            gap: 15px;
+        }
+
+        .header-left h1 {
+            font-size: 2rem;
+            margin: 0;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
         }
 
-        .timezone-banner {
+        .header-left p {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin: 0;
+        }
+
+        .header-right {
+            text-align: right;
+        }
+
+        .timezone-display {
             background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-            text-align: center;
-            padding: 10px 20px;
-            margin-bottom: 10px;
+            padding: 8px 15px;
             border-radius: 10px;
             font-weight: bold;
             box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
 
-        .timezone-info {
-            font-size: 0.9rem;
+        .timezone-item {
+            font-size: 0.85rem;
             display: inline-block;
-            margin: 0 15px;
+            margin: 0 8px 0 0;
+        }
+
+        @media (max-width: 768px) {
+            .header-compact {
+                flex-direction: column;
+                text-align: center;
+                gap: 15px;
+            }
+            
+            .header-left {
+                flex-direction: column;
+                gap: 5px;
+            }
+            
+            .header-right {
+                text-align: center;
+            }
         }
 
         .nav-links {
@@ -528,16 +561,17 @@
 </head>
 <body>
     <div class="container">
-        <!-- Timezone Display Banner -->
-        <div class="timezone-banner" id="timezoneBanner">
-            <span class="timezone-info">🕐 Display Timezone: <span id="displayTimezone">Loading...</span></span>
-            <span class="timezone-info">📍 Offset: <span id="timezoneOffset">Loading...</span></span>
-            <span class="timezone-info">📝 All times shown in this timezone</span>
-        </div>
-        
-        <div class="header">
-            <h1>🏙️ City View</h1>
-            <p>Browse your vacation memories by city</p>
+        <div class="header-compact">
+            <div class="header-left">
+                <h1>🏙️ City View</h1>
+                <p>Browse your vacation memories by city</p>
+            </div>
+            <div class="header-right">
+                <div class="timezone-display">
+                    <span class="timezone-item">🕐 <span id="displayTimezone">Loading...</span></span>
+                    <span class="timezone-item">📍 <span id="timezoneOffset">Loading...</span></span>
+                </div>
+            </div>
         </div>
 
         <div class="nav-links">
@@ -545,7 +579,7 @@
             <a href="daily.html">📅 Daily View</a>
             <a href="city.html" class="active">🏙️ City View</a>
             <a href="special.html">🎯 Special View</a>
-            <a href="fixinfo.html">� GPS Editor</a>
+            <a href="fixinfo.html">� FixInfo</a>
             <a href="journal.html">📔 Journal</a>
         </div>
 
@@ -613,23 +647,18 @@
         let cityMediaData = [];
         let allCities = [];
 
-        // Load timezone configuration on page load
+        // Load timezone configuration
         async function loadTimezoneConfig() {
             try {
                 const response = await fetch('/api/config/timezone');
                 const config = await response.json();
                 
-                if (config.OffsetTime && config.TimeZone) {
-                    document.getElementById('displayTimezone').textContent = config.TimeZone;
-                    document.getElementById('timezoneOffset').textContent = config.OffsetTime;
-                } else {
-                    document.getElementById('displayTimezone').textContent = 'ASIA Time';
-                    document.getElementById('timezoneOffset').textContent = '+08:00';
-                }
+                document.getElementById('timezoneOffset').textContent = config.OffsetTime;
+                document.getElementById('displayTimezone').textContent = config.TimeZone;
             } catch (error) {
-                console.warn('Could not load timezone config:', error);
-                document.getElementById('displayTimezone').textContent = 'ASIA Time';
+                console.error('Error loading timezone config:', error);
                 document.getElementById('timezoneOffset').textContent = '+08:00';
+                document.getElementById('displayTimezone').textContent = 'ASIA Time';
             }
         }
 
@@ -943,8 +972,7 @@
                     });
                     
                     return `
-                                            return `
-                        <div class="media-card list-view ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">`
+                        <div class="media-card list-view ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
                             ${isVideo ? 
                                 `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
                                         style="pointer-events: none;"></video>` :
@@ -1003,8 +1031,7 @@
                 } else {
                     // Thumbnail view
                     return `
-                                            return `
-                        <div class="media-item thumbnail ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">`
+                        <div class="media-item thumbnail ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
                             ${isVideo ? 
                                 `<video class="media-thumbnail" muted preload="none">
                                     <source src="/api/media/${media.id}/thumbnail" type="video/${media.file_extension?.substring(1) || 'mp4'}">

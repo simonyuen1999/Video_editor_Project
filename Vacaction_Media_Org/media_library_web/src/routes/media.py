@@ -1383,6 +1383,148 @@ def bulk_update_media():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
+@media_bp.route('/media/bulk-delete', methods=['DELETE'])
+def bulk_delete_media():
+    """Delete multiple media files from database and move files to delete directory"""
+    try:
+        data = request.get_json()
+        media_ids = data.get('media_ids', [])
+        
+        if not media_ids:
+            return jsonify({'error': 'No media IDs provided'}), 400
+            
+        # Get directories from config
+        base_directory = Config.get_value('base_directory', '')
+        thumb_directory = Config.get_value('thumb_directory', '')
+        
+        if not base_directory:
+            return jsonify({'error': 'base_directory not configured in database'}), 500
+        if not thumb_directory:
+            return jsonify({'error': 'thumb_directory not configured in database'}), 500
+            
+        delete_directory = os.path.join(thumb_directory, "delete")
+        
+        # Create delete directory if it doesn't exist
+        if not os.path.exists(delete_directory):
+            os.makedirs(delete_directory, exist_ok=True)
+            print(f"Created delete directory: {delete_directory}")
+            
+        deleted_count = 0
+        failed_count = 0
+        moved_files = []
+        
+        for media_id in media_ids:
+            try:
+                # Get media record
+                media = Media.query.get(media_id)
+                if not media:
+                    print(f"Media ID {media_id} not found")
+                    failed_count += 1
+                    continue
+                    
+                # Construct full paths using config directories
+                full_media_path = os.path.join(base_directory, media.filepath) if media.filepath else None
+                
+                # Create thumbnail filename: change extension to _thumb.jpg
+                if media.filepath:
+                    name_without_ext = os.path.splitext(media.filepath)[0]
+                    thumb_relative_path = f"{name_without_ext}_thumb.jpg"
+                    full_thumbnail_path = os.path.join(thumb_directory, thumb_relative_path)
+                else:
+                    full_thumbnail_path = None
+                
+                # Debug: Print file path info
+                print(f"Processing media ID {media_id}: filename={media.filename}")
+                print(f"  DB filepath: {media.filepath}")
+                print(f"  Full media path: {full_media_path}")
+                print(f"  Full thumbnail path: {full_thumbnail_path}")
+                
+                # Track if we successfully moved files
+                media_file_moved = False
+                thumbnail_file_moved = False
+                
+                # Move original media file to delete directory
+                if full_media_path:
+                    if os.path.exists(full_media_path):
+                        filename = os.path.basename(full_media_path)
+                        delete_file_path = os.path.join(delete_directory, filename)
+                        
+                        # Handle filename conflicts by adding incrementing number
+                        counter = 1
+                        original_delete_path = delete_file_path
+                        while os.path.exists(delete_file_path):
+                            name, ext = os.path.splitext(original_delete_path)
+                            delete_file_path = f"{name}_{counter}{ext}"
+                            counter += 1
+                        
+                        try:
+                            os.rename(full_media_path, delete_file_path)
+                            moved_files.append(f"Media: {filename}")
+                            print(f"✅ Moved media file: {full_media_path} -> {delete_file_path}")
+                            media_file_moved = True
+                        except Exception as e:
+                            print(f"❌ Failed to move media file {full_media_path}: {e}")
+                    else:
+                        print(f"⚠️ Media file not found: {full_media_path}")
+                else:
+                    print(f"⚠️ No filepath in database for media ID {media_id}")
+                        
+                # Move thumbnail file to delete directory  
+                if full_thumbnail_path:
+                    if os.path.exists(full_thumbnail_path):
+                        thumb_filename = os.path.basename(full_thumbnail_path)
+                        delete_thumb_path = os.path.join(delete_directory, thumb_filename)
+                        
+                        # Handle filename conflicts
+                        counter = 1
+                        original_delete_thumb_path = delete_thumb_path
+                        while os.path.exists(delete_thumb_path):
+                            name, ext = os.path.splitext(original_delete_thumb_path)
+                            delete_thumb_path = f"{name}_{counter}{ext}"
+                            counter += 1
+                        
+                        try:
+                            os.rename(full_thumbnail_path, delete_thumb_path)
+                            moved_files.append(f"Thumbnail: {thumb_filename}")
+                            print(f"✅ Moved thumbnail file: {full_thumbnail_path} -> {delete_thumb_path}")
+                            thumbnail_file_moved = True
+                        except Exception as e:
+                            print(f"❌ Failed to move thumbnail file {full_thumbnail_path}: {e}")
+                    else:
+                        print(f"⚠️ Thumbnail file not found: {full_thumbnail_path}")
+                else:
+                    print(f"⚠️ Could not determine thumbnail path for media ID {media_id}")
+                
+                # Only delete from database if we successfully moved the media file OR it didn't exist
+                # (thumbnail is optional, missing thumbnail shouldn't prevent deletion)
+                if media_file_moved or not (full_media_path and os.path.exists(full_media_path)):
+                    db.session.delete(media)
+                    deleted_count += 1
+                    print(f"✅ Deleted media record from database: {media.filename}")
+                else:
+                    failed_count += 1
+                    print(f"❌ Skipping database deletion due to file move failure: {media.filename}")
+                
+            except Exception as e:
+                print(f"Error processing media ID {media_id}: {e}")
+                failed_count += 1
+                continue
+                
+        # Commit database changes
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'deleted_count': deleted_count,
+            'failed_count': failed_count,
+            'delete_directory': delete_directory,
+            'moved_files': moved_files[:10] if len(moved_files) > 10 else moved_files  # Limit for response size
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @media_bp.route('/config/timezone', methods=['GET'])
 def get_timezone_config():
     """Get timezone configuration for web display"""

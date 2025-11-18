@@ -24,20 +24,74 @@
             padding: 10px 20px;
         }
 
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
+        .header-compact {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
             color: white;
+            padding: 10px 0;
         }
 
-        .header h1 {
-            font-size: 2.5rem;
-            margin-bottom: 10px;
+        .header-left {
+            display: flex;
+            align-items: baseline;
+            gap: 15px;
         }
 
-        .header p {
-            font-size: 1.2rem;
+        .header-left h1 {
+            font-size: 2rem;
+            margin: 0;
+        }
+
+        .header-left .description {
+            font-size: 0.95rem;
             opacity: 0.9;
+            font-weight: 400;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .timezone-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .timezone-info .label {
+            font-weight: 500;
+        }
+
+        .timezone-info .value {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+
+        @media (max-width: 768px) {
+            .header-compact {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+
+            .header-left {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+
+            .header-right {
+                align-self: stretch;
+                justify-content: flex-end;
+            }
         }
 
         .navigation {
@@ -412,9 +466,19 @@
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1>📔 Journal</h1>
-            <p>Your travel diary and daily notes</p>
+        <div class="header-compact">
+            <div class="header-left">
+                <h1>📔 Journal</h1>
+                <span class="description">Your travel diary and daily notes</span>
+            </div>
+            <div class="header-right">
+                <div class="timezone-info">
+                    <span class="label">Timezone:</span>
+                    <span class="value" id="current-timezone">Loading...</span>
+                    <span class="label">Offset:</span>
+                    <span class="value" id="current-offset">Loading...</span>
+                </div>
+            </div>
         </div>
 
         <div class="navigation">
@@ -524,6 +588,7 @@
 
         document.addEventListener('DOMContentLoaded', function() {
             // Initialize page
+            loadTimezoneInfo();
             loadJournalEntries();
 
             // Event listeners
@@ -575,6 +640,20 @@
                 setTimeout(() => {
                     syncStatus.textContent = 'Ready to sync';
                 }, 3000);
+            }
+        }
+
+        async function loadTimezoneInfo() {
+            try {
+                const response = await fetch('/api/config/timezone');
+                const config = await response.json();
+                
+                document.getElementById('current-timezone').textContent = config.TimeZone;
+                document.getElementById('current-offset').textContent = config.OffsetTime;
+            } catch (error) {
+                console.error('Error loading timezone info:', error);
+                document.getElementById('current-timezone').textContent = 'ASIA Time';
+                document.getElementById('current-offset').textContent = '+08:00';
             }
         }
 
