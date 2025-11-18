@@ -262,6 +262,21 @@
             margin-left: 24px;
         }
 
+        .info-message {
+            background: #e7f3ff;
+            border: 1px solid #667eea;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+
+        .info-message p {
+            margin: 0;
+            color: #2c5282;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
         /* Media Modal Styles */
         .modal-media {
             max-width: 100%;
@@ -473,7 +488,7 @@
             position: absolute;
             top: 8px;
             right: 8px;
-            background: #ff6b6b;
+            background: #daa520;
             color: white;
             border-radius: 12px;
             width: 24px;
@@ -487,7 +502,7 @@
         }
 
         .media-item.unknown-location .media-info {
-            background: rgba(255, 107, 107, 0.05);
+            background: rgba(218, 165, 32, 0.4);
         }
 
         .thumbnail-size-control {
@@ -504,6 +519,7 @@
             text-align: center;
             padding: 40px;
             color: #666;
+            display: none;
         }
 
         .media-info-header {
@@ -1052,7 +1068,7 @@
     <div class="container">
         <div class="header">
             <h1>FixInfo View</h1>
-            <p>Modify media creation time, location, and GPS information</p>
+            <p>Modify media location, GPS coordinates, and optionally database creation time</p>
         </div>
 
         <div class="nav-links">
@@ -1060,7 +1076,7 @@
             <a href="city.html">🏙️ City View</a>
             <a href="daily.html">📅 Daily View</a>
             <a href="special.html">⭐ Special View</a>
-            <a href="fixinfo.html" class="active">🔧 FixInfo View</a>
+            <a href="fixinfo.html" class="active">� GPS Editor</a>
             <a href="journal.html">📔 Journal</a>
         </div>
 
@@ -1130,11 +1146,12 @@
                     <div class="control-group checkbox-group">
                         <label>
                             <input type="checkbox" id="force-update-time" class="update-time-checkbox">
-                            <span class="checkbox-label">🕒 Force Update Creation Time</span>
+                            <span class="checkbox-label">🕒 Force Update Database Creation Time</span>
                         </label>
                         <small class="checkbox-help">
-                            When unchecked: Only update files without creation_time<br>
-                            When checked: Overwrite all selected files' creation_time
+                            When unchecked: Database creation_time will NOT be modified<br>
+                            When checked: Update database creation_time to UTC Zulu format<br>
+                            <strong>Note:</strong> EXIF date/time fields are NEVER modified - only GPS coordinates
                         </small>
                     </div>
                 </div>
@@ -1213,9 +1230,9 @@
             </div>
             <div class="status-text" id="status-text">Select a date to view media</div>
         </div>
-
-        <div id="loading" class="loading" style="display: none;">
+        <div id="loading" class="loading">
             Loading media...
+        </div>
         </div>
 
         <div id="media-container"></div>
@@ -1288,6 +1305,8 @@
         let currentViewMode = 'thumbnail';
         let mediaData = [];
         let selectedCityData = null;
+        let selectedModifyDateTime = '';
+        let selectedForceUpdateTime = false;
         let availableDateRange = { earliest: null, latest: null };
         let showAllCities = false; // Track city display mode: false = media cities only, true = all cities from geo
         let allGeoCities = []; // Cache all cities from geo database
@@ -1301,8 +1320,8 @@
                 const response = await fetch('/config/timezone');
                 const config = await response.json();
                 
-                document.getElementById('offsetTime').textContent = config.offsetTime;
-                document.getElementById('displayTime').textContent = config.displayTime;
+                document.getElementById('offsetTime').textContent = config.OffsetTime;
+                document.getElementById('displayTime').textContent = config.TimeZone;
             } catch (error) {
                 console.error('Error loading timezone config:', error);
                 document.getElementById('offsetTime').textContent = '+08:00';
@@ -1367,6 +1386,9 @@
             document.getElementById('city-select').addEventListener('change', updateModifyButton);
             document.getElementById('modify-date').addEventListener('change', updateModifyButton);
             document.getElementById('modify-time').addEventListener('change', updateModifyButton);
+            
+            // Initial update of modify button state
+            updateModifyButton();
         });
 
         async function loadInitialDate() {
@@ -1672,11 +1694,11 @@
                 document.getElementById('loading').style.display = 'block';
                 document.getElementById('media-container').innerHTML = '';
 
-                const dateFrom = selectedDate + ' 00:00:00';
-                const dateTo = selectedDate + ' 23:59:59';
+                // Use simple date format for single-day queries to leverage timezone-aware logic
+                const date = selectedDate; // Already in YYYY-MM-DD format
                 
                 console.log(`Loading media for date: ${selectedDate}`);
-                const response = await fetch(`/api/media?date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}&order=asc&_t=${Date.now()}`);
+                const response = await fetch(`/api/media?date_from=${encodeURIComponent(date)}&date_to=${encodeURIComponent(date)}&order=asc&_t=${Date.now()}`);
                 console.log('Media response status:', response.status);
                 let data = await response.json();
                 console.log('Media count for date:', data.length);
@@ -1823,19 +1845,32 @@
             return [];
         }
 
+        // Helper function to check if saved location values exist
+        function hasSavedLocationValues() {
+            return currentGeoData && 
+                   currentGeoData.latitude !== null && currentGeoData.longitude !== null &&
+                   (currentGeoData.country_en || currentGeoData.country_zh || currentGeoData.city_en || currentGeoData.city_zh);
+        }
+
         function updateModifyButton() {
             const checkedBoxes = document.querySelectorAll('.media-checkbox:checked');
             const citySelect = document.getElementById('city-select');
             const modifyDate = document.getElementById('modify-date').value;
             const modifyTime = document.getElementById('modify-time').value;
+            const modifyDateTime = modifyDate + ' ' + modifyTime + ':00';
             const modifyButton = document.getElementById('modify-button');
             
             const hasSelectedFiles = checkedBoxes.length > 0;
             const hasSelectedCity = citySelect.value !== '';
+            const hasSavedLocation = hasSavedLocationValues();
             const hasModifyDate = modifyDate !== '';
             const hasModifyTime = modifyTime !== '';
             
-            modifyButton.disabled = !(hasSelectedFiles && hasSelectedCity && hasModifyDate && hasModifyTime);
+            // Enable button if:
+            // 1. Files are selected AND
+            // 2. Either saved location values exist OR country/city is selected
+            const hasLocationData = hasSavedLocation || hasSelectedCity;
+            modifyButton.disabled = !(hasSelectedFiles && hasLocationData);
             
             // Update selection button states
             updateSelectionButtons();
@@ -1869,17 +1904,12 @@
                 return;
             }
             
-            // Check if date and time are provided
-            if (!modifyDate || !modifyTime) {
-                alert('❌ Please provide both modify date and time.');
-                return;
-            }
-
             let locationData = null;
             let dataSource = '';
 
-            // First priority: Check if we have saved location data
-            if (currentGeoData && currentGeoData.latitude !== null && currentGeoData.longitude !== null &&
+            // Priority 1: Check if we have saved GPS/Country/City data (most reliable)
+            if (currentGeoData && 
+                currentGeoData.latitude !== null && currentGeoData.longitude !== null &&
                 (currentGeoData.country_en || currentGeoData.country_zh || currentGeoData.city_en || currentGeoData.city_zh)) {
                 locationData = {
                     country_en: currentGeoData.country_en || '',
@@ -1889,9 +1919,9 @@
                     latitude: currentGeoData.latitude,
                     longitude: currentGeoData.longitude
                 };
-                dataSource = '💾 Saved Location Values';
+                dataSource = '💾 Saved GPS/Location Data';
             }
-            // Second priority: Check country/city selection dropdowns
+            // Priority 2: Check country/city selection dropdowns (if no saved data above)
             else if (citySelect.value) {
                 try {
                     locationData = JSON.parse(citySelect.value);
@@ -1901,32 +1931,46 @@
                     return;
                 }
             }
-            // No location data available
+            // Priority 3: Do not modify unless valid data from 1 or 2
             else {
-                alert('❌ Please either:\n• Click on geo coordinates to save location data, OR\n• Select a country and city from the dropdown lists');
+                alert('❌ No valid GPS/location data available. Please either:\n\n1. Click on existing geo coordinates to save GPS/location data, OR\n2. Select a country and city from the dropdown lists\n\nWithout valid location data, no modifications will be made.');
                 return;
             }
 
             // Store the selected city data for execution
             selectedCityData = locationData;
             
-            // Format modify date and time (convert 24-hour to HH:MM:SS)
-            const modifyDateTime = modifyDate + ' ' + modifyTime + ':00';
-            
-            // Format time for display in AM/PM format
-            const displayTime = formatTimeToAMPM(modifyTime);
-            const displayDateTime = modifyDate + ' ' + displayTime;
-            
             // Get force update time checkbox state for confirmation
             const forceUpdateTime = document.getElementById('force-update-time').checked;
-            const timeUpdateMode = forceUpdateTime ? 
-                '🕒 Force update ALL files\' creation time' : 
-                '� Do not update the Creation Time (Only update files without creation time)';
+            selectedForceUpdateTime = forceUpdateTime;
             
-            // Show different date/time message based on force update setting
-            const dateTimeMessage = forceUpdateTime ? 
-                `<p><strong>New Date & Time:</strong> ${displayDateTime}</p>` :
-                `<p><strong>Provided Date & Time:</strong> ${displayDateTime} <em>(Will only apply to files without existing creation time)</em></p>`;
+            let modifyDateTime = '';
+            let displayDateTime = '';
+            let dateTimeMessage = '';
+            
+            // Handle date/time only if both are provided
+            if (modifyDate && modifyTime) {
+                // Format modify date and time for database (UTC Zulu format)
+                modifyDateTime = modifyDate + ' ' + modifyTime + ':00';
+                selectedModifyDateTime = modifyDateTime;
+                
+                // Format time for display in AM/PM format
+                const displayTime = formatTimeToAMPM(modifyTime);
+                displayDateTime = modifyDate + ' ' + displayTime;
+                
+                // Show date/time confirmation based on checkbox state
+                dateTimeMessage = forceUpdateTime ? 
+                    `<p><strong>New Database Creation Time:</strong> ${displayDateTime} (stored as UTC Zulu)</p>` :
+                    `<p><strong>Date & Time Provided:</strong> ${displayDateTime} <em>(Database creation_time will NOT be changed)</em></p>`;
+            } else {
+                // No date/time provided
+                selectedModifyDateTime = '';
+                dateTimeMessage = '<p><strong>Date & Time:</strong> Not provided <em>(Database creation_time will NOT be changed)</em></p>';
+            }
+            
+            const timeUpdateMode = (forceUpdateTime && modifyDate && modifyTime) ? 
+                '🕒 Update database creation_time to UTC Zulu format' : 
+                '📝 Database creation_time will NOT be modified';
             
             // Create confirmation details
             const detailsHtml = `
@@ -1935,10 +1979,10 @@
                 <p><strong>New City:</strong> ${locationData.city_zh || 'N/A'} | ${locationData.city_en || 'N/A'}</p>
                 <p><strong>New Country:</strong> ${locationData.country_zh || 'N/A'} | ${locationData.country_en || 'N/A'}</p>
                 ${dateTimeMessage}
-                <p><strong>Creation Time Update:</strong> ${timeUpdateMode}</p>
+                <p><strong>Database Creation Time:</strong> ${timeUpdateMode}</p>
                 <p><strong>New GPS Coordinates:</strong> <a href="https://maps.google.com/?q=${locationData.latitude},${locationData.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${locationData.latitude}, ${locationData.longitude} 🗺️</a></p>
                 <br>
-                <p><em>This will update both the database records and the EXIF data in the media files using exiftool.</em></p>
+                <p><em>⚠️ <strong>EXIF Safety:</strong> Only GPS coordinates (GPSLatitude/GPSLongitude) will be updated in EXIF metadata. All date/time/timezone EXIF fields remain untouched.</em></p>
             `;
             
             document.getElementById('confirmation-details').innerHTML = detailsHtml;
@@ -1953,9 +1997,6 @@
             closeConfirmationModal();
             
             const checkedBoxes = document.querySelectorAll('.media-checkbox:checked');
-            const modifyDate = document.getElementById('modify-date').value;
-            const modifyTime = document.getElementById('modify-time').value;
-            const modifyDateTime = modifyDate + ' ' + modifyTime + ':00';
             
             // Get media IDs
             const mediaIds = Array.from(checkedBoxes).map(cb => parseInt(cb.dataset.mediaId));
@@ -1969,9 +2010,6 @@
             progressText.textContent = `0 of ${mediaIds.length} files processed`;
             
             try {
-                // Get the force update time checkbox state
-                const forceUpdateTime = document.getElementById('force-update-time').checked;
-                
                 const updatePayload = {
                     media_ids: mediaIds,
                     city_en: selectedCityData.city_en,
@@ -1980,9 +2018,13 @@
                     country_zh: selectedCityData.country_zh,
                     latitude: selectedCityData.latitude,
                     longitude: selectedCityData.longitude,
-                    creation_time: modifyDateTime,
-                    force_update_time: forceUpdateTime
+                    force_update_time: selectedForceUpdateTime
                 };
+                
+                // Only include creation_time if date and time are provided
+                if (selectedModifyDateTime) {
+                    updatePayload.creation_time = selectedModifyDateTime;
+                }
                 console.log('Bulk update payload:', updatePayload); // Debug log
                 
                 const response = await fetch('/api/media/bulk-update', {
@@ -2026,19 +2068,19 @@
                 }
                 alert(message);
                 
-                // Refresh the appropriate view while preserving selections
+                // Refresh the appropriate view and unselect all media files
                 if (currentFilenamePattern) {
-                    // Reload media by filename pattern (already preserves selections)
+                    // Reload media by filename pattern
                     loadMediaByFilenamePattern();
                 } else {
-                    // Reload media by date with preserved selections
-                    const savedSelections = saveCurrentSelections();
+                    // Reload media by date
                     loadMediaForSelectedDate();
-                    // Restore selections after a brief delay to ensure DOM is updated
-                    setTimeout(() => {
-                        restoreSelections(savedSelections);
-                    }, 200);
                 }
+                
+                // Unselect all media files after successful update
+                setTimeout(() => {
+                    unselectAllMedia();
+                }, 200);
                 
                 // Reset form
                 document.getElementById('city-select').value = '';
@@ -2565,6 +2607,9 @@
             // Display saved values in the UI
             displaySavedValues();
             
+            // Update modify button state since saved location values have changed
+            updateModifyButton();
+            
             // Show success message
             alert(`📍 Location data saved to controls!\n\nCountry: ${country_zh || country_en || 'N/A'}\nCity: ${city_zh || city_en || 'N/A'}\nCoordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
             
@@ -2656,6 +2701,9 @@
                 city_zh: '',
                 filename: ''
             };
+            
+            // Update modify button state since saved location values have been cleared
+            updateModifyButton();
         }
 
         // Close geo prompt when clicking outside the dialog

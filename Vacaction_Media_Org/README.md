@@ -4,17 +4,30 @@
 
 A comprehensive, Flask-based web application for organizing and exploring vacation photos and videos with intelligent metadata extraction, semantic analysis, and dual-view interfaces for enhanced media browsing.
 
-## Latest Implementation (October 2025)
+## Latest Implementation (November 2025)
+
+### **Advanced File Processing Pipeline**
+- **PreImport EXIF Processing**: Automated file preparation with `PreImport_exif_file_processor.py`
+  - Removes hidden dot files (.DS_Store, .thumbnails, etc.) and LRF sidecar files
+  - Validates real media file types against file extensions
+  - Automatically renames mismatched extensions and converts to uppercase
+  - Calculates precise creation_time in UTC Zulu format
+  - Embeds standardized timestamps in EXIF UserComment field
+- **UTC Zulu Time Management**: Consistent UTC-based creation time handling throughout the system
 
 ### **Dual-Interface Web Application**
 - **Map View**: Interactive map-based media exploration with clustering and filtering
 - **Daily View**: Chronological day-by-day media browsing with flexible display modes
+- **City View**: Location-focused media organization with unknown location highlighting
+- **Special View**: Activity and scenery-based media browsing
+- **FixInfo View**: Advanced metadata editing interface with bulk operations
 
 ### **Smart Media Organization**
-- **Automated Metadata Extraction**: Creation time, GPS coordinates, file size, and technical details
+- **Automated Metadata Extraction**: UTC Zulu creation time from EXIF UserComment, GPS coordinates, file size, and technical details
 - **Semantic Analysis**: People detection, activity recognition, talking detection, and scenery classification
 - **Location Intelligence**: Bilingual city/country support (English + Chinese) with geographic clustering
 - **Database-Driven**: SQLite backend with comprehensive media indexing and relationship management
+- **Time Zone Display**: Configurable display timezone (OffsetTime) for consistent local time presentation
 
 ### **Advanced User Experience**
 - **Responsive Design**: Mobile-friendly interface with gradient themes and modern UI components
@@ -55,6 +68,8 @@ static/
 3. **Responsive Media Gallery**: Thumbnail and list view modes with adjustable sizing
 4. **Modal Media Viewer**: Full-resolution media display with comprehensive metadata
 5. **System Integration**: Direct file opening in default applications
+6. **Saved Location Workflow**: Click-to-save GPS coordinates from reference files, then bulk apply to selected media
+7. **Unknown Location Highlighting**: Visual indicators (darker yellow background) for media missing GPS data
 6. **Advanced Filtering**: Dropdown-based city/country selection with live search
 7. **Chronological Navigation**: Day-by-day browsing with previous/next controls
 
@@ -165,7 +180,40 @@ City,Region,Subregion,CountryCode,Country,TimeZone,FeatureCode,Population,Latitu
 
 ## Usage Guide
 
-### **1. Initial Media Scanning**
+### **1. PreImport File Processing (Recommended First Step)**
+
+Before scanning your media files, use the PreImport processor to prepare and standardize your files:
+
+```bash
+# Activate environment
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Process and prepare media files
+python PreImport_exif_file_processor.py /path/to/your/raw/media/directory
+
+# Interactive mode - prompts for directory path if not provided
+python PreImport_exif_file_processor.py
+```
+
+**PreImport Processing Features:**
+- **File Cleanup**: Automatically removes hidden dot files (.DS_Store, .thumbnails, ._metadata) and LRF sidecar files
+- **File Type Validation**: Checks actual file content against file extension using magic bytes
+- **Extension Standardization**: Renames mismatched extensions and converts all extensions to uppercase
+- **UTC Zulu Time Calculation**: Determines precise creation_time in UTC Zulu format (YYYY-MM-DDTHH:MM:SS.sssZ)
+- **EXIF Embedding**: Saves standardized UTC timestamps in EXIF UserComment field for consistent database import
+- **File Structure Preservation**: Maintains original directory structure while standardizing files
+
+**Example PreImport Output:**
+```
+Processing /path/to/media...
+✅ Removed hidden file: .DS_Store
+✅ Removed LRF file: IMG_1234.LRF  
+✅ Renamed IMG_1234.jpeg → IMG_1234.JPEG (extension mismatch)
+✅ Updated EXIF UserComment: 2025-03-15T14:30:25.123Z
+✅ Processed 245 files successfully
+```
+
+### **2. Initial Media Scanning**
 
 Process your vacation photos and videos from iPhone, DJI Pocket 3, and other devices:
 
@@ -184,24 +232,32 @@ python organize_media.py /path/to/media --skip-existing
 ```
 
 **What happens during scanning:**
-- Extracts creation dates, GPS coordinates, and technical metadata
-- Performs semantic analysis (people counting, activity recognition)
-- Assigns GPS coordinates from HEIC files to DJI MP4 files from same day
-- Identifies cities/countries using geo.list database
-- Creates organized directory structure with symbolic links
-- Populates SQLite database with all metadata
+- **Reads UTC creation_time** from EXIF UserComment field (set by PreImport processor)
+- **Fallback metadata extraction**: Creation dates, GPS coordinates, and technical metadata from standard EXIF fields
+- **Semantic analysis**: People counting, activity recognition, talking detection
+- **GPS intelligence**: Assigns GPS coordinates from HEIC files to GPS-less DJI MP4 files from same day
+- **Location identification**: Maps coordinates to cities/countries using geo.list database
+- **File organization**: Creates organized directory structure with symbolic links
+- **Database population**: Stores all metadata in SQLite database with UTC Zulu timestamps
 
 ### **2. Launch Web Application**
 
 Start the Flask web server to access both viewing interfaces:
 
 ```bash
-# Start the application
+# Start the modern web application (recommended)
+cd media_library_web/src
 python main.py
 
 # Application will be available at:
-# http://localhost:5000 - Map View interface
-# http://localhost:5000/daily - Daily View interface
+# http://localhost:5001 - Main Dashboard (index.html)
+# http://localhost:5001/daily.html - Daily chronological view
+# http://localhost:5001/city.html - City-based organization
+# http://localhost:5001/special.html - Activity/scenery browsing
+# http://localhost:5001/fixinfo.html - Advanced metadata editor with saved location feature
+
+# Legacy application (older interface)
+# python main.py  # http://localhost:5000
 ```
 
 ### **3. Web Interface Usage**
@@ -215,6 +271,7 @@ python main.py
   - People count and talking detection filters
 - **Modal Media Viewer**: Click thumbnails for full-resolution viewing
 - **System Integration**: Open files directly in Preview, QuickTime, etc.
+- **Unknown Location Highlighting**: Media items without GPS data display with darker yellow background for easy identification
 
 #### **Daily View (Chronological Interface)**
 - **Day Navigation**: Previous/Next buttons for chronological browsing
@@ -222,6 +279,60 @@ python main.py
 - **Thumbnail Sizing**: Adjustable small/medium/large thumbnail controls
 - **Smart Defaults**: Automatically loads earliest media creation date
 - **Sorting Options**: Toggle between newest-first and oldest-first ordering
+- **UTC Zulu Display**: Shows creation times in YYYY-MM-DD hh:mm:ss AM/PM format using OffsetTime from config table
+
+#### **Time Zone Management**
+- **UTC Zulu Storage**: All creation times stored as standardized UTC Zulu format in database
+- **Configurable Display**: Web interface converts UTC to local display time using OffsetTime config setting
+- **Consistent Presentation**: All web pages display times in YYYY-MM-DD hh:mm:ss AM/PM format
+- **TimeZone Labels**: Display shows configured timezone name (e.g., "Asia/Hong_Kong") for user reference
+- **Mixed Timezone Support**: Handles media files from different original timezones consistently
+
+#### **FixInfo View (Metadata Editor)**
+- **Bulk Operations**: Select multiple media files for batch editing
+- **Location Correction**: Update GPS coordinates and city/country information
+- **Date/Time Modification**: Adjust creation timestamps while maintaining UTC consistency
+- **Unknown Location Management**: Special tools for identifying and correcting files without location data
+- **Auto-Unselect**: Automatically clears selections after successful bulk operations
+- **Visual Indicators**: Darker yellow highlighting for items needing location data
+- **Saved Location Workflow**: 
+  - Click any media file to extract and save its GPS coordinates and location data
+  - Saved location information persists in the interface for reuse
+  - Apply saved location to multiple selected files with bulk operations
+  - Enables efficient correction of media files missing GPS data using reference files
+  - Modify button activates when either saved location values exist OR country/city selections are made
+
+#### **FixInfo Saved Location Usage Example**
+
+**Scenario**: You have some photos with GPS data and others from the same location without GPS data.
+
+```
+Step-by-step workflow:
+
+1. Navigate to FixInfo page: http://localhost:5001/fixinfo.html
+2. Select a date containing your media files
+3. Click on a media file that HAS GPS coordinates (reference file)
+   → System automatically saves the location data from this file
+   → Location fields populate with: latitude, longitude, city, country
+   
+4. Select multiple media files that NEED location data (checkbox selection)
+   → Files without GPS data show with darker yellow background for easy identification
+   
+5. Click "Modify Selected Files" button
+   → Button is enabled because saved location values exist
+   → Bulk applies the saved GPS coordinates and location to all selected files
+   
+6. After "Successfully updated X files" message:
+   → All checkboxes automatically unselect for clean workflow
+   → Updated files now display proper location information
+```
+
+**Benefits of Saved Location Feature:**
+- **Efficiency**: One-click location extraction from reference files
+- **Consistency**: Ensures accurate location data for grouped photos/videos
+- **GPS Recovery**: Corrects media files that lost GPS data during transfer or processing
+- **Batch Processing**: Apply location to multiple files simultaneously
+- **Visual Feedback**: Unknown locations highlighted for easy identification
 
 ### **4. Incremental Updates**
 
@@ -253,21 +364,66 @@ python organize_media.py /path/to/media --skip-existing --debug-level 1
 
 ```
 vacation_media_organizer2/
-├── main.py                    # Flask application entry point
-├── database_manager.py        # Database schema and operations
-├── metadata_extractor.py      # ExifTool and metadata processing
+├── PreImport_exif_file_processor.py  # File preparation and EXIF standardization
+├── Main_scan_media.py         # Main scanning engine with timezone configuration
+├── main.py                    # Flask application entry point (legacy - use media_library_web/)
+├── database_manager.py        # Database operations and schema management
+├── metadata_extractor.py      # ExifTool integration and metadata processing
 ├── semantic_analyzer.py       # YOLOv8 and audio analysis
-├── organize_media.py          # Media scanning and organization
+├── organize_media.py          # Media scanning and organization (legacy)
+├── geo_table_manager.py       # Geographic location database management
+├── Tk_geo_translation_editor.py # GUI editor for geographic translations
 ├── geo.list                   # Geographic location database
+├── *.csv                      # Translation databases (Chinese_City_en_translated.csv, etc.)
 ├── media_organizer.db         # SQLite database (created at runtime)
 ├── requirements.txt           # Python dependencies
-├── static/
-│   ├── index.html            # Map View interface
-│   └── daily.html            # Daily View interface
-└── media/                    # Organized media files (created at runtime)
+├── media_library_web/         # Modern Flask web application
+│   ├── src/
+│   │   ├── main.py           # Flask application entry point
+│   │   ├── models/           # SQLAlchemy data models
+│   │   ├── routes/           # API route handlers
+│   │   └── static/           # Web interface files
+│   │       ├── index.html    # Main dashboard interface
+│   │       ├── daily.html    # Daily chronological view
+│   │       ├── city.html     # City-based organization view
+│   │       ├── special.html  # Activity/scenery view
+│   │       └── fixinfo.html  # Advanced metadata editing interface
+│   └── requirements.txt      # Web application dependencies
+├── bin/                      # Utility scripts
+│   ├── dji_rename.py        # DJI file renaming utility
+│   └── extractHEIF.py       # HEIF extraction tool
+└── util/                     # Testing and development utilities
 ```
 
 ## Configuration
+
+### **Database Configuration (config table)**
+The system uses a `config` table to manage timezone and display settings:
+
+```sql
+-- Key configuration settings
+OffsetTime: '+08:00'           -- Display timezone offset for web interface
+TimeZone: 'Asia/Hong_Kong'     -- Display timezone name/location
+base_directory: '/path/to/media'     -- Base media directory path
+thumb_directory: '/path/to/thumbs'   -- Thumbnail cache directory
+```
+
+**Configuration Management:**
+```bash
+# Run Main_scan_media.py to configure timezone settings interactively
+python Main_scan_media.py
+# Prompts for:
+# - Timezone offset for web display (e.g., '+08:00' for UTC+8)
+# - Display location name (e.g., 'Asia/Hong_Kong', 'Toronto', 'ASIA Time')
+```
+
+### **Time Zone Display Format**
+- **Database Storage**: UTC Zulu format (2025-03-15T14:30:25.123Z)
+- **Web Display**: Local format using OffsetTime conversion
+- **Example Conversion**:
+  - Database: `2025-03-15T14:30:25.123Z` (UTC)
+  - OffsetTime: `+08:00`
+  - Web Display: `2025-03-15 10:30:25 PM` (converted to UTC+8)
 
 ### **Debug Levels**
 - `--debug-level 0` - Silent operation

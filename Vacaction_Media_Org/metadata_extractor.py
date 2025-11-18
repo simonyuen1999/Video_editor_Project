@@ -286,7 +286,7 @@ class MetadataExtractor:
                 'talking_detected': False
             }
         
-        extension = os.path.splitext(filepath)[1].lower()
+        extension = os.path.splitext(filepath)[1].upper()
         
         # Initialize results
         analysis_result = {
@@ -297,10 +297,10 @@ class MetadataExtractor:
         }
         
         try:
-            if extension in ['.jpg', '.jpeg', '.png', '.heic']:
+            if extension in ['.JPG', '.JPEG', '.PNG', '.HEIC']:
                 # Analyze image file
                 analysis_result.update(self._analyze_image(filepath))
-            elif extension in ['.mp4', '.mov', '.avi', '.mkv', '.webm']:
+            elif extension in ['.MP4', '.MOV', '.AVI', '.MKV', '.WEBM']:
                 # Analyze video file
                 analysis_result.update(self._analyze_video(filepath))
             else:
@@ -590,10 +590,10 @@ class MetadataExtractor:
                 return result
             
             # Get file extension to determine approach
-            extension = os.path.splitext(filepath)[1].lower()
+            extension = os.path.splitext(filepath)[1].upper()
             
             # For video files, we need to be more careful with audio loading
-            if extension in ['.mp4', '.mov', '.avi', '.mkv', '.webm']:
+            if extension in ['.MP4', '.MOV', '.AVI', '.MKV', '.WEBM']:
                 # Check if video has audio streams first
                 if not self._has_audio_stream(filepath):
                     logging.debug(f"No audio streams detected in video: {filepath}")
@@ -810,13 +810,13 @@ class MetadataExtractor:
         try:
             cmd = ['exiftool', '-j', '-n',
                    '-CreateDate', '-FileInodeChangeDate', 
-                   '-GPSAltitude', '-GPSLatitude', str(filepath)]
+                   '-GPSLatitude', '-GPSLongitude', '-UserComment', str(filepath)]
             
             result = subprocess.run(cmd, capture_output=True, text=True)
             
             if result.stdout:
                 metadata_list = json.loads(result.stdout)
-                if metadata_list:
+                if metadata_list and len(metadata_list) > 0:
                     metadata = metadata_list[0]
                     logger.debug(f"EXIF extracted for {filepath}: {metadata}")
                 else:
@@ -836,19 +836,40 @@ class MetadataExtractor:
             logger.error(f"Unexpected error extracting EXIF from {filepath}: {e}")
             return {}
        
-        exif_data = metadata[0]
+        # Ensure metadata exists and is a dictionary before processing
+        if not metadata or not isinstance(metadata, dict):
+            logger.warning(f"Invalid metadata format for {filepath}: {type(metadata)}")
+            return {}
+       
+        # metadata is already the first element from metadata_list, not a list itself
+        exif_data = metadata
         Latitude  = exif_data.get("GPSLatitude", "N/A")  if "GPSLatitude" in exif_data else None
         Longitude = exif_data.get("GPSLongitude", "N/A") if "GPSLongitude" in exif_data else None
         create_date = exif_data.get('CreateDate', '')
         inode_change_date = exif_data.get('FileInodeChangeDate', '')
+        user_comment = exif_data.get('UserComment', '')
 
-        # Extract creation_time (UTC Zulu format) logic is from exif_file_processor.py
-        creation_time = self.calculate_creation_time(create_date, inode_change_date)
+        # -----------------------------------------------------------
+        # PreImport_exif_file_processor.py should update EXIF: Add UserComment (UTC Zulu)
+        # from create_date & inode_change_date with calculate_creation_time() logic.
+        # However, the update EXIF also update indoe_change_date to current time,
+        # Therefore, we cannot re-calculate creation_time with inode_change_date again here.
+        # So here we only calculate creation_time when UserComment is empty.
+
+        # calculate_creation_time() return UTC with offset ISO 8601 format.
+        # convert_to_utc_zulu() transfer to UTC Zulu format
+        if user_comment == '':
+            iso8601 = self.calculate_creation_time(create_date, inode_change_date)
+            creation_time = self.convert_to_utc_zulu( iso8601 )
+        else:
+            creation_time = user_comment  # Preserve existing UserComment if present
+        # -----------------------------------------------------------
 
         rc_exif_data = {
             "Latitude": Latitude,
             "Longitude": Longitude,
             "Creation_time": creation_time,
+            'UserComment': user_comment       # This should be from UserComment or calculated
         }
 
         return rc_exif_data
@@ -969,7 +990,7 @@ class MetadataExtractor:
             except ValueError:
                 continue
         
-        self.logger.warning(f"Could not parse date: {date_string}")
+        logger.warning(f"Could not parse date: {date_string}")
         return None
     
     def convert_to_utc_zulu(self, datetime_str):
@@ -996,7 +1017,7 @@ class MetadataExtractor:
                     utc_date = parsed_date - timedelta(minutes=offset_minutes)
                     return utc_date.strftime('%Y-%m-%dT%H:%M:%SZ')
                 except Exception as e:
-                    self.logger.warning(f"Error converting timezone offset {tz_offset}: {e}")
+                    logger.warning(f"Error converting timezone offset {tz_offset}: {e}")
             
             # No timezone offset, assume already UTC
             return parsed_date.strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -1036,18 +1057,45 @@ class MetadataExtractor:
         if not exif_data:
             return None
 
+        creation_time = exif_data.get("Creation_time", None)
+        user_comment = exif_data.get("UserComment", None)
+
+        if not self.is_utc_zulu_format(user_comment):
+            logger.info(f"*** Error: {filepath} UserComment '{user_comment}' is not UTC Zulu format, Creation_time '{creation_time}'.")
+
         stat_info = os.stat(filepath)
         base_metadata = {
             "filepath": os.path.abspath(filepath),
             "filename": os.path.basename(filepath),
-            "file_extension": os.path.splitext(filepath)[1].lstrip("."),
+            "file_extension": os.path.splitext(filepath)[1].lstrip(".").upper(),
             "size": stat_info.st_size,
             "media_type": mediaType,
             "latitude": exif_data.get("Latitude", None),
             "longitude": exif_data.get("Longitude", None),
-            "creation_time": exif_data.get("Creation_time", None),
+            "creation_time": creation_time,
+            "UserComment": user_comment
         }
         return base_metadata
+
+    def is_utc_zulu_format(self, date_string):
+        """Check if a string is in UTC Zulu format (YYYY-MM-DDTHH:MM:SSZ)."""
+        if not date_string or date_string.strip() == '':
+            return False
+        
+        date_string = date_string.strip()
+        
+        # UTC Zulu format should end with 'Z' and match the pattern YYYY-MM-DDTHH:MM:SSZ
+        if not date_string.endswith('Z'):
+            return False
+        
+        # Try to parse as UTC Zulu format
+        try:
+            # Remove the 'Z' and try to parse
+            date_part = date_string[:-1]
+            datetime.strptime(date_part, '%Y-%m-%dT%H:%M:%S')
+            return True
+        except ValueError:
+            return False
 
     def haversine(self, lat1, lon1, lat2, lon2):
         R = 6371  # Earth radius in km

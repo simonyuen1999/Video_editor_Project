@@ -25,7 +25,7 @@ def get_timezone_offset_sql():
     
     try:
         cursor = conn.cursor()
-        cursor.execute("SELECT value FROM config WHERE key = 'offsetTime'")
+        cursor.execute("SELECT value FROM config WHERE key = 'OffsetTime'")
         result = cursor.fetchone()
         offset_time = result[0] if result else '+08:00'
         conn.close()

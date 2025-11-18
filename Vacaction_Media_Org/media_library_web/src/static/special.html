@@ -452,6 +452,12 @@
                 height: 150px;
             }
         }
+
+        /* Darker yellow background for unknown location */
+        .unknown-location {
+            background-color: rgba(218, 165, 32, 0.4) !important;
+            border: 1px solid rgba(218, 165, 32, 0.7) !important;
+        }
     </style>
 </head>
 <body>
@@ -472,7 +478,7 @@
             <a href="daily.html">📅 Daily View</a>
             <a href="city.html">🏙️ City View</a>
             <a href="special.html" class="active">🎯 Special View</a>
-            <a href="fixinfo.html">🔧 FixInfo View</a>
+            <a href="fixinfo.html">� GPS Editor</a>
             <a href="journal.html">📔 Journal</a>
         </div>
 
@@ -558,8 +564,8 @@
                 const response = await fetch('/config/timezone');
                 const config = await response.json();
                 
-                document.getElementById('offsetTime').textContent = config.offsetTime;
-                document.getElementById('displayTime').textContent = config.displayTime;
+                document.getElementById('offsetTime').textContent = config.OffsetTime;
+                document.getElementById('displayTime').textContent = config.TimeZone;
             } catch (error) {
                 console.error('Error loading timezone config:', error);
                 document.getElementById('offsetTime').textContent = '+08:00';
@@ -794,7 +800,8 @@
 
                 if (currentViewMode === 'list') {
                     return `
-                        <div class="media-item list" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                                            return `
+                        <div class="media-item list ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">`
                             ${isVideo ? 
                                 `<video class="media-thumbnail" muted preload="none">
                                     <source src="/api/media/${media.id}/thumbnail" type="video/${media.file_extension?.substring(1) || 'mp4'}">
@@ -849,7 +856,8 @@
                 } else {
                     // Thumbnail view
                     return `
-                        <div class="media-item thumbnail" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                        return `
+                        <div class="media-item thumbnail ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">`
                             ${isVideo ? 
                                 `<video class="media-thumbnail" muted preload="none">
                                     <source src="/api/media/${media.id}/thumbnail" type="video/${media.file_extension?.substring(1) || 'mp4'}">

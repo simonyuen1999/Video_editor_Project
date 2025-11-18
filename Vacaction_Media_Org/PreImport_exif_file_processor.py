@@ -155,7 +155,7 @@ class ExifFileProcessor:
         """Extract EXIF metadata using exiftool."""
         try:
             cmd = ['exiftool', '-j', '-n', '-CreateDate', '-FileInodeChangeDate', 
-                   '-FileType', '-GPSAltitude', '-GPSLatitude', str(filepath)]
+                   '-FileType', '-GPSAltitude', '-GPSLatitude', '-UserComment', str(filepath)]
             
             result = subprocess.run(cmd, capture_output=True, text=True)
             
@@ -288,6 +288,26 @@ class ExifFileProcessor:
                 return filepath
         
         return filepath
+    
+    def is_utc_zulu_format(self, date_string):
+        """Check if a string is in UTC Zulu format (YYYY-MM-DDTHH:MM:SSZ)."""
+        if not date_string or date_string.strip() == '':
+            return False
+        
+        date_string = date_string.strip()
+        
+        # UTC Zulu format should end with 'Z' and match the pattern YYYY-MM-DDTHH:MM:SSZ
+        if not date_string.endswith('Z'):
+            return False
+        
+        # Try to parse as UTC Zulu format
+        try:
+            # Remove the 'Z' and try to parse
+            date_part = date_string[:-1]
+            datetime.strptime(date_part, '%Y-%m-%dT%H:%M:%S')
+            return True
+        except ValueError:
+            return False
     
     def parse_exif_date(self, date_string):
         """Parse EXIF date string to timezone-naive datetime object."""
@@ -506,14 +526,26 @@ class ExifFileProcessor:
                     inode_change_date = exif_data.get('FileInodeChangeDate', '')
                     gps_altitude = exif_data.get('GPSAltitude', 'N/A')
                     gps_latitude = exif_data.get('GPSLatitude', 'N/A')
+                    user_comment = exif_data.get('UserComment', '')
                     
-                    # Calculate creation time using sophisticated logic
-                    creation_time, creation_method = self.calculate_creation_time(create_date, inode_change_date, corrected_filepath.name)
-                    
-                    # Convert creation time to UTC Zulu format
-                    utc_time = self.convert_to_utc_zulu(creation_time)
-                    
-                    # Handle CreateDate display logic
+                    bUpdateUserComment = False
+
+                    # If user_comment is not present or not in UTC Zulu format, then use calculate_creation_time() to create creation_time
+                    if user_comment.strip() == '' or not self.is_utc_zulu_format(user_comment):
+                        # Calculate creation time using sophisticated logic
+                        creation_time, creation_method = self.calculate_creation_time(create_date, inode_change_date, corrected_filepath.name)
+
+                        # Convert creation time to UTC Zulu format
+                        utc_time = self.convert_to_utc_zulu(creation_time)
+                        user_comment = utc_time
+                        bUpdateUserComment = True
+
+                    else:
+                        creation_time = user_comment
+                        creation_method = 'IPUC'    # Import process and from UserComment
+                        utc_time = user_comment
+
+                    # Handle CreateDate (from media file EXIF) display logic for reporting
                     create_date_display = create_date if create_date else 'N/A'
                     if create_date and create_date.startswith('0000:00:00'):
                         create_date_display = '0000:00:00'
@@ -525,15 +557,43 @@ class ExifFileProcessor:
                         'CreateDate': create_date_display,
                         'FileInodeChangeDate': inode_change_date if inode_change_date else 'N/A',
                         'Creation_Method': creation_method,
+                        # ------- Creation_time is either from calculation or from UserComment -------
                         'Creation_time': creation_time,
                         'UTC': utc_time,
+                        'UserComment': user_comment,
+                        # -----------------------------------------------
                         'GPSAltitude': gps_altitude,
-                        'GPSLatitude': gps_latitude
+                        'GPSLatitude': gps_latitude,
                     }
                     
+                    # ------------------------------------------------------
+                    # When EXIF of media file is updated (by update Geo info or other),
+                    # 1. FileInodeChangeDate and FileModifyDate will be updated with the current time.
+                    # 2. CreateDate remains unchanged.
+                    # - - - - - - - - - - - - - - - - - - -
+                    # During testing of updating Geo info, FileInodeChangeDate is updated, so the calculate_creation_time() is not working.
+                    # We cannot re-execute the import process again.
+                    # To avoid confusion, use UserComment to keep UTC (Zulu) creation time.
+                    # 1. If UserComment is empty, we populate it with the calculated UTC time logic from calculate_creation_time().
+                    # 2. If UserComment already has a value, we leave it unchanged.   That will be used in the import process.
+                    # The Import process will prioritize UserComment for creation time if present.
+                    # ------------------------------------------------------
+                    if bUpdateUserComment:
+                        try:
+                            # Update UserComment using exiftool
+                            cmd_update = ['exiftool', '-overwrite_original', 
+                                          f'-UserComment={user_comment}', str(corrected_filepath)]
+                            subprocess.run(cmd_update, capture_output=True, text=True, check=True)
+                            self.logger.info(f">> For {corrected_filepath}, update UserComment to '{user_comment}' from '{inode_change_date}' and '{create_date}'")
+                        except subprocess.CalledProcessError as e:
+                            self.logger.error(f"Failed to update UserComment for {corrected_filepath}: {e}")
+                    else:
+                        self.logger.info(f">> For {corrected_filepath}, UserComment already has value '{user_comment}', so not updating the media file.")
+                    # ------------------------------------------------------
+
                     self.processed_files.append(file_info)
                     processed_count += 1
-                    
+
                     if processed_count % 100 == 0:
                         print(f"📊 Processed {processed_count} files...")
                         
@@ -551,7 +611,7 @@ class ExifFileProcessor:
         try:
             with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
                 fieldnames = ['FileType', 'filename', 'CreateDate', 'FileInodeChangeDate', 
-                             'Creation_Method', 'Creation_time', 'UTC', 'GPSAltitude', 'GPSLatitude']
+                             'Creation_Method', 'Creation_time', 'UTC', 'UserComment', 'GPSAltitude', 'GPSLatitude']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                 
                 writer.writeheader()
@@ -644,13 +704,23 @@ Deleted Files Breakdown:
 
 def main():
     """Main function to handle command line arguments."""
-    if len(sys.argv) != 2:
+    if len(sys.argv) == 2:
+        directory_path = sys.argv[1]
+    else:
+        # Prompt user for directory path if not provided
         print("Usage: python exif_file_processor.py <directory_path>")
         print("\nExample:")
         print("  python exif_file_processor.py /path/to/photos")
-        sys.exit(1)
-    
-    directory_path = sys.argv[1]
+        print("\n" + "="*50)
+        
+        try:
+            directory_path = input("Please enter the directory path to process: ").strip()
+            if not directory_path:
+                print("❌ No directory path provided.")
+                sys.exit(1)
+        except KeyboardInterrupt:
+            print("\n❌ Operation cancelled by user.")
+            sys.exit(1)
     
     if not os.path.exists(directory_path):
         print(f"❌ Directory does not exist: {directory_path}")

@@ -176,7 +176,7 @@ def get_all_media():
                 # Single day query - use proper timezone conversion for mixed timezone data
                 # Get timezone offset from config
                 from src.models.media import Config
-                offset_time = Config.get_value('offsetTime', '+08:00')
+                offset_time = Config.get_value('OffsetTime', '+08:00')
                 
                 print(f"🕐 Single-day query: Converting all timestamps to {offset_time} for date {date_from}")
                 
@@ -244,7 +244,7 @@ def get_all_media():
         # Apply timezone conversion filtering for single-day queries
         if date_from and date_to and date_from == date_to and len(date_from) == 10:
             from src.models.media import Config
-            offset_time = Config.get_value('offsetTime', '+08:00')
+            offset_time = Config.get_value('OffsetTime', '+08:00')
             
             print(f"🔍 Post-filtering {len(media_records)} records by timezone conversion to {offset_time}")
             
@@ -466,8 +466,8 @@ def serve_media_thumbnail(media_id):
             return response
         else:
             # Fallback: serve original file with reduced quality headers for images
-            file_ext = os.path.splitext(file_path)[1].lower()
-            if file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.heic', '.webp']:
+            file_ext = os.path.splitext(file_path)[1].upper()
+            if file_ext in ['.JPG', '.JPEG', '.PNG', '.BMP', '.TIFF', '.HEIC', '.WEBP']:
                 response = send_file(file_path, as_attachment=False)
                 response.headers['Cache-Control'] = 'public, max-age=3600'  # Cache for 1 hour
                 response.headers['ETag'] = f'"{media_id}-{media.size}"'
@@ -559,7 +559,7 @@ def get_stats():
         
         # Convert ISO 8601 dates to display format
         from src.models.media import Config
-        offset_time = Config.get_value('offsetTime', '+08:00')
+        offset_time = Config.get_value('OffsetTime', '+08:00')
         earliest_display = convert_iso8601_to_local_display(date_range.earliest, None, offset_time) if date_range.earliest else None
         latest_display = convert_iso8601_to_local_display(date_range.latest, None, offset_time) if date_range.latest else None
         
@@ -1247,7 +1247,7 @@ def update_media_creation_time(media_id):
 
 @media_bp.route('/media/bulk-update', methods=['PUT'])
 def bulk_update_media():
-    """Bulk update media files with city, date, and GPS information"""
+    """Bulk update media files with location information and optionally database creation_time"""
     try:
         data = request.get_json()
         if not data:
@@ -1314,70 +1314,28 @@ def bulk_update_media():
                 if latitude is not None and longitude is not None:
                     media.shareGPS = True
                 
-                # Conditional creation_time update logic
-                if creation_time is not None:
-                    if force_update_time:
-                        # Force update: overwrite all selected files' creation_time
-                        media.creation_time = creation_time
-                    else:
-                        # Conditional update: only update if file doesn't have creation_time
-                        if not media.creation_time or media.creation_time.strip() == '':
-                            media.creation_time = creation_time
+                # Conditional creation_time update logic (DATABASE ONLY - NO EXIF DATE MODIFICATION)
+                if creation_time is not None and force_update_time:
+                    # Only update database creation_time when force_update_time is checked
+                    # Convert to UTC Zulu format for database storage
+                    utc_creation_time = creation_time.replace(' ', 'T') if ' ' in creation_time else creation_time
+                    if 'T' not in utc_creation_time:
+                        utc_creation_time = utc_creation_time.replace(' ', 'T')
+                    # Ensure Z suffix for UTC Zulu format
+                    if not utc_creation_time.endswith('Z'):
+                        utc_creation_time += 'Z'
+                    media.creation_time = utc_creation_time
                 
-                # Update file metadata using exiftool
+                # Update file metadata using exiftool (GPS COORDINATES ONLY - NO DATE/TIME FIELDS)
                 try:
                     cmd = ['exiftool']
                     exif_updates_needed = False
                     
-                    # Add GPS coordinates if provided
+                    # Add GPS coordinates if provided (ONLY GPS DATA - NO DATES/TIMES/OFFSETS)
                     if latitude is not None and longitude is not None:
                         cmd.extend([f'-GPSLatitude={latitude}'])
                         cmd.extend([f'-GPSLongitude={longitude}'])
                         exif_updates_needed = True
-                    
-                    # Add creation time only if force_update_time is True or file has no creation_time
-                    if creation_time is not None:
-                        should_update_exif_time = force_update_time or (not media.creation_time or media.creation_time.strip() == '')
-                        if should_update_exif_time:
-                            # Convert creation_time to proper UTC format
-                            utc_time = creation_time.replace(' ', 'T') if ' ' in creation_time else creation_time
-                            if 'T' not in utc_time:
-                                utc_time = utc_time.replace(' ', 'T')
-                            # Remove Z suffix if present for processing
-                            if utc_time.endswith('Z'):
-                                utc_time = utc_time[:-1]
-                            
-                            # Get file extension to determine proper datetime format
-                            file_ext = media.file_extension.lower() if media.file_extension else ''
-                            
-                            if file_ext in ['.heic', '.heif', '.mov', '.mp4']:
-                                # HEIC, HEIF, MOV, MP4 formats support Z suffix for UTC
-                                cmd.extend([
-                                    f'-DateTimeOriginal={utc_time}Z',
-                                    f'-CreationDate={utc_time}Z',
-                                    f'-CreateDate={utc_time}Z',
-                                    f'-ModifyDate={utc_time}Z'
-                                ])
-                            elif file_ext in ['.jpg', '.jpeg', '.tiff', '.png']:
-                                # JPEG, JPG, TIFF, PNG formats use EXIF-specific fields with offset
-                                cmd.extend([
-                                    f'-EXIF:DateTimeOriginal={utc_time}',
-                                    f'-EXIF:CreateDate={utc_time}',
-                                    f'-EXIF:ModifyDate={utc_time}',
-                                    '-EXIF:OffsetTimeOriginal=+00:00',
-                                    '-EXIF:OffsetTime=+00:00',
-                                    '-EXIF:OffsetTimeDigitized=+00:00',
-                                    '-ignoreMinorErrors'
-                                ])
-                            else:
-                                # Default handling for other file types
-                                cmd.extend([
-                                    f'-DateTimeOriginal={utc_time}Z',
-                                    f'-CreationDate={utc_time}Z',
-                                    f'-CreateDate={utc_time}Z',
-                                    f'-ModifyDate={utc_time}Z'
-                                ])
-                            exif_updates_needed = True
                     
                     # Execute exiftool command only if there are updates to make
                     if exif_updates_needed:
@@ -1402,7 +1360,7 @@ def bulk_update_media():
                         'country_zh': country_zh,
                         'latitude': latitude,
                         'longitude': longitude,
-                        'creation_time': creation_time,
+                        'creation_time': media.creation_time if force_update_time and creation_time else None,
                         'shareGPS': media.shareGPS if latitude is not None and longitude is not None else None
                     }
                 })
@@ -1429,12 +1387,12 @@ def bulk_update_media():
 def get_timezone_config():
     """Get timezone configuration for web display"""
     try:
-        offset_time = Config.get_value('offsetTime', '+08:00')
-        display_time = Config.get_value('displayTime', 'ASIA Time')
+        offset_time = Config.get_value('OffsetTime', '+08:00')
+        display_time = Config.get_value('TimeZone', 'ASIA Time')
         
         return jsonify({
-            'offsetTime': offset_time,
-            'displayTime': display_time
+            'OffsetTime': offset_time,
+            'TimeZone': display_time
         })
         
     except Exception as e:

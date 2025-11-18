@@ -211,8 +211,8 @@ class MediaOrganizerDB:
             
             # Insert default configuration values if they don't exist
             default_configs = [
-                ('offsetTime', '+08:00', 'Web server display timezone offset for converting UTC creation_time to local display time'),
-                ('displayTime', 'ASIA Time', 'Web server display timezone location name shown in views')
+                ('OffsetTime', '+08:00', 'Web server display timezone offset for converting UTC creation_time to local display time'),
+                ('TimeZone', 'ASIA Time', 'Web server display timezone location name shown in views')
             ]
             
             for key, value, description in default_configs:
@@ -290,39 +290,8 @@ class MediaOrganizerDB:
             # Determine hasGPS based on presence of latitude and longitude
             has_gps = bool(metadata_to_store.get('latitude') and metadata_to_store.get('longitude'))
             
-            # Normalize creation_time to always have 'Z' suffix for UTC times
-            creation_time = metadata_to_store.get('creation_time')
-            file_ext = metadata_to_store.get('file_extension', '').lower()
-            
-            # Define file types based on actual input directory content and their timestamp behavior
-            # Files that have UTC timestamps WITH 'Z' suffix
-            utc_with_z_types = {'.mp4', '.mov', '.heic'}
-            # Files that have UTC timestamps WITHOUT 'Z' suffix (need Z added for consistency)
-            utc_without_z_types = {'.png', '.jpg', '.jpeg'}
-            
-            if creation_time and not creation_time.endswith('Z'):
-                # Add Z suffix for UTC times that don't have it
-                if 'T' in creation_time and not ('+' in creation_time or creation_time.count('-') > 2):
-                    if '.' not in creation_time:
-                        creation_time += '.000Z'
-                    else:
-                        creation_time += 'Z'
-                elif ':' in creation_time and ' ' in creation_time and 'T' not in creation_time:
-                    # Convert EXIF format to ISO format with Z
-                    date_part, time_part = creation_time.split(' ', 1)
-                    iso_date = date_part.replace(':', '-')
-                    if '.' not in time_part:
-                        time_part += '.000'
-                    creation_time = f"{iso_date}T{time_part}Z"
-                metadata_to_store['creation_time'] = creation_time
-                
-                # Log info about file type and timestamp handling
-                if file_ext in utc_with_z_types:
-                    logging.info(f"UTC timestamp (already has Z) for {file_ext} file: {metadata_to_store.get('filepath')}")
-                elif file_ext in utc_without_z_types:
-                    logging.info(f"UTC timestamp (Z added for consistency) for {file_ext} file: {metadata_to_store.get('filepath')}")
-                else:
-                    logging.info(f"Timestamp normalized for unknown {file_ext} file: {metadata_to_store.get('filepath')}")
+            # metadata_extractor retuns creation_time in UTC Zulu format for all the files
+            # creation_time can be inserted directly
             
             self.cursor.execute('''
                 INSERT INTO media_files (
@@ -362,7 +331,8 @@ class MediaOrganizerDB:
                 # Generate thumbnail using configured directories
                 generated_thumbnail_path = self.generate_thumbnail(original_filepath, base_directory=base_directory)
                 if generated_thumbnail_path:
-                    logging.info(f"Generated new thumbnail: {generated_thumbnail_path}")
+                    # logging.info(f"Generated new thumbnail: {generated_thumbnail_path}")
+                    pass
                 else:
                     logging.debug(f"Thumbnail generation skipped or failed for: {original_filepath}")
                     
@@ -614,10 +584,10 @@ class MediaOrganizerDB:
                 logging.debug(f"Thumbnail already exists: {thumbnail_path}")
                 return thumbnail_path
             
-            file_ext = os.path.splitext(filepath)[1].lower()
+            file_ext = os.path.splitext(filepath)[1].upper()
             
             # Handle image files
-            if file_ext in ['.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.heic', '.webp']:
+            if file_ext in ['.JPG', '.JPEG', '.PNG', '.BMP', '.TIFF', '.HEIC', '.WEBP']:
                 try:
                     # Debug logging to check filepath
                     logging.debug(f"Attempting to open image file: '{filepath}'")
@@ -625,7 +595,7 @@ class MediaOrganizerDB:
                     logging.debug(f"File extension: {file_ext}")
                     
                     # Special handling for HEIC files which might need pillow-heif
-                    if file_ext == '.heic':
+                    if file_ext == '.HEIC':
                         try:
                             # Try importing pillow_heif for HEIC support
                             import pillow_heif
@@ -661,7 +631,7 @@ class MediaOrganizerDB:
                     return None
             
             # Handle video files
-            elif file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.webm', '.m4v']:
+            elif file_ext in ['.MP4', '.MOV', '.AVI', '.MKV', '.WEBM', '.M4V']:
                 try:
                     # First, try to get video info to check if file is valid
                     info_cmd = ['ffprobe', '-v', 'quiet', '-print_format', 'json', '-show_streams', filepath]
@@ -937,9 +907,15 @@ def scan_directory_recursive(path):
     all_files = []
     for root, _, files in os.walk(path):
         for file in files:
-            # Skip hidden files and non-media files
-            extension = os.path.splitext(file)[1].lower()
-            if file.startswith('.') or extension not in [".jpg", ".jpeg", ".png", ".heic", ".mp4", ".mov"]:
+
+            # Remove the hidden files (files starting with '.')
+            if file.startswith('.'):
+                os.unlink(os.path.join(root, file))
+                continue
+            
+            # Skip non-media files by checking extension
+            extension = os.path.splitext(file)[1].upper()
+            if extension not in [".JPG", ".JPEG", ".PNG", ".HEIC", ".MP4", ".MOV"]:
                 continue
             
             # Skip thumbnail files (files ending with _thumb.jpg)
@@ -1065,15 +1041,15 @@ def configure_timezone_settings(db):
     print("="*80)
     
     # Get current values from database
-    current_offset = db.get_config('offsetTime', '-04:00')
-    current_display = db.get_config('displayTime', 'Toronto')
+    current_offset = db.get_config('OffsetTime', '-04:00')
+    current_display = db.get_config('TimeZone', 'Toronto')
     
     print(f"\nCurrent settings:")
     print(f"  Timezone Offset: {current_offset}")
     print(f"  Display Location: {current_display}")
     print()
     
-    # Ask user for offsetTime
+    # Ask user for OffsetTime
     print("TIMEZONE OFFSET FOR WEB DISPLAY:")
     print("Enter the timezone offset for displaying media files in web views")
     print("Example: -04:00 for EDT Canada/US")
@@ -1082,9 +1058,9 @@ def configure_timezone_settings(db):
     print("")
     print("This converts UTC creation_time to your preferred local display time.")
     print("For example:")
-    print("  If offsetTime='+08:00' and creation_time='2025-03-20T16:23:51.000+08:00'")
+    print("  If OffsetTime='+08:00' and creation_time='2025-03-20T16:23:51.000+08:00'")
     print("  Then display: '2025-03-20 4:23:51 PM'")
-    print("  If offsetTime='+08:00' and creation_time='2025-04-25T18:20:18.000-04:00'") 
+    print("  If OffsetTime='+08:00' and creation_time='2025-04-25T18:20:18.000-04:00'") 
     print("  Then display: '2025-04-26 06:20:18 AM'")
     print()
     
@@ -1102,9 +1078,9 @@ def configure_timezone_settings(db):
         else:
             print("ERROR: Invalid format. Please use format like '+08:00' or '-04:00'")
     
-    # Ask user for displayTime
-    print(f"\nDISPLAY LOCATION:")
-    print("Enter the location name for web views display label (e.g., 'Toronto', 'Asia', 'Hong Kong')")
+    # Ask user for TimeZone
+    print(f"\nDISPLAY LOCATION (TimeZone string):")
+    print("Enter the location name for web views display label (e.g., 'America/Toronto', 'Asia/Hong Kong')")
     print("This appears as a label on top of all web views showing the timezone context.")
     
     user_display = input(f"Enter display location (press Enter to keep '{current_display}'): ").strip()
@@ -1116,8 +1092,8 @@ def configure_timezone_settings(db):
     print(f"  Timezone Offset: {user_offset}")
     print(f"  Display Location: {user_display}")
     
-    success1 = db.set_config('offsetTime', user_offset, 'Web server display timezone offset for converting UTC creation_time to local display time')
-    success2 = db.set_config('displayTime', user_display, 'Web server display timezone location name shown in views')
+    success1 = db.set_config('OffsetTime', user_offset, 'Web server display timezone offset for converting UTC creation_time to local display time')
+    success2 = db.set_config('TimeZone', user_display, 'Web server display timezone location name shown in views')
     
     if success1 and success2:
         print("✓ Web server timezone display configuration saved successfully.")
@@ -1688,7 +1664,7 @@ Option 'updateMediaInfo' is specified.
                 generated_thumbnail_path = db.generate_thumbnail(filepath, base_directory=target_directory, thumb_directory=thumb_directory)
                 if generated_thumbnail_path:
                     thumbnail_count += 1
-                    logging.debug(f"Generated new thumbnail: {generated_thumbnail_path}")
+                    # logging.info(f"Generated new thumbnail: {generated_thumbnail_path}")
         logging.info(f"Sync FS and DB: Generated {thumbnail_count} new thumbnails")
         
         db.cursor.execute('SELECT filepath FROM media_files')
