@@ -132,9 +132,10 @@
         }
 
         #map {
-            height: 900px;
+            height: 750px;
             border-radius: 10px;
             border: 2px solid #ddd;
+            transition: height 0.3s ease;
         }
 
         .filters {
@@ -208,6 +209,33 @@
             background: #667eea;
             color: white;
             border-color: #667eea;
+        }
+
+        .map-height-control {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 10px;
+            background: white;
+            border: 2px solid #ccc;
+            border-radius: 6px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            font-size: 11px;
+        }
+
+        .map-height-control label {
+            font-weight: bold;
+            color: #333;
+            margin: 0;
+        }
+
+        .map-height-control select {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 2px 4px;
+            font-size: 11px;
+            background: white;
+            min-width: 70px;
         }
 
         #map-container {
@@ -850,6 +878,17 @@
                     <div id="map-container">
                         <div id="map"></div>
                         <div class="map-controls">
+                            <div class="map-height-control">
+                                <label>📏 Height:</label>
+                                <select id="map-height-select" onchange="changeMapHeight(this.value)" title="Select map height in pixels">
+                                    <option value="750">750px</option>
+                                    <option value="850">850px</option>
+                                    <option value="950">950px</option>
+                                    <option value="1050">1050px</option>
+                                    <option value="1150">1150px</option>
+                                    <option value="1250">1250px</option>
+                                </select>
+                            </div>
                             <button class="map-control-btn" onclick="toggleFullscreen()" id="fullscreen-btn" title="Toggle Fullscreen">🖥️ Fullscreen</button>
                             <button class="map-control-btn active" onclick="toggleMapMode('markers')" id="markers-btn">📍 Markers</button>
                             <button class="map-control-btn" onclick="toggleMapMode('clusters')" id="clusters-btn">🧮 Clusters</button>
@@ -1106,6 +1145,28 @@
                 spiderfyOnMaxZoom: true,
                 showCoverageOnHover: false,
                 zoomToBoundsOnClick: true
+            });
+            
+            // Add cluster click event handler for 5+ markers
+            markerClusterGroup.on('clusterclick', function (e) {
+                const cluster = e.layer;
+                const childMarkers = cluster.getAllChildMarkers();
+                
+                if (childMarkers.length >= 5) {
+                    // Prevent default zoom behavior for large clusters
+                    e.originalEvent.preventDefault();
+                    
+                    // Extract media data from markers
+                    const clusterMedia = childMarkers.map(marker => {
+                        // Get the media data stored in the marker's popup content
+                        // We need to extract this from the popup or store it differently
+                        return marker.mediaData;
+                    }).filter(media => media); // Filter out undefined
+                    
+                    if (clusterMedia.length >= 5) {
+                        handleLargeClusterClick(clusterMedia, cluster.getLatLng());
+                    }
+                }
             });
             
             // Add scale control
@@ -1695,17 +1756,51 @@
                 // Custom icon based on media count
                 const iconColor = location.count > 10 ? '#FF5722' : location.count > 5 ? '#FF9800' : '#4CAF50';
                 
-                const customIcon = L.divIcon({
-                    className: 'custom-marker',
-                    html: `<div style="background: ${iconColor}; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 2px solid white; font-weight: bold; font-size: 12px;">${location.count}</div>`,
-                    iconSize: [30, 30],
-                    iconAnchor: [15, 15]
-                });
+                let marker;
                 
-                const marker = L.marker([location.lat, location.lng], { icon: customIcon })
-                    .bindPopup(createPopupContent(location))
-                    .addTo(map);
+                if (location.count === 1) {
+                    // For single media, create individual marker with thumbnail popup
+                    const media = location.media[0];
+                    const isVideo = media.file_extension && 
+                        ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
                     
+                    const iconSymbol = isVideo ? '🎥' : '📷';
+                    const singleIconColor = isVideo ? '#FF5722' : '#4CAF50';
+                    
+                    const customIcon = L.divIcon({
+                        className: 'media-marker',
+                        html: `<div style="background: ${singleIconColor}; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; border: 2px solid white;">${iconSymbol}</div>`,
+                        iconSize: [25, 25],
+                        iconAnchor: [12, 12]
+                    });
+                    
+                    marker = L.marker([location.lat, location.lng], { icon: customIcon })
+                        .bindPopup(createIndividualPopupContent(media));
+                } else if (location.count >= 2 && location.count <= 4) {
+                    // For 2-4 media, show thumbnail array popup
+                    const customIcon = L.divIcon({
+                        className: 'custom-marker',
+                        html: `<div style="background: ${iconColor}; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 2px solid white; font-weight: bold; font-size: 12px;">${location.count}</div>`,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+                    
+                    marker = L.marker([location.lat, location.lng], { icon: customIcon })
+                        .bindPopup(createThumbnailArrayPopupContent(location));
+                } else {
+                    // For >4 media, show gallery loader popup
+                    const customIcon = L.divIcon({
+                        className: 'custom-marker',
+                        html: `<div style="background: ${iconColor}; color: white; border-radius: 50%; width: 35px; height: 35px; display: flex; align-items: center; justify-content: center; border: 2px solid white; font-weight: bold; font-size: 13px;">${location.count}</div>`,
+                        iconSize: [35, 35],
+                        iconAnchor: [17, 17]
+                    });
+                    
+                    marker = L.marker([location.lat, location.lng], { icon: customIcon })
+                        .bindPopup(createGalleryLoaderPopupContent(location));
+                }
+                
+                marker.addTo(map);
                 markers.push(marker);
             });
         }
@@ -1716,11 +1811,8 @@
             Object.values(locations).forEach(location => {
                 // Different icons for different media types
                 location.media.forEach(media => {
-                    const isVideo = media.filename && (
-                        media.filename.toLowerCase().endsWith('.mp4') ||
-                        media.filename.toLowerCase().endsWith('.mov') ||
-                        media.filename.toLowerCase().endsWith('.avi')
-                    );
+                    const isVideo = media.file_extension && 
+                        ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
                     
                     const iconColor = isVideo ? '#FF5722' : '#4CAF50';
                     const iconSymbol = isVideo ? '🎥' : '📷';
@@ -1734,6 +1826,9 @@
                     
                     const marker = L.marker([location.lat, location.lng], { icon: customIcon })
                         .bindPopup(createIndividualPopupContent(media));
+                        
+                    // Store media data in the marker for cluster handling
+                    marker.mediaData = media;
                         
                     markerClusterGroup.addLayer(marker);
                 });
@@ -1817,24 +1912,155 @@
         }
 
         function createIndividualPopupContent(media) {
-            const isVideo = media.filename && (
-                media.filename.toLowerCase().endsWith('.mp4') ||
-                media.filename.toLowerCase().endsWith('.mov') ||
-                media.filename.toLowerCase().endsWith('.avi')
-            );
+            const isVideo = media.file_extension && 
+                ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
             
             return `
-                <div style="max-width: 250px;">
-                    <div style="font-weight: bold; margin-bottom: 8px;">${isVideo ? '🎥' : '📷'} ${media.filename}</div>
-                    <div style="font-size: 12px; color: #666; margin-bottom: 8px;">${formatCreationTimeClean(media.formatted_creation_time)}</div>
-                    <div style="font-size: 11px; color: #888; margin-bottom: 10px;">
+                <div style="max-width: 200px;">
+                    <div style="font-weight: bold; margin-bottom: 8px; font-size: 13px;">${isVideo ? '🎥' : '📷'} ${media.filename}</div>
+                    <div style="font-size: 11px; color: #666; margin-bottom: 8px;">${formatCreationTimeClean(media.formatted_creation_time)}</div>
+                    <div style="font-size: 10px; color: #888; margin-bottom: 10px;">
                         📍 ${media.city_zh || media.city_en || 'Unknown'}, ${media.country_zh || media.country_en || 'Unknown'}
                     </div>
-                    <button onclick="openFileInSystem(${media.id})" style="padding: 6px 12px; background: #667eea; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; width: 100%;">
-                        📂 Open File
-                    </button>
+                    <div style="text-align: center; margin-bottom: 8px;">
+                        ${isVideo ? 
+                            `<video onclick="openMediaModal(${media.id})" style="width: 150px; height: 100px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 2px solid #ddd; transition: border-color 0.3s ease;" 
+                                   onmouseover="this.style.borderColor='#667eea'" onmouseout="this.style.borderColor='#ddd'"
+                                   muted preload="none" title="Click to open full view">
+                                <source src="/api/media/${media.id}/thumbnail" type="video/mp4">
+                            </video>` :
+                            `<img onclick="openMediaModal(${media.id})" src="/api/media/${media.id}/thumbnail" alt="${media.filename}" 
+                                  style="width: 150px; height: 100px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 2px solid #ddd; transition: border-color 0.3s ease;" 
+                                  onmouseover="this.style.borderColor='#667eea'" onmouseout="this.style.borderColor='#ddd'"
+                                  title="Click to open full view">`
+                        }
+                    </div>
+                    <div style="font-size: 10px; color: #999; text-align: center; margin-bottom: 6px;">Click thumbnail to open full view</div>
                 </div>
             `;
+        }
+
+        function createThumbnailArrayPopupContent(location) {
+            return `
+                <div style="max-width: 320px;">
+                    <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px; text-align: center;">
+                        📍 ${location.city}, ${location.country}
+                    </div>
+                    <div style="font-size: 12px; color: #666; text-align: center; margin-bottom: 12px;">
+                        ${location.count} media files - Click thumbnail to open
+                    </div>
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
+                        ${location.media.map(media => {
+                            const isVideo = media.file_extension && 
+                                ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
+                            
+                            return `
+                                <div style="text-align: center;">
+                                    ${isVideo ? 
+                                        `<video onclick="openMediaModal(${media.id})" style="width: 140px; height: 90px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 2px solid #ddd; transition: border-color 0.3s ease;" 
+                                               onmouseover="this.style.borderColor='#667eea'" onmouseout="this.style.borderColor='#ddd'"
+                                               muted preload="none" title="${media.filename}">
+                                            <source src="/api/media/${media.id}/thumbnail" type="video/mp4">
+                                        </video>` :
+                                        `<img onclick="openMediaModal(${media.id})" src="/api/media/${media.id}/thumbnail" alt="${media.filename}" 
+                                              style="width: 140px; height: 90px; object-fit: cover; border-radius: 4px; cursor: pointer; border: 2px solid #ddd; transition: border-color 0.3s ease;" 
+                                              onmouseover="this.style.borderColor='#667eea'" onmouseout="this.style.borderColor='#ddd'"
+                                              title="${media.filename}">`
+                                    }
+                                    <div style="font-size: 9px; color: #666; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                        ${media.filename.length > 18 ? media.filename.substring(0, 15) + '...' : media.filename}
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        function createGalleryLoaderPopupContent(location) {
+            return `
+                <div style="max-width: 280px; text-align: center;">
+                    <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">
+                        📍 ${location.city}, ${location.country}
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-bottom: 12px;">
+                        ${location.count} media files at this location
+                    </div>
+                    <div style="margin: 15px 0;">
+                        ${location.media.slice(0, 3).map(media => {
+                            const isVideo = media.file_extension && 
+                                ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
+                            return `
+                                <div style="font-size: 11px; color: #666; margin: 3px 0; display: flex; align-items: center; justify-content: flex-start;">
+                                    <span style="margin-right: 8px;">${isVideo ? '🎥' : '📷'}</span>
+                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${media.filename}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                        ${location.count > 3 ? `<div style="font-size: 11px; color: #999; margin: 5px 0;">... and ${location.count - 3} more files</div>` : ''}
+                    </div>
+                    <button onclick="loadLocationMediaToGallery(${JSON.stringify(location.media).replace(/"/g, '&quot;')})" 
+                            style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: bold;">
+                        📱 Load to Gallery Below
+                    </button>
+                    <div style="font-size: 10px; color: #999; margin-top: 8px;">
+                        This will load all ${location.count} files into the media gallery
+                    </div>
+                </div>
+            `;
+        }
+
+        function createClusterPopupContent(location) {
+            return `
+                <div style="max-width: 280px; text-align: center;">
+                    <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">
+                        📍 ${location.city}, ${location.country}
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-bottom: 12px;">
+                        ${location.count} media files at this location
+                    </div>
+                    <div style="margin: 15px 0;">
+                        ${location.media.slice(0, 3).map(media => {
+                            const isVideo = media.file_extension && 
+                                ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
+                            return `
+                                <div style="font-size: 11px; color: #666; margin: 3px 0; display: flex; align-items: center; justify-content: flex-start;">
+                                    <span style="margin-right: 8px;">${isVideo ? '🎥' : '📷'}</span>
+                                    <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${media.filename}</span>
+                                </div>
+                            `;
+                        }).join('')}
+                        ${location.count > 3 ? `<div style="font-size: 11px; color: #999; margin: 5px 0;">... and ${location.count - 3} more files</div>` : ''}
+                    </div>
+                    <div style="font-size: 11px; color: #28a745; margin-top: 12px; font-weight: bold;">
+                        ✅ Media loaded to gallery below
+                    </div>
+                </div>
+            `;
+        }
+
+        function handleLargeClusterClick(clusterMedia, latlng) {
+            // Directly load media to gallery without showing popup
+            loadLocationMediaToGallery(clusterMedia);
+        }
+
+        function loadLocationMediaToGallery(mediaArray) {
+            // Load the media into the gallery
+            loadedMediaData = [...mediaArray];
+            
+            // Display the media grid
+            displayMedia(loadedMediaData);
+            
+            // Show the media grid and view controls
+            document.getElementById('media-grid').style.display = 'grid';
+            document.getElementById('view-controls').style.display = 'flex';
+            
+            // Hide initial message
+            document.getElementById('initial-message').style.display = 'none';
+            
+            // Scroll to gallery section
+            document.getElementById('media-grid').scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
 
         function fitMapToData(locations, heatmapPoints) {
@@ -1875,6 +2101,18 @@
         };
 
         // Enhanced Map Control Functions
+        function changeMapHeight(height) {
+            const mapElement = document.getElementById('map');
+            mapElement.style.height = height + 'px';
+            
+            // Trigger map resize to adjust to new dimensions
+            setTimeout(() => {
+                if (map) {
+                    map.invalidateSize();
+                }
+            }, 350); // Wait for CSS transition to complete
+        }
+
         function toggleMapMode(mode) {
             // Update button states
             document.querySelectorAll('.map-control-btn').forEach(btn => btn.classList.remove('active'));
