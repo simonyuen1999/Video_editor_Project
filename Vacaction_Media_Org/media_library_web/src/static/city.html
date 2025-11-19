@@ -199,6 +199,7 @@
             text-align: center;
             padding: 40px;
             color: #666;
+            display: none;
         }
 
         .media-info-header {
@@ -207,7 +208,7 @@
             padding: 15px 20px;
             margin-bottom: 20px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-            display: flex;
+            display: none;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
@@ -225,6 +226,41 @@
         }
 
         .media-info-header a:hover {
+            background: #5a6fd8 !important;
+        }
+
+        .view-on-map-btn {
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+        }
+
+        .view-on-map-header {
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+        }
+
+        .view-on-map-header:hover {
+            background: #5a6fd8 !important;
+        }
+
+        .view-on-map-info {
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            transition: background 0.3s ease;
+        }
+        
+        .view-on-map-info:hover {
             background: #5a6fd8 !important;
         }
 
@@ -579,7 +615,7 @@
             <a href="daily.html">📅 Daily View</a>
             <a href="city.html" class="active">🏙️ City View</a>
             <a href="special.html">🎯 Special View</a>
-            <a href="fixinfo.html">� FixInfo</a>
+            <a href="fixinfo.html">🔧 FixInfo</a>
             <a href="journal.html">📔 Journal</a>
         </div>
 
@@ -605,18 +641,20 @@
                     <input type="range" id="thumbnail-size" class="size-slider" min="150" max="350" value="200">
                     <span id="size-display">200px</span>
                 </div>
+                
+                <a id="view-on-map-control" href="#" class="view-on-map-header">📍 View on Map</a>
             </div>
         </div>
 
-        <div id="media-info-header" class="media-info-header" style="display: none;">
+        <div id="media-info-header" class="media-info-header">
             <div>
                 <h2 id="selected-city-name">City Name</h2>
                 <span class="media-count" id="media-count">0 photos and videos</span>
             </div>
-            <a id="view-on-map" href="#" style="background: #667eea; color: white; text-decoration: none; padding: 8px 16px; border-radius: 8px; transition: background 0.3s ease;">📍 View on Map</a>
+            <a id="view-on-map-header" href="#" class="view-on-map-info">📍 View on Map</a>
         </div>
-
-        <div id="loading" class="loading" style="display: none;">
+        
+        <div id="loading" class="loading">
             <h3>Loading media...</h3>
         </div>
 
@@ -834,7 +872,8 @@
             
             // Hide info header and map link
             document.getElementById('media-info-header').style.display = 'none';
-            document.getElementById('view-on-map').style.display = 'none';
+            const viewOnMapControl = document.getElementById('view-on-map-control');
+            if (viewOnMapControl) viewOnMapControl.style.display = 'none';
             
             // Show default message
             document.getElementById('media-container').innerHTML = `
@@ -850,7 +889,8 @@
             currentCity = null;
             cityMediaData = [];
             document.getElementById('media-info-header').style.display = 'none';
-            document.getElementById('view-on-map').style.display = 'none';
+            const viewOnMapControl = document.getElementById('view-on-map-control');
+            if (viewOnMapControl) viewOnMapControl.style.display = 'none';
             
             // Show default message
             document.getElementById('media-container').innerHTML = `
@@ -879,15 +919,28 @@
                 document.getElementById('media-count').textContent = `${cityMediaData.length} ${cityMediaData.length === 1 ? 'item' : 'items'}`;
                 
                 // Update "View on Map" link
-                const mapLink = document.getElementById('view-on-map');
+                const mapLink = document.getElementById('view-on-map-header');
+                // Get current country selection
+                const countrySelect = document.getElementById('country-select');
+                const selectedCountry = countrySelect ? countrySelect.value : '';
+                
                 // Find the selected option to get coordinates
                 const selectedOption = Array.from(document.getElementById('city-select').options).find(opt => opt.value === cityName);
                 if (selectedOption && selectedOption.dataset.lat && selectedOption.dataset.lng) {
-                    mapLink.href = `index.html?lat=${encodeURIComponent(selectedOption.dataset.lat)}&lng=${encodeURIComponent(selectedOption.dataset.lng)}`;
+                    // Include coordinates, city, and country for precise location
+                    mapLink.href = `index.html?lat=${encodeURIComponent(selectedOption.dataset.lat)}&lng=${encodeURIComponent(selectedOption.dataset.lng)}&city=${encodeURIComponent(cityName)}&country=${encodeURIComponent(selectedCountry)}`;
                 } else {
-                    mapLink.href = `index.html?city=${encodeURIComponent(cityName)}`;
+                    // Include both city and country for filtering
+                    mapLink.href = `index.html?city=${encodeURIComponent(cityName)}&country=${encodeURIComponent(selectedCountry)}`;
                 }
                 mapLink.style.display = 'inline-block';
+                
+                // Also update the control panel map link
+                const mapControlLink = document.getElementById('view-on-map-control');
+                if (mapControlLink) {
+                    mapControlLink.href = mapLink.href;
+                    mapControlLink.style.display = 'inline-block';
+                }
                 
                 document.getElementById('media-info-header').style.display = 'flex';
 

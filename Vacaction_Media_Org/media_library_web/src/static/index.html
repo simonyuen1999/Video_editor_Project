@@ -773,8 +773,94 @@
             }
         }
 
+        /* Navigation styles */
+        .nav-links {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            margin: 0 15px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.2);
+            transition: background 0.3s ease;
+        }
+        
+        .nav-links a.active {
+            background: rgba(255,255,255,0.4);
+            font-weight: bold;
+        }
+        
         .nav-links a:hover {
             background: rgba(255,255,255,0.3) !important;
+        }
+        
+        /* Button styles */
+        .search-btn {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .sort-btn {
+            padding: 10px 15px;
+            background: #fd7e14;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .timeline-controls {
+            text-align: center;
+            margin-top: 10px;
+        }
+        
+        .play-btn {
+            padding: 5px 15px;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin-right: 10px;
+        }
+        
+        .reset-btn {
+            padding: 5px 15px;
+            background: #6c757d;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        
+        /* Utility classes */
+        .hidden {
+            display: none !important;
+        }
+        
+        .clickable {
+            cursor: pointer;
+        }
+        
+        .map-link {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .map-link:hover {
+            text-decoration: underline;
+        }
+        
+        .no-pointer-events {
+            pointer-events: none;
         }
 
         /* Darker yellow background for unknown location */
@@ -799,13 +885,13 @@
             </div>
         </div>
 
-        <div class="nav-links" style="text-align: center; margin-bottom: 20px;">
-            <a href="index.html" class="active" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.4); font-weight: bold;">🗺️ Map View</a>
-            <a href="daily.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">📅 Daily View</a>
-            <a href="city.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">🏙️ City View</a>
-            <a href="special.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">🎯 Special View</a>
-            <a href="fixinfo.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">� FixInfo</a>
-            <a href="journal.html" style="color: white; text-decoration: none; margin: 0 15px; padding: 8px 16px; border-radius: 20px; background: rgba(255,255,255,0.2); transition: background 0.3s ease;">📔 Journal</a>
+        <div class="nav-links">
+            <a href="index.html" class="active">🗺️ Map View</a>
+            <a href="daily.html">📅 Daily View</a>
+            <a href="city.html">🏙️ City View</a>
+            <a href="special.html">🎯 Special View</a>
+            <a href="fixinfo.html">🔧 FixInfo</a>
+            <a href="journal.html">📔 Journal</a>
         </div>
 
         <div class="main-content">
@@ -837,10 +923,10 @@
                             <input type="datetime-local" id="date-to">
                         </div>
                         <div class="search-buttons">
-                            <button id="search-btn" onclick="searchMedia()" style="padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                            <button id="search-btn" onclick="searchMedia()" class="search-btn">
                                 🔍 Search Media
                             </button>
-                            <button id="sort-toggle-btn" onclick="toggleSortOrder()" style="padding: 10px 15px; background: #fd7e14; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">
+                            <button id="sort-toggle-btn" onclick="toggleSortOrder()" class="sort-btn">
                                 📅 Oldest First
                             </button>
                         </div>
@@ -904,9 +990,9 @@
                                 <span id="timeline-end">End Date</span>
                             </div>
                             <input type="range" class="timeline-slider" id="timeline-slider" min="0" max="100" value="100" onchange="updateTimeline(this.value)">
-                            <div style="text-align: center; margin-top: 10px;">
-                                <button onclick="playTimeline()" id="play-btn" style="padding: 5px 15px; background: #28a745; color: white; border: none; border-radius: 5px; margin-right: 10px;">▶️ Play</button>
-                                <button onclick="resetTimeline()" style="padding: 5px 15px; background: #6c757d; color: white; border: none; border-radius: 5px;">🔄 Reset</button>
+                            <div class="timeline-controls">
+                                <button onclick="playTimeline()" id="play-btn" class="play-btn">▶️ Play</button>
+                                <button onclick="resetTimeline()" class="reset-btn">🔄 Reset</button>
                             </div>
                         </div>
                     </div>
@@ -919,7 +1005,7 @@
             <h2>📱 Media Gallery</h2>
             
             <!-- View Controls -->
-            <div id="view-controls" class="view-controls" style="display: none;">
+            <div id="view-controls" class="view-controls hidden">
                 <div class="view-mode-buttons">
                     <button id="thumbnail-mode-btn" class="view-mode-btn active" onclick="setViewMode('thumbnail')">
                         🏞️ Thumbnails
@@ -938,10 +1024,10 @@
             <div id="initial-message" class="loading">
                 🎯 Select date range and search criteria above, then click "Search Media" to find your photos and videos.
             </div>
-            <div id="loading" class="loading" style="display: none;">Searching media...</div>
-            <div id="loading-images" class="loading" style="display: none;">Loading images...</div>
-            <div id="error" class="error" style="display: none;"></div>
-            <div id="media-grid" class="media-grid thumbnail" style="display: none;">
+            <div id="loading" class="loading hidden">Searching media...</div>
+            <div id="loading-images" class="loading hidden">Loading images...</div>
+            <div id="error" class="error hidden"></div>
+            <div id="media-grid" class="media-grid thumbnail hidden">
                 <!-- Media cards will be loaded here -->
             </div>
                 </div>
@@ -1036,6 +1122,11 @@
                 loadStats();
                 loadCountries();
                 setupEventListeners();
+                
+                // Check for URL parameters and apply them after initialization
+                setTimeout(async () => {
+                    await applyUrlParameters();
+                }, 500); // Small delay to ensure countries/cities are loaded
                 
                 // Add country selection change handler
                 const countryFilter = document.getElementById('country-filter');
@@ -1469,6 +1560,90 @@
             return params;
         }
 
+        // Apply URL parameters on page load (from City View navigation)
+        async function applyUrlParameters() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const country = urlParams.get('country');
+            const city = urlParams.get('city');
+            const lat = urlParams.get('lat');
+            const lng = urlParams.get('lng');
+            
+            console.log('Applying URL parameters:', { country, city, lat, lng });
+            
+            // If no parameters, just return
+            if (!country && !city && !lat && !lng) {
+                console.log('No URL parameters found');
+                return;
+            }
+            
+            try {
+                // Apply country filter first and wait for countries to load
+                if (country) {
+                    console.log('Setting country filter to:', country);
+                    const countrySelect = document.getElementById('country-filter');
+                    if (countrySelect) {
+                        // Wait a bit for countries to be loaded if needed
+                        let retries = 0;
+                        while (countrySelect.options.length <= 1 && retries < 10) {
+                            console.log('Waiting for countries to load, retry:', retries);
+                            await new Promise(resolve => setTimeout(resolve, 100));
+                            retries++;
+                        }
+                        
+                        countrySelect.value = country;
+                        console.log('Country filter set to:', countrySelect.value);
+                        
+                        // Load cities for the selected country
+                        if (city) {
+                            console.log('Loading cities for country and setting city to:', city);
+                            await loadCitiesByCountry(country);
+                            
+                            // Wait for cities to load and then set city
+                            const citySelect = document.getElementById('city-filter');
+                            if (citySelect) {
+                                let cityRetries = 0;
+                                while (citySelect.options.length <= 1 && cityRetries < 10) {
+                                    console.log('Waiting for cities to load, retry:', cityRetries);
+                                    await new Promise(resolve => setTimeout(resolve, 100));
+                                    cityRetries++;
+                                }
+                                
+                                citySelect.value = city;
+                                console.log('City filter set to:', citySelect.value);
+                            }
+                        }
+                    }
+                } else if (city) {
+                    // If only city is provided, try to set it directly
+                    console.log('Setting city filter directly to:', city);
+                    const citySelect = document.getElementById('city-filter');
+                    if (citySelect) {
+                        citySelect.value = city;
+                    }
+                }
+                
+                // If coordinates are provided, center map on that location
+                if (lat && lng) {
+                    const latitude = parseFloat(lat);
+                    const longitude = parseFloat(lng);
+                    if (!isNaN(latitude) && !isNaN(longitude)) {
+                        map.setView([latitude, longitude], 15);
+                        console.log('Map centered on coordinates:', latitude, longitude);
+                    }
+                }
+                
+                // Auto-trigger search if parameters are present
+                if (country || city) {
+                    console.log('Triggering search with applied filters');
+                    await searchMedia();
+                    console.log('Search completed with URL parameters');
+                }
+                
+            } catch (error) {
+                console.error('Error applying URL parameters:', error);
+            }
+        }
+
         // Show search results summary
         function showSearchResults(results) {
             const resultsDiv = document.getElementById('search-results');
@@ -1595,7 +1770,7 @@
                         <div class="media-card list-view" onclick="openMediaModal(${media.id})">
                             ${isVideo ? 
                                 `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
-                                        style="pointer-events: none;"></video>` :
+                                        class="no-pointer-events"></video>` :
                                 `<img src="/api/media/${media.id}/thumbnail" alt="Media" 
                                       loading="lazy"
                                       onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`
@@ -1622,7 +1797,7 @@
                                         <span class="info-value">
                                             <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" 
                                                target="_blank" 
-                                               style="color: #667eea; text-decoration: none; cursor: pointer;"
+                                               class="map-link clickable"
                                                onclick="event.stopPropagation();"
                                                title="Open in Google Maps">
                                                 ${media.latitude.toFixed(6)}, ${media.longitude.toFixed(6)} 🗺️
@@ -1631,7 +1806,7 @@
                                     </div>` : ''}
                                     ${media.talking_detected ? `
                                     <div class="info-item">
-                                        <span class="info-label">�️ Talking:</span>
+                                        <span class="info-label">🗣️ Talking:</span>
                                         <span class="info-value">Detected</span>
                                     </div>` : ''}
                                 </div>
@@ -1660,7 +1835,7 @@
                         <div class="media-card" onclick="openMediaModal(${media.id})">
                             ${isVideo ? 
                                 `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
-                                        style="pointer-events: none;"></video>` :
+                                        class="no-pointer-events"></video>` :
                                 `<img src="/api/media/${media.id}/thumbnail" alt="Media" 
                                       loading="lazy"
                                       onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`
@@ -1670,7 +1845,7 @@
                                 <div class="meta">📅 ${displayTime}</div>
                                 <div class="meta">📏 ${formatFileSize(media.size)}</div>
                                 ${media.city_zh && media.country_zh ? `<div class="meta">📍 ${media.city_zh}, ${media.country_zh}</div>` : ''}
-                                ${media.latitude != null && media.longitude != null ? `<div class="meta">🌐 <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" onclick="event.stopPropagation();" title="Open in Google Maps">${media.latitude.toFixed(6)}, ${media.longitude.toFixed(6)} 🗺️</a></div>` : ''}
+                                ${media.latitude != null && media.longitude != null ? `<div class="meta">🌐 <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" class="map-link" onclick="event.stopPropagation();" title="Open in Google Maps">${media.latitude.toFixed(6)}, ${media.longitude.toFixed(6)} 🗺️</a></div>` : ''}
                                 ${media.talking_detected ? `<div class="meta">🗣️ Talking detected</div>` : ''}
                                 ${tags.length > 0 ? `
                                 <div class="tags">
@@ -2368,7 +2543,7 @@
             
             // Update button state
             fullscreenBtn.classList.remove('active');
-            fullscreenBtn.innerHTML = '�️ Fullscreen';
+            fullscreenBtn.innerHTML = '🗺️ Fullscreen';
             fullscreenBtn.title = 'Enter Fullscreen';
             
             // Remove fullscreen styles
@@ -2518,7 +2693,7 @@
                         <p><strong>Filename:</strong> ${media.filename || 'N/A'}</p>
                         <p><strong>Creation Time:</strong> ${displayTime}</p>
                         <p><strong>Location:</strong> ${media.city_zh || 'N/A'}, ${media.country_zh || 'N/A'}</p>
-                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${media.latitude}, ${media.longitude} 🗺️</a></p>` : ''}
+                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" class="map-link" title="Open in Google Maps">${media.latitude}, ${media.longitude} 🗺️</a></p>` : ''}
                         <p><strong>Talking Detected:</strong> ${media.talking_detected ? 'Yes' : 'No'}</p>
                         ${media.activities && media.activities.length > 0 ? `<p><strong>Activities:</strong> ${media.activities.join(', ')}</p>` : ''}
                         ${media.scenery && media.scenery.length > 0 ? `<p><strong>Scenery:</strong> ${media.scenery.join(', ')}</p>` : ''}

@@ -493,6 +493,43 @@
             background-color: rgba(218, 165, 32, 0.4) !important;
             border: 1px solid rgba(218, 165, 32, 0.7) !important;
         }
+        
+        /* Utility classes */
+        .hidden {
+            display: none !important;
+        }
+        
+        .center-align {
+            text-align: center;
+        }
+        
+        .clickable {
+            cursor: pointer;
+        }
+        
+        .map-link {
+            color: #667eea;
+            text-decoration: none;
+        }
+        
+        .map-link:hover {
+            text-decoration: underline;
+        }
+        
+        .modal-button {
+            margin-top: 10px;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .modal-button:hover {
+            background: #5a6fd8;
+        }
     </style>
 </head>
 <body>
@@ -515,7 +552,7 @@
             <a href="daily.html">📅 Daily View</a>
             <a href="city.html">🏙️ City View</a>
             <a href="special.html" class="active">🎯 Special View</a>
-            <a href="fixinfo.html">� FixInfo</a>
+            <a href="fixinfo.html">🔧 FixInfo</a>
             <a href="journal.html">📔 Journal</a>
         </div>
 
@@ -532,11 +569,7 @@
                     <label class="selection-label">🏞️ Scenery</label>
                     <select id="scenery-select" class="selection-dropdown" title="Select scenery type to filter media">
                         <option value="">Select scenery...</option>
-            <div class="clear-button-container">
-                <button class="clear-button" id="clear-selections">Clear All Selections</button>
-            </div>
-            
-            <div style="text-align: center;">
+            <div class="clear-button-container center-align">
                 <button class="clear-button" id="clear-selections">Clear All Selections</button>
             </div>
 
@@ -550,11 +583,11 @@
                     <label for="thumbnail-size">Size:</label>
                     <input type="range" id="thumbnail-size" class="size-slider" min="150" max="350" value="200" title="Adjust thumbnail size">
                     <span id="size-display">200px</span>
-        <div id="media-info-header" class="media-info-header hidden">
+                </div>
             </div>
         </div>
 
-        <div id="media-info-header" class="media-info-header" style="display: none;">
+        <div id="media-info-header" class="media-info-header hidden">
             <div>
                 <h2 id="selection-title">Selection</h2>
                 <span class="media-count" id="media-count">0 photos and videos</span>
@@ -562,7 +595,7 @@
             </div>
         </div>
 
-        <div id="loading" class="loading" style="display: none;">
+        <div id="loading" class="loading hidden">
             <h3>Loading...</h3>
         </div>
 
@@ -837,7 +870,7 @@
 
                 if (currentViewMode === 'list') {
                     return `
-                        <div class="media-item list ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                        <div class="media-item list clickable ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})">
                             ${isVideo ? 
                                 `<video class="media-thumbnail" muted preload="none">
                                     <source src="/api/media/${media.id}/thumbnail" type="video/${media.file_extension?.substring(1) || 'mp4'}">
@@ -865,7 +898,7 @@
                                         <span class="info-value">
                                             <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" 
                                                target="_blank" 
-                                               style="color: #667eea; text-decoration: none; cursor: pointer;"
+                                               class="map-link clickable"
                                                onclick="event.stopPropagation();"
                                                title="Open in Google Maps">
                                                 ${media.latitude.toFixed(6)}, ${media.longitude.toFixed(6)} 🗺️
@@ -892,7 +925,7 @@
                 } else {
                     // Thumbnail view
                     return `
-                        <div class="media-item thumbnail ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})" style="cursor: pointer;">
+                        <div class="media-item thumbnail clickable ${location === 'Unknown location' ? 'unknown-location' : ''}" onclick="openMediaModal(${media.id})">
                             ${isVideo ? 
                                 `<video class="media-thumbnail" muted preload="none">
                                     <source src="/api/media/${media.id}/thumbnail" type="video/${media.file_extension?.substring(1) || 'mp4'}">
@@ -905,7 +938,7 @@
                                     📅 ${displayTime}<br>
                                     📏 ${formatFileSize(media.size)}<br>
                                     📍 ${location}
-                                    ${media.latitude != null && media.longitude != null ? `<br>🌐 <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" onclick="event.stopPropagation();" title="Open in Google Maps">${media.latitude.toFixed(6)}, ${media.longitude.toFixed(6)} 🗺️</a>` : ''}
+                                    ${media.latitude != null && media.longitude != null ? `<br>🌐 <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" class="map-link" onclick="event.stopPropagation();" title="Open in Google Maps">${media.latitude.toFixed(6)}, ${media.longitude.toFixed(6)} 🗺️</a>` : ''}
                                     ${media.talking_detected ? '<br>🗣️ Talking detected' : ''}
                                 </div>
                                 ${activities.length > 0 || scenery.length > 0 ? `
@@ -1013,13 +1046,13 @@
                         <p><strong>Filename:</strong> ${media.filename || 'N/A'}</p>
                         <p><strong>Creation Time:</strong> ${displayTime}</p>
                         <p><strong>Location:</strong> ${media.city_zh || 'N/A'}, ${media.country_zh || 'N/A'}</p>
-                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" style="color: #667eea; text-decoration: none;" title="Open in Google Maps">${media.latitude}, ${media.longitude} 🗺️</a></p>` : ''}
+                        ${media.latitude && media.longitude ? `<p><strong>Coordinates:</strong> <a href="https://maps.google.com/?q=${media.latitude},${media.longitude}" target="_blank" class="map-link" title="Open in Google Maps">${media.latitude}, ${media.longitude} 🗺️</a></p>` : ''}
                         <p><strong>Talking Detected:</strong> ${media.talking_detected ? 'Yes' : 'No'}</p>
                         ${media.activities && media.activities.length > 0 ? `<p><strong>Activities:</strong> ${media.activities.join(', ')}</p>` : ''}
                         ${media.scenery && media.scenery.length > 0 ? `<p><strong>Scenery:</strong> ${media.scenery.join(', ')}</p>` : ''}
                         <p><strong>File Path:</strong> ${media.filepath || 'N/A'}</p>
                         <p><strong>File Size:</strong> ${media.size ? (media.size / 1024 / 1024).toFixed(2) + ' MB' : 'N/A'}</p>
-                        <button style="margin-top: 10px; padding: 10px 20px; background: #667eea; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;" onclick="openFileInSystem(${media.id})">
+                        <button class="modal-button" onclick="openFileInSystem(${media.id})">
                             📱 Open with System App
                         </button>
                     </div>

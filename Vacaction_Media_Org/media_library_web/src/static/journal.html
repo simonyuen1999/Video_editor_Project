@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Journal - Vacation Media Organizer</title>
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <style>
         * {
             margin: 0;
@@ -462,6 +463,40 @@
         .cancel-btn:hover {
             background: #5a6268;
         }
+        
+        /* Navigation active state */
+        .nav-link.active {
+            background: rgba(255, 255, 255, 0.4) !important;
+        }
+        
+        /* Print button styling */
+        .print-btn {
+            background: #6f42c1;
+            margin-right: 10px;
+        }
+        
+        .print-btn:hover {
+            background: #5a2d91;
+        }
+        
+        /* Utility classes */
+        .hidden {
+            display: none !important;
+        }
+        
+        /* Date display styling */
+        .date-display-box {
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            color: #666;
+            font-size: 1rem;
+        }
+        
+        .help-text {
+            color: #666;
+            font-size: 0.8rem;
+        }
     </style>
 </head>
 <body>
@@ -487,7 +522,7 @@
             <a href="city.html" class="nav-link">🏙️ City View</a>
             <a href="special.html" class="nav-link">⭐ Special</a>
             <a href="fixinfo.html" class="nav-link">🔧 Fix Info</a>
-            <a href="journal.html" class="nav-link" style="background: rgba(255, 255, 255, 0.4);">📔 Journal</a>
+            <a href="journal.html" class="nav-link active">📔 Journal</a>
         </div>
 
         <div class="controls">
@@ -496,13 +531,13 @@
                 <span id="sync-status" class="sync-status">Ready to sync</span>
             </div>
             <div class="action-buttons">
-                <button id="print-journal-btn" class="add-entry-btn" style="background: #6f42c1; margin-right: 10px;">🖨️ Printable Journal</button>
+                <button id="print-journal-btn" class="add-entry-btn print-btn">🖨️ Printable Journal</button>
                 <button id="add-entry-btn" class="add-entry-btn">➕ Add Journal Entry</button>
             </div>
         </div>
 
         <div class="journal-container">
-            <div id="loading" class="loading" style="display: none;">
+            <div id="loading" class="loading hidden">
                 <h3>Loading journal entries...</h3>
             </div>
             <div id="journal-list" class="journal-list">
@@ -526,10 +561,10 @@
                     <input type="date" id="entry-date" required>
                 </div>
                 
-                <div class="form-group" id="date-display" style="display: none;">
+                <div class="form-group hidden" id="date-display">
                     <label>Date</label>
-                    <div id="display-date" style="padding: 10px; background: #f8f9fa; border-radius: 6px; color: #666; font-size: 1rem;"></div>
-                    <small style="color: #666; font-size: 0.8rem;">Date cannot be changed as it corresponds to media file dates</small>
+                    <div id="display-date" class="date-display-box"></div>
+                    <small class="help-text">Date cannot be changed as it corresponds to media file dates</small>
                 </div>
 
                 <div class="form-group">
