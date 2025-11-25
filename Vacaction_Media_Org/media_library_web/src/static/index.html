@@ -474,8 +474,8 @@
 
         .media-grid {
             display: grid;
-            gap: 20px;
-            padding: 20px;
+            gap: 8px;
+            padding: 8px;
             background: white;
             border-radius: 15px;
             box-shadow: 0 5px 20px rgba(0,0,0,0.1);
@@ -544,6 +544,8 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.1);
             transition: transform 0.3s ease, box-shadow 0.3s ease;
             cursor: pointer;
+            display: flex;
+            flex-direction: column;
         }
 
         .media-card:hover {
@@ -557,6 +559,88 @@
             object-fit: cover;
             background: #f0f0f0;
             display: block;
+        }
+
+        /* Thumbnail gallery: show images at one-third scale and expand on hover */
+        .media-grid.thumbnail .media-card {
+            overflow: visible;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: auto;
+        }
+
+        .media-grid.thumbnail .media-card img,
+        .media-grid.thumbnail .media-card video {
+            width: calc(var(--thumbnail-size, 250px));
+            height: calc(var(--thumbnail-size, 250px) * 0.6);
+            max-width: none;
+            object-fit: cover;
+            display: block;
+            pointer-events: auto;
+            border-radius: 6px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
+
+        /* Create a tooltip-style overlay on hover using the thumbnail image */
+        .media-grid.thumbnail .media-card:hover::after {
+            content: '';
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: calc(var(--thumbnail-size, 250px) * 3);
+            height: calc(var(--thumbnail-size, 250px) * 1.8);
+            background-image: var(--thumb-url);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            border-radius: 8px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+            z-index: 10000;
+            pointer-events: none;
+        }
+
+        /* On hover, expanded thumbnail overlays neighboring cards and hides content below */
+        .media-grid.thumbnail .media-card:hover {
+            z-index: 999;
+        }
+
+        .media-grid.thumbnail .media-card:hover .media-card-content {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        /* Ensure hover-expanded thumbnails overlay neighboring cards */
+        .media-grid.thumbnail .media-card {
+            will-change: transform;
+        }
+
+        /* Reduce typography for compact thumbnail display and scale with thumbnail size */
+        .media-grid.thumbnail .media-card .media-card-content {
+            /* font size scales with thumbnail size: default 250px -> ~12.5px */
+            font-size: calc(var(--thumbnail-size, 250px) / 20);
+            padding: 8px;
+            line-height: 1.1;
+        }
+
+        .media-grid.thumbnail .media-card h3 {
+            font-size: calc(var(--thumbnail-size, 250px) / 22);
+            margin: 0 0 4px 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .media-grid.thumbnail .media-card .meta {
+            font-size: calc(var(--thumbnail-size, 250px) / 26);
+            color: #666;
+        }
+
+        .media-grid.thumbnail .media-card .tags .tag {
+            font-size: calc(var(--thumbnail-size, 250px) / 32);
+            padding: 2px 6px;
         }
 
         .media-card img[src=""], .media-card video[src=""] {
@@ -605,32 +689,28 @@
 
         /* Enhanced Media Card Styles for View Modes */
         .media-card.list-view {
-            display: flex;
-            align-items: center;
-            padding: 15px;
-            margin-bottom: 10px;
+            /* Stack thumbnail on top and details below to reduce horizontal space */
+            display: block;
+            padding: 8px;
+            margin-bottom: 8px;
         }
 
         .media-card.list-view img, .media-card.list-view video {
-            width: 100px;
-            height: 80px;
-            flex-shrink: 0;
-            margin-right: 20px;
-            border-radius: 8px;
+            width: 100%;
+            height: auto;
+            display: block;
+            margin: 0 0 8px 0;
+            border-radius: 6px;
         }
 
         .media-card.list-view .media-card-content {
-            flex: 1;
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            display: block;
             padding: 0;
         }
 
         .media-card.list-view h3 {
-            grid-column: 1 / -1;
-            margin-bottom: 10px;
-            font-size: 1.1rem;
+            margin: 0 0 6px 0;
+            font-size: 1rem;
         }
 
         .media-info-section {
@@ -1683,7 +1763,15 @@
                 document.getElementById('loading-images').style.display = 'block';
                 document.getElementById('search-results').style.display = 'none';
                 
-                loadedMediaData = [...searchResults];
+                // Respect currentSortOrder when loading images (asc = oldest-first)
+                try {
+                    loadedMediaData = (searchResults || []).slice().sort((a, b) => {
+                        const diff = new Date(a.creation_time) - new Date(b.creation_time);
+                        return currentSortOrder === 'asc' ? diff : -diff;
+                    });
+                } catch (e) {
+                    loadedMediaData = [...searchResults];
+                }
                 
                 // Display the media grid
                 displayMedia(loadedMediaData);
@@ -1773,8 +1861,7 @@
                                         class="no-pointer-events"></video>` :
                                 `<img src="/api/media/${media.id}/thumbnail" alt="Media" 
                                       loading="lazy"
-                                      onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`
-                            }
+                                      onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`}
                             <div class="media-card-content">
                                 <h3>${media.filename || 'Unknown File'}</h3>
                                 <div class="media-info-section">
@@ -1832,14 +1919,13 @@
                     if (scenery.length > 0) tags.push(...scenery);
                     
                     return `
-                        <div class="media-card" onclick="openMediaModal(${media.id})">
+                        <div class="media-card" onclick="openMediaModal(${media.id})" style="--thumb-url: url('/api/media/${media.id}/thumbnail');">
                             ${isVideo ? 
                                 `<video src="/api/media/${media.id}/thumbnail" muted preload="none" 
                                         class="no-pointer-events"></video>` :
                                 `<img src="/api/media/${media.id}/thumbnail" alt="Media" 
                                       loading="lazy"
-                                      onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`
-                            }
+                                      onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3QgeD0iMyIgeT0iMyIgd2lkdGg9IjE4IiBoZWlnaHQ9IjE4IiByeD0iMiIgc3Ryb2tlPSIjY2NjIiBzdHJva2Utd2lkdGg9IjIiLz4KPGNpcmNsZSBjeD0iOC41IiBjeT0iOC41IiByPSIxLjUiIGZpbGw9IiNjY2MiLz4KPHBhdGggZD0ibTIxIDEyLTUtNUw1IDE4IiBzdHJva2U9IiNjY2MiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo='">`}
                             <div class="media-card-content">
                                 <h3>${media.filename || 'Unknown File'}</h3>
                                 <div class="meta">📅 ${displayTime}</div>
@@ -2116,6 +2202,11 @@
         }
 
         function createThumbnailArrayPopupContent(location) {
+            // Ensure thumbnails are shown oldest-first in popups
+            const sortedMedia = (location.media || []).slice().sort((a, b) => {
+                try { return new Date(a.creation_time) - new Date(b.creation_time); } catch (e) { return 0; }
+            });
+
             return `
                 <div style="max-width: 320px;">
                     <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px; text-align: center;">
@@ -2125,7 +2216,7 @@
                         ${location.count} media files - Click thumbnail to open
                     </div>
                     <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;">
-                        ${location.media.map(media => {
+                        ${sortedMedia.map(media => {
                             const isVideo = media.file_extension && 
                                 ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
                             
@@ -2154,6 +2245,11 @@
         }
 
         function createGalleryLoaderPopupContent(location) {
+            // Show a short preview sorted oldest-first
+            const sortedMedia = (location.media || []).slice().sort((a, b) => {
+                try { return new Date(a.creation_time) - new Date(b.creation_time); } catch (e) { return 0; }
+            });
+
             return `
                 <div style="max-width: 280px; text-align: center;">
                     <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px;">
@@ -2163,7 +2259,7 @@
                         ${location.count} media files at this location
                     </div>
                     <div style="margin: 15px 0;">
-                        ${location.media.slice(0, 3).map(media => {
+                        ${sortedMedia.slice(0, 3).map(media => {
                             const isVideo = media.file_extension && 
                                 ['.mp4', '.mov', '.avi', '.mkv', '.webm'].includes(media.file_extension.toLowerCase());
                             return `
@@ -2222,7 +2318,12 @@
 
         function loadLocationMediaToGallery(mediaArray) {
             // Load the media into the gallery
-            loadedMediaData = [...mediaArray];
+            // Ensure oldest-first ordering when loading from map
+            try {
+                loadedMediaData = (mediaArray || []).slice().sort((a, b) => new Date(a.creation_time) - new Date(b.creation_time));
+            } catch (e) {
+                loadedMediaData = [...(mediaArray || [])];
+            }
             
             // Display the media grid
             displayMedia(loadedMediaData);
