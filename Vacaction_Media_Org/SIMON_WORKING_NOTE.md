@@ -24,16 +24,25 @@ This note records:
 
 All four sit on `/Volumes/SSD_HD` (exFAT, 3.6 TB, ~1.9 TB free).
 
-| ID | Path | Role | Real files | Size (du) | Structure |
-|----|------|------|-----------:|----------:|-----------|
-| **C** | `/Volumes/SSD_HD/Keep_Media_files/2025HKTrip_Organized_from_Original` | Pristine curated master | 3,235 | 290 GB | 23 hand-named folders, flat, **files renamed** |
-| **B** | `/Volumes/SSD_HD/Keep_Media_files/Videos_Original_Inc_Simon_iPhone` | Raw archive (C + other people's media + LRF) | 4,410 | 378 GB | 31 folders, original names |
-| **A** | `/Volumes/SSD_HD/Keep_Media_files/testing_media_dir_2025-Nov-18` | Processed / scanned / de-duplicated working copy | 3,403 | 293 GB | same 31 folders as B |
-| **D** | `/Volumes/SSD_HD/media` | **Duplicate of A** (no `*.db`) — configured `base_directory` in the DB | 3,401 | 293 GB | same as A |
+**Short names used throughout this note**
+
+```
+DIR_A = /Volumes/SSD_HD/Keep_Media_files/testing_media_dir_2025-Nov-18
+DIR_B = /Volumes/SSD_HD/Keep_Media_files/Videos_Original_Inc_Simon_iPhone
+DIR_C = /Volumes/SSD_HD/Keep_Media_files/2025HKTrip_Organized_from_Original
+DIR_D = /Volumes/SSD_HD/media
+```
+
+| Name | Role | Real files | Size (du) | Structure |
+|------|------|-----------:|----------:|-----------|
+| `DIR_C` | Pristine curated master | 3,235 | 290 GB | 23 hand-named folders, flat, **files renamed** |
+| `DIR_B` | Raw archive (`DIR_C` + other people's media + LRF) | 4,410 | 378 GB | 31 folders, original names |
+| `DIR_A` | Processed / scanned / de-duplicated working copy | 3,403 | 293 GB | same 31 folders as `DIR_B` |
+| `DIR_D` | **Duplicate of `DIR_A`** (no `*.db`) — configured `base_directory` in the DB | 3,401 | 293 GB | same as `DIR_A` |
 
 ### 2.1 File inventory [verified]
 
-| Extension | A | B | C |
+| Extension | `DIR_A` | `DIR_B` | `DIR_C` |
 |-----------|---:|---:|---:|
 | HEIC | 2,068 | 2,220 | 2,055 |
 | MP4 | 945 | 945 | 896 |
@@ -45,19 +54,19 @@ All four sit on `/Volumes/SSD_HD` (exFAT, 3.6 TB, ~1.9 TB free).
 | **Total real files** | **3,403** | **4,410** | **3,235** |
 | AppleDouble `._*` junk | **1,689** | 174 | 0 |
 
-Logical byte totals: A = 310.9 GB, B = 403.2 GB (incl. 91.9 GB LRF), C = 309.8 GB.
+Logical byte totals: `DIR_A` = 310.9 GB, `DIR_B` = 403.2 GB (incl. 91.9 GB LRF), `DIR_C` = 309.8 GB.
 
 ### 2.2 What each tree really is [verified]
 
-**C — pristine master.** Files were **renamed** to Chinese descriptive names (`香港_1.HEIC`, `台灣_1.MP4`, `長洲太平清醮_3.HEIC`, `東莞家族晚餐_Menu3.HEIC`). No Zulu `UserComment` was written. 97 files carry Apple's own `UserComment` ("Screenshot"). 1,612 of 3,235 have GPS. Folder set is a hand-curated regrouping, so **path and filename do not align with A or B** — matching must be by content.
+**`DIR_C` — pristine master.** Files were **renamed** to Chinese descriptive names (`香港_1.HEIC`, `台灣_1.MP4`, `長洲太平清醮_3.HEIC`, `東莞家族晚餐_Menu3.HEIC`). No Zulu `UserComment` was written. 97 files carry Apple's own `UserComment` ("Screenshot"). 1,612 of 3,235 have GPS. Folder set is a hand-curated regrouping, so **path and filename do not align with `DIR_A` or `DIR_B`** — matching must be by content.
 
-> Note: C is *not* perfectly untouched. 21 of its 3,235 files are not byte-identical to anything in B; at least one (`00_2025_iPhone/IMG_8262.HEIC`) has different rotation metadata. Treat C as "best available original", not "certified untouched".
+> Note: `DIR_C` is *not* perfectly untouched. 21 of its 3,235 files are not byte-identical to anything in `DIR_B`; at least one (`00_2025_iPhone/IMG_8262.HEIC`) has different rotation metadata. Treat `DIR_C` as "best available original", not "certified untouched".
 
-**B — raw archive.** A superset of C: 3,214 of C's 3,235 files match a B file exactly on size + mtime (3,212 also match mtime within 2 s). B adds 1,097 items: 897 LRF sidecars, 152 HEIC, 27 PNG, 19 JPG, 1 MOV, `desktop.ini`. Contains the DJI `.LRF` proxies that C and A do not.
+**`DIR_B` — raw archive.** A superset of `DIR_C`: 3,214 of `DIR_C`'s 3,235 files match a `DIR_B` file exactly on size + mtime (3,212 also match mtime within 2 s). `DIR_B` adds 1,097 items: 897 LRF sidecars, 152 HEIC, 27 PNG, 19 JPG, 1 MOV, `desktop.ini`. Contains the DJI `.LRF` proxies that `DIR_C` and `DIR_A` do not.
 
-**A — processed working copy.** Produced by `PreImport_exif_file_processor.py` + the scan pipeline, then manually pruned. Same 31 folders as B, extensions upper-cased, 88 `.HEIC`→`.JPG` corrections, `UserComment` stamped on every file, GPS written into 1,604 files, all mtimes rewritten to Nov 2025, 1,689 AppleDouble files created, and the two `*.db` files copied into the root.
+**`DIR_A` — processed working copy.** Produced by `PreImport_exif_file_processor.py` + the scan pipeline, then manually pruned. Same 31 folders as `DIR_B`, extensions upper-cased, 88 `.HEIC`→`.JPG` corrections, `UserComment` stamped on every file, GPS written into 1,604 files, all mtimes rewritten to Nov 2025, 1,689 AppleDouble files created, and the two `*.db` files copied into the root.
 
-**D — `/Volumes/SSD_HD/media`.** Same 3,401 media files as A with identical relative paths and identical sizes; the only difference is A additionally holds `media_organizer.db` and `media_library.db`. Different inodes → a real second copy, not a symlink. **This is ~293 GB of duplication** and is the path recorded in `config.base_directory`.
+**`DIR_D` — duplicate of `DIR_A`.** Same 3,401 media files as `DIR_A` with identical relative paths and identical sizes; the only difference is `DIR_A` additionally holds `media_organizer.db` and `media_library.db`. Different inodes → a real second copy, not a symlink. **This is ~293 GB of duplication** and is the path recorded in `config.base_directory`.
 
 ---
 
@@ -65,22 +74,23 @@ Logical byte totals: A = 310.9 GB, B = 403.2 GB (incl. 91.9 GB LRF), C = 309.8 G
 
 ### What Simon said [assumed]
 
-> C holds my own original media. I duplicated C to B, then collected other people's media into B. I copied B to A. I ran the scan programs against A, then manually removed LRF files and removed duplicate/useless files from A. A should therefore hold the minimal set. Their creation time and Geo may not be correct.
+> *(directory names normalised to `DIR_x` for readability)*
+> `DIR_C` holds my own original media. I duplicated `DIR_C` to `DIR_B`, then collected other people's media into `DIR_B`. I copied `DIR_B` to `DIR_A`. I ran the scan programs against `DIR_A`, then manually removed LRF files and removed duplicate/useless files from `DIR_A`. `DIR_A` should therefore hold the minimal set. Their creation time and Geo may not be correct.
 
 ### What the evidence says [verified]
 
 | Assumption | Verdict | Evidence |
 |---|---|---|
-| C is Simon's own original set | ✅ supported | C ⊂ B on content; all C names are Simon-style Chinese descriptive names |
-| B = C + other people's media | ✅ supported | 3,214/3,235 C files found in B; B adds 165 HEIC / 27 PNG / 19 JPG / 1 MOV beyond C |
-| A = copy of B | ✅ supported | 3,354 shared folder+stem items; A holds nothing B lacks except the 2 DB files |
-| Scan programs modified A | ✅ confirmed | `UserComment` on 3,401/3,401; GPS added to 1,604 files; all mtimes → Nov 2025 |
-| LRF files removed from A | ✅ confirmed | 897 LRF in B (91.9 GB), 0 in A |
-| Duplicates / useless files removed from A | ⚠️ **only partly true** | 111 media files (328.9 MB) were removed, but **none of them is a content duplicate of anything left in A**. They were unique files. |
-| A is the minimal set | ❌ not quite | A keeps 3,401 media items; C's curated set is 3,235. Also A is duplicated in full at `/Volumes/SSD_HD/media`. |
-| A's creation times / Geo may be wrong | ✅ **confirmed, and quantified below** | 1,597 of 3,401 stamped timestamps are provably wrong |
+| `DIR_C` is Simon's own original set | ✅ supported | `DIR_C` ⊂ `DIR_B` on content; all `DIR_C` names are Simon-style Chinese descriptive names |
+| `DIR_B` = `DIR_C` + other people's media | ✅ supported | 3,214/3,235 `DIR_C` files found in `DIR_B`; `DIR_B` adds 165 HEIC / 27 PNG / 19 JPG / 1 MOV beyond `DIR_C` |
+| `DIR_A` = copy of `DIR_B` | ✅ supported | 3,354 shared folder+stem items; `DIR_A` holds nothing `DIR_B` lacks except the 2 DB files |
+| Scan programs modified `DIR_A` | ✅ confirmed | `UserComment` on 3,401/3,401; GPS added to 1,604 files; all mtimes → Nov 2025 |
+| LRF files removed from `DIR_A` | ✅ confirmed | 897 LRF in `DIR_B` (91.9 GB), 0 in `DIR_A` |
+| Duplicates / useless files removed from `DIR_A` | ⚠️ **only partly true** | 111 media files (328.9 MB) were removed, but **none of them is a content duplicate of anything left in `DIR_A`**. They were unique files. |
+| `DIR_A` is the minimal set | ❌ not quite | `DIR_A` keeps 3,401 media items; `DIR_C`'s curated set is 3,235. Also `DIR_A` is duplicated in full at `DIR_D`. |
+| `DIR_A`'s creation times / Geo may be wrong | ✅ **confirmed, and quantified below** | 1,597 of 3,401 stamped timestamps are provably wrong |
 
-### 3.1 What was actually deleted from A
+### 3.1 What was actually deleted from `DIR_A`
 
 111 media files, 328.9 MB: **64 HEIC, 27 PNG, 19 JPG, 1 MOV**.
 
@@ -95,8 +105,8 @@ Logical byte totals: A = 310.9 GB, B = 403.2 GB (incl. 91.9 GB LRF), C = 309.8 G
 | `iPhone` | 4 | incl. a 135 MB screen recording |
 | others (12 folders) | 12 | mixed |
 
-- 96 of the 111 are still preserved in **C**.
-- **15 exist nowhere but B** (41.0 MB) — see §7.
+- 96 of the 111 are still preserved in **`DIR_C`**.
+- **15 exist nowhere but `DIR_B`** (41.0 MB) — see §7.
 
 ---
 
@@ -122,18 +132,18 @@ Logical byte totals: A = 310.9 GB, B = 403.2 GB (incl. 91.9 GB LRF), C = 309.8 G
 
 ### 5.1 Content integrity — CLEAN
 
-**All 3,354 media items shared between A and B have identical content.** No re-encoding, no resizing, no quality loss anywhere. A is a pure metadata rewrite of B.
+**All 3,354 media items shared between `DIR_A` and `DIR_B` have identical content.** No re-encoding, no resizing, no quality loss anywhere. `DIR_A` is a pure metadata rewrite of `DIR_B`.
 
 ### 5.2 The critical reassurance
 
 **No original capture timestamp was ever modified.** `QuickTime:CreateDate` is byte-for-byte unchanged in **3,313 / 3,313** shared files. Only a new `UserComment` field was added. Every file still contains its own ground truth.
 
-### 5.3 Metadata written into A
+### 5.3 Metadata written into `DIR_A`
 
 | Change | Scope |
 |---|---|
 | `UserComment` = UTC Zulu (`YYYY-MM-DDTHH:MM:SSZ`) | 3,401 / 3,401 |
-| GPS coordinates written into the file (XMP for video, EXIF for stills) | **+1,604** files (3,223 with GPS vs 1,619 in B; 0 lost) |
+| GPS coordinates written into the file (XMP for video, EXIF for stills) | **+1,604** files (3,223 with GPS vs 1,619 in `DIR_B`; 0 lost) |
 | Extension case normalised to upper case | all |
 | Real-type correction `.HEIC` → `.JPG` (iOS had mislabelled JPEG data) | 88 (`Shenzhen_2025`) |
 | `FileModifyDate` overwritten | 3,401 / 3,401 → all `2025-11-17/18` |
@@ -157,8 +167,8 @@ Each stamped `UserComment` compared against the file's own authoritative source:
 
 | Metric | Count |
 |---|---:|
-| Files with GPS before (B) | 1,619 |
-| Files with GPS after (A) | 3,223 |
+| Files with GPS before (`DIR_B`) | 1,619 |
+| Files with GPS after (`DIR_A`) | 3,223 |
 | GPS added | **+1,604** |
 | Original GPS preserved untouched | **1,602 / 1,619** |
 | Original GPS **modified** (needs review) | **17** (e.g. `IMG_8925`: 30°14'54.16"N → 30°14'54.75"N, ≈18 m) |
@@ -263,9 +273,9 @@ GPS provenance recorded in `media_files`:
 
 ---
 
-## 7. Files that exist only in B (at risk)
+## 7. Files that exist only in `DIR_B` (at risk)
 
-15 files, 41.0 MB. Present in B; absent from A and from C.
+15 files, 41.0 MB. Present in `DIR_B`; absent from `DIR_A` and from `DIR_C`.
 
 ```
 01_2025Mar香港/IMG_8183.HEIC        3,005,197
@@ -285,7 +295,7 @@ Miu_iPhone/202505/IMG_1907.HEIC     1,783,300
 iPhone/IMG_9748.HEIC                5,319,456
 ```
 
-**B must not be deleted until these 15 are restored to C or A.**
+**`DIR_B` must not be deleted until these 15 are restored to `DIR_C` or `DIR_A`.**
 
 ---
 
@@ -293,8 +303,8 @@ iPhone/IMG_9748.HEIC                5,319,456
 
 ### Guiding principles
 
-1. **B and C are read-only.** No process may write to them.
-2. **Never re-run PreImport against A.** A's mtimes are destroyed, so any recomputation is guaranteed wrong.
+1. **`DIR_B` and `DIR_C` are read-only.** No process may write to them.
+2. **Never re-run PreImport against `DIR_A`.** `DIR_A`'s mtimes are destroyed, so any recomputation is guaranteed wrong.
 3. **The files already hold the truth.** Repair means *reading* the authoritative field and *replacing derived data*, not inventing values.
 4. **Derived data belongs in the DB, not in the media files.** Inheritance and manual corrections should live in SQLite; files should stay as the camera wrote them.
 5. **Every derived value carries provenance and confidence.**
@@ -303,20 +313,20 @@ iPhone/IMG_9748.HEIC                5,319,456
 
 ### Phase 0 — Freeze and back up
 
-- [ ] Make `/Volumes/SSD_HD/Keep_Media_files/Videos_Original_Inc_Simon_iPhone` (B) and `…/2025HKTrip_Organized_from_Original` (C) read-only; never write to them.
+- [ ] Make `DIR_B` and `DIR_C` read-only; never write to them.
 - [ ] `sqlite3 media_organizer.db ".backup media_organizer.db.2026-11-01.bak"`
 - [ ] Export the journal: `sqlite3 media_organizer.db ".mode insert journal" "SELECT * FROM journal;" > journal_export_2026-11-01.sql`
 - [ ] Snapshot `geo_chinese.list` checksum (it is the true source of `geo_data`).
-- [ ] Stop running `PreImport_exif_file_processor.py` and `Main_scan_media.py` against A or D.
-- [ ] Decide the fate of D (`/Volumes/SSD_HD/media`, 293 GB duplicate of A).
+- [ ] Stop running `PreImport_exif_file_processor.py` and `Main_scan_media.py` against `DIR_A` or `DIR_D`.
+- [ ] Decide the fate of `DIR_D` (293 GB duplicate of `DIR_A`).
 
-**Exit criteria:** backups exist and verify; B and C untouched; no pipeline runs scheduled.
+**Exit criteria:** backups exist and verify; `DIR_B` and `DIR_C` untouched; no pipeline runs scheduled.
 
 ---
 
 ### Phase 1 — Build the ledger (read-only, changes nothing)
 
-Create `build_media_ledger.py` producing `media_ledger` (SQLite table + CSV export), one row per media file in A:
+Create `build_media_ledger.py` producing `media_ledger` (SQLite table + CSV export), one row per media file in `DIR_A`:
 
 | Column | Rule |
 |---|---|
@@ -337,7 +347,7 @@ Expected outcome: **3,244 files with authoritative UTC** (2,068 HEIC + 123 JPG +
 
 ### Phase 2 — Restore files that should never have changed
 
-**2a. 6 internally inconsistent MOVs** — copy back from B:
+**2a. 6 internally inconsistent MOVs** — copy back from `DIR_B`:
 
 ```
 05_2025Apr深圳/63.MOV
@@ -348,9 +358,9 @@ Expected outcome: **3,244 files with authoritative UTC** (2,068 HEIC + 123 JPG +
 40_2025Apr_/IMG_8943.MOV
 ```
 
-**2b. 17 photos whose original EXIF GPS was overwritten** — copy back from B (their original coordinates are intact there):
+**2b. 17 photos whose original EXIF GPS was overwritten** — copy back from `DIR_B` (their original coordinates are intact there):
 
-| File | Original (B) | Currently in A |
+| File | Original (`DIR_B`) | Currently in `DIR_A` |
 |---|---|---|
 | `IMG_8240.HEIC` | 22°17'23.96"N | 22°17'21.28"N |
 | `IMG_8241.HEIC` | 22°17'23.96"N | 22°17'21.28"N |
@@ -372,9 +382,9 @@ Expected outcome: **3,244 files with authoritative UTC** (2,068 HEIC + 123 JPG +
 
 Most are tens of metres — consistent with "snap to saved location" bulk edits. `IMG_8793` (14 km) and `IMG_8297` (750 m) look like genuine mistakes and must be reverted. **Confirm with Simon before reverting the small ones**, which may be deliberate corrections.
 
-**2c. 15 files that currently exist only in B** (§7) — restore into C first, then into A.
+**2c. 15 files that currently exist only in `DIR_B`** (§7) — restore into `DIR_C` first, then into `DIR_A`.
 
-**Exit criteria:** A's GPS values match B's for every file that had GPS in B (or a documented, deliberate override is recorded); the 15 orphans are preserved in at least two locations.
+**Exit criteria:** `DIR_A`'s GPS values match `DIR_B`'s for every file that had GPS in `DIR_B` (or a documented, deliberate override is recorded); the 15 orphans are preserved in at least two locations.
 
 ---
 
@@ -420,7 +430,7 @@ Re-run these checks and require:
 | MOV `QuickTime:CreateDate` vs `Keys:CreationDate` | 0 mismatches (or all documented) |
 | MP4 filename clock + 4:00 vs `QuickTime:CreateDate` | 0 mismatches |
 | `UserComment` (if retained) vs `capture_utc` | 0 mismatches |
-| Content hash A vs B | still 3,354/3,354 identical |
+| Content hash `DIR_A` vs `DIR_B` | still 3,354/3,354 identical |
 | Row count | `media_files` = `media_ledger` = actual file count |
 | Journal | 74 rows, byte-identical text to the Phase 0 export |
 | Web UI spot-check | 10 known dates display the expected local times and locations |
@@ -431,10 +441,10 @@ Re-run these checks and require:
 
 | # | Decision | Options |
 |---|---|---|
-| 1 | What to do with `/Volumes/SSD_HD/media` (D, 293 GB duplicate) | keep as scan target · delete · make it the only working copy |
+| 1 | What to do with `DIR_D` (293 GB duplicate of `DIR_A`) | keep as scan target · delete · make it the only working copy |
 | 2 | Phase 3 option | leave files untouched (Option 1) vs write corrected UTC+GPS for PhotoPrism (Option 2) |
 | 3 | Keep or drop the 88 PNG screenshots and ~65 JPGs with no usable date | drop · keep in a separate `Screenshots/` folder |
-| 4 | Rename strategy for A | keep original camera names · adopt C's Chinese descriptive names |
+| 4 | Rename strategy for `DIR_A` | keep original camera names · adopt `DIR_C`'s Chinese descriptive names |
 | 5 | Whether to clean the machine-translated Chinese city names in `geo_chinese.list` | now · later · never |
 
 ---
